@@ -1,6 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { applyEdgeCors } from './cors';
 
+/** Vercel às vezes grava DATABASE_URL com aspas — Prisma falha se não limpar. */
+function normalizeDatabaseEnv(): void {
+  for (const name of ['DATABASE_URL', 'DIRECT_URL'] as const) {
+    const raw = process.env[name]?.trim();
+    if (!raw) continue;
+    process.env[name] = raw.replace(/^"+|"+$/g, '');
+  }
+}
+
 function validateDbEnv(): string[] {
   const issues: string[] = [];
   for (const name of ['DATABASE_URL', 'DIRECT_URL'] as const) {
@@ -20,6 +29,7 @@ function validateDbEnv(): string[] {
 let cachedHandler: ((req: VercelRequest, res: VercelResponse) => void) | null = null;
 
 export default async function vercelHandler(req: VercelRequest, res: VercelResponse) {
+  normalizeDatabaseEnv();
   if (applyEdgeCors(req, res)) return;
 
   const path = (req.url ?? '').split('?')[0] ?? '';
@@ -48,7 +58,12 @@ export default async function vercelHandler(req: VercelRequest, res: VercelRespo
   } catch (err) {
     console.error('[api] handler error:', err);
     if (!res.headersSent) {
-      res.status(500).json({ message: 'Erro interno na API' });
+      const detail = err instanceof Error ? err.message : String(err);
+      res.status(500).json({
+        message: 'Erro interno na API',
+        hint: 'Abra /api/env-check na API e confira DATABASE_URL, DIRECT_URL e JWT_SECRET',
+        detail: detail.slice(0, 200),
+      });
     }
   }
 }
