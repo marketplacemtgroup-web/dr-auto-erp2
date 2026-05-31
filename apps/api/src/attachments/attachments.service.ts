@@ -252,7 +252,13 @@ export class AttachmentsService {
     if (!row) throw new NotFoundException('Anexo não encontrado');
 
     const bucket = this.storage.bucketForEntity(row.entityType);
-    await this.storage.remove(bucket, row.storagePath);
+    try {
+      await this.storage.remove(bucket, row.storagePath);
+    } catch (err) {
+      this.logger.warn(
+        `Arquivo ${row.storagePath} não removido do storage: ${err instanceof Error ? err.message : err}`,
+      );
+    }
     await this.prisma.attachment.delete({ where: { id } });
     return { ok: true };
   }

@@ -12,9 +12,8 @@ import { osStatusLabel, osStatusToVariant, quoteStatusLabel } from "../../lib/se
 import { portalAccessUrl, portalPublicQuoteUrl, routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
-import { attachmentFileUrl } from "../../lib/mediaUrl";
-import { isImageMime, isVideoMime } from "../../lib/mediaTypes";
 import ServiceOrderPrintSheet from "../../components/service-orders/ServiceOrderPrintSheet";
+import AttachmentGrid from "../../components/attachments/AttachmentGrid";
 
 const STATUS_OPTIONS = [
   "RECEIVED",
@@ -48,6 +47,7 @@ export default function ServiceOrderDetailPage() {
     "dados" | "itens" | "checklist" | "midia" | "timeline" | "orcamentos"
   >("dados");
   const [uploading, setUploading] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [itemDrawer, setItemDrawer] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [itemForm, setItemForm] = useState({
@@ -117,6 +117,20 @@ export default function ServiceOrderDetailPage() {
       api.updateServiceOrderChecklist(token!, id!, items),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-order", id] }),
   });
+
+  async function handleDeleteAttachment(attachmentId: string) {
+    if (!token || !id) return;
+    if (!confirm("Remover esta mídia? Esta ação não pode ser desfeita.")) return;
+    setDeletingAttachmentId(attachmentId);
+    try {
+      await api.deleteAttachment(token, attachmentId);
+      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao remover mídia");
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  }
 
   async function handleUpload(file: File) {
     if (!token || !id) return;
@@ -497,39 +511,12 @@ export default function ServiceOrderDetailPage() {
               />
             </label>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {(os.attachments ?? []).map((a) => (
-              <a
-                key={a.id}
-                href={attachmentFileUrl(a)}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-lg border border-[#E2E8F0] overflow-hidden"
-              >
-                {isImageMime(a.mimeType) ? (
-                  <img
-                    src={attachmentFileUrl(a)}
-                    alt={a.fileName}
-                    className="w-full h-32 object-cover"
-                  />
-                ) : isVideoMime(a.mimeType) ? (
-                  <video
-                    src={attachmentFileUrl(a)}
-                    controls
-                    className="w-full h-32 object-cover bg-black"
-                    preload="metadata"
-                  />
-                ) : (
-                  <div className="h-32 flex items-center justify-center text-xs text-[#64748B] p-2">
-                    {a.fileName}
-                  </div>
-                )}
-              </a>
-            ))}
-            {(os.attachments ?? []).length === 0 && (
-              <p className="col-span-full text-sm text-[#94A3B8]">Nenhum anexo ainda.</p>
-            )}
-          </div>
+          <AttachmentGrid
+            attachments={os.attachments ?? []}
+            deletingId={deletingAttachmentId}
+            onDelete={(attachmentId) => void handleDeleteAttachment(attachmentId)}
+            emptyLabel="Nenhuma mídia ainda. Envie fotos ou vídeos para o cliente ver no portal."
+          />
         </div>
       )}
 

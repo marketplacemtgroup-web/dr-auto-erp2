@@ -10,7 +10,7 @@ import { formatDateTime, formatMoney } from "../../lib/format";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel } from "../../lib/service-order-status";
 import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
-import { attachmentFileUrl } from "../../lib/mediaUrl";
+import AttachmentGrid from "../../components/attachments/AttachmentGrid";
 
 const KIND_LABEL: Record<string, string> = {
   CAR: "Carro",
@@ -28,6 +28,7 @@ export default function VehicleDetailPage() {
     "visao",
   );
   const [uploading, setUploading] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState({
     chassis: "",
@@ -57,6 +58,20 @@ export default function VehicleDetailPage() {
       setEditOpen(false);
     },
   });
+
+  async function handleDeleteAttachment(attachmentId: string) {
+    if (!token || !id) return;
+    if (!confirm("Remover esta foto? Esta ação não pode ser desfeita.")) return;
+    setDeletingAttachmentId(attachmentId);
+    try {
+      await api.deleteAttachment(token, attachmentId);
+      queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao remover foto");
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  }
 
   async function handleUpload(file: File) {
     if (!token || !id) return;
@@ -266,30 +281,12 @@ export default function VehicleDetailPage() {
               />
             </label>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {v.attachments.map((a) => (
-              <a
-                key={a.id}
-                href={attachmentFileUrl(a)}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-lg border overflow-hidden"
-              >
-                {a.mimeType.startsWith("image/") ? (
-                  <img
-                    src={attachmentFileUrl(a)}
-                    alt={a.fileName}
-                    className="w-full h-32 object-cover"
-                  />
-                ) : (
-                  <div className="h-32 flex items-center justify-center text-xs p-2">{a.fileName}</div>
-                )}
-              </a>
-            ))}
-            {v.attachments.length === 0 && (
-              <p className="col-span-full text-sm text-[#94A3B8]">Nenhuma foto ainda.</p>
-            )}
-          </div>
+          <AttachmentGrid
+            attachments={v.attachments}
+            deletingId={deletingAttachmentId}
+            onDelete={(attachmentId) => void handleDeleteAttachment(attachmentId)}
+            emptyLabel="Nenhuma foto ainda."
+          />
         </div>
       )}
 
