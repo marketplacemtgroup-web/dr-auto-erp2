@@ -19,7 +19,7 @@ export function configureNestApp(app: NestExpressApplication) {
 
   const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => s.trim().replace(/\/$/, ''))
     .filter(Boolean);
 
   const lanOrigin =
@@ -31,16 +31,19 @@ export function configureNestApp(app: NestExpressApplication) {
         callback(null, true);
         return;
       }
-      if (allowedOrigins.includes(origin)) {
+      const normalized = origin.replace(/\/$/, '');
+      if (allowedOrigins.includes(normalized)) {
         callback(null, true);
         return;
       }
-      if (process.env.NODE_ENV !== 'production' && lanOrigin.test(origin)) {
+      if (process.env.NODE_ENV !== 'production' && lanOrigin.test(normalized)) {
         callback(null, true);
         return;
       }
       callback(null, false);
     },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 }
