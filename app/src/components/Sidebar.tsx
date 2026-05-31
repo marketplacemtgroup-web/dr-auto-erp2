@@ -70,7 +70,7 @@ export default function Sidebar() {
         }`}
       >
         <div className="px-4 pt-5 pb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-start gap-2">
             <BrandLogo size="sm" />
             <div className="flex flex-col">
               <span className="text-white text-[30px] font-bold leading-tight tracking-tight">

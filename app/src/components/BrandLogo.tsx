@@ -1,8 +1,13 @@
 import { branding } from "../lib/branding";
 
 const sizeClass = {
-  sm: "w-9 h-9",
-  md: "w-10 h-10",
+  sm: "w-[108px] h-[108px]",
+  md: "w-[120px] h-[120px]",
+} as const;
+
+const sizePx = {
+  sm: 108,
+  md: 120,
 } as const;
 
 type BrandLogoProps = {
@@ -19,8 +24,8 @@ export default function BrandLogo({ size = "sm", className = "" }: BrandLogoProp
       <img
         src={branding.logoUrl}
         alt={branding.appName}
-        width={size === "md" ? 40 : 36}
-        height={size === "md" ? 40 : 36}
+        width={sizePx[size]}
+        height={sizePx[size]}
         className="w-full h-full object-contain"
         decoding="async"
       />
