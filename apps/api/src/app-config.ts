@@ -40,6 +40,15 @@ export function configureNestApp(app: NestExpressApplication) {
         callback(null, true);
         return;
       }
+      try {
+        const host = new URL(normalized).hostname;
+        if (host.endsWith('.vercel.app')) {
+          callback(null, true);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
       callback(null, false);
     },
     credentials: true,

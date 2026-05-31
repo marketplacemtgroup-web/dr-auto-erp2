@@ -41,7 +41,7 @@ npm run supabase:init
 
 | Variável | Valor |
 |----------|--------|
-| `DATABASE_URL` | Pooler Supabase (porta **6543**, `?pgbouncer=true`) |
+| `DATABASE_URL` | Pooler Supabase (porta **6543**, `?pgbouncer=true`). **Sem aspas** na Vercel. Se a senha tiver `@`, `#`, `:` etc., use URL encode (`@` → `%40`). |
 | `DIRECT_URL` | Direct Supabase (porta **5432**) — usado em migrations locais |
 | `JWT_SECRET` | String longa e aleatória |
 | `JWT_EXPIRES_IN` | `7d` |
@@ -49,10 +49,28 @@ npm run supabase:init
 | `SUPABASE_URL` | `https://[ref].supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role (Settings → API) |
 | `SINGLE_TENANT` | `true` |
-| `CORS_ORIGIN` | URLs dos frontends (atualize após passo 3) |
+| `CORS_ORIGIN` | `https://dr-auto-erp2.vercel.app,https://dr-auto-erp2-portal.vercel.app` (sem `/` final, separado por vírgula) |
 
 5. Deploy → anote a URL: `https://SEU-API.vercel.app`
-6. Teste: `https://SEU-API.vercel.app/api/auth/setup-status`
+6. Teste (deve responder JSON, não 500):
+   - `https://SEU-API.vercel.app/api/ping` → `{"ok":true}`
+   - `https://SEU-API.vercel.app/api/env-check` → `{"ok":true,"issues":[]}`
+   - `https://SEU-API.vercel.app/api/auth/setup-status`
+
+**Variáveis obrigatórias na Vercel (projeto API, Production):**
+
+| Variável | Exemplo / nota |
+|----------|----------------|
+| `DATABASE_URL` | pooler `:6543?pgbouncer=true` — **sem aspas**; `@` na senha → `%40` |
+| `DIRECT_URL` | direct `:5432` — mesma senha codificada |
+| `JWT_SECRET` | string longa |
+| `SUPABASE_URL` | `https://[ref].supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role (Settings → API) |
+| `NODE_ENV` | `production` |
+| `SINGLE_TENANT` | `true` |
+| `CORS_ORIGIN` | URLs ERP + Portal |
+
+**Se o portal der erro de CORS mas a API retornar 500:** o problema não é só CORS — veja [Troubleshooting](#troubleshooting) abaixo.
 
 ---
 
@@ -91,7 +109,36 @@ Volte ao projeto **API** na Vercel e atualize:
 CORS_ORIGIN=https://SEU-ERP.vercel.app,https://SEU-PORTAL.vercel.app
 ```
 
+Exemplo (seus projetos):
+
+```
+CORS_ORIGIN=https://dr-auto-erp2.vercel.app,https://dr-auto-erp2-portal.vercel.app
+```
+
+> Mesmo sem `CORS_ORIGIN` correto, domínios `*.vercel.app` são aceitos automaticamente após o redeploy com as correções de serverless.
+
 Redeploy da API.
+
+---
+
+## Troubleshooting
+
+### Portal: "blocked by CORS policy"
+
+1. Abra `https://SUA-API.vercel.app/api/ping` no navegador.
+   - **500 + log `URL must start with postgresql://`** → `DATABASE_URL` na Vercel está vazia, com aspas, ou a **senha tem `@` sem encode** (`@` → `%40`).
+   - **500 / FUNCTION_INVOCATION_FAILED** (outro erro) → veja logs da função.
+   - **`{"ok":true}`** → API viva; confira `VITE_API_URL` no portal (sem `/api` no final) e redeploy do portal.
+
+2. Na Vercel → projeto **API** → **Settings → Environment Variables**:
+   - `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL` preenchidos
+   - `CORS_ORIGIN` com URLs exatas do ERP e Portal
+
+3. Portal → **Environment Variables** → `VITE_API_URL=https://dr-auto-erp2-api.vercel.app` (sem barra final)
+
+### Banner PWA "beforeinstallprompt"
+
+Aviso do Chrome sobre instalação do app — **não impede o login**. Pode ignorar.
 
 ---
 
@@ -106,6 +153,7 @@ Redeploy da API.
 
 ## Checklist pós-deploy
 
+- [ ] `GET /api/ping` → `{"ok":true}`
 - [ ] `GET /api/auth/setup-status` responde JSON
 - [ ] Login ERP + dashboard KPIs
 - [ ] Upload foto na OS (Supabase Storage)
