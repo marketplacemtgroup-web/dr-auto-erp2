@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd .. && npm ci",
+  "installCommand": "cd .. && npm ci --include=dev",
   "buildCommand": "cd .. && npm run build -w app",
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/((?!assets/|manifest.webmanifest|sw.js|workbox-|push-sw|favicon|pwa-|sem%20fundo).*)", "destination": "/index.html" }]
