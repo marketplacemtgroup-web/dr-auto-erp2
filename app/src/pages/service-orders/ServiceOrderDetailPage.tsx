@@ -127,6 +127,8 @@ export default function ServiceOrderDetailPage() {
         showOnQuote: true,
       });
       queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao enviar arquivo");
     } finally {
       setUploading(false);
     }
@@ -174,9 +176,13 @@ export default function ServiceOrderDetailPage() {
   }
 
   if (error || !os) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Ordem de servico nao encontrada.";
     return (
       <main className="px-6 pb-8">
-        <p className="text-red-600 text-sm">Ordem de servico nao encontrada.</p>
+        <p className="text-red-600 text-sm">{message}</p>
         <Link to={routes.ordemDeServico} className="text-[#0E7490] text-sm mt-2 inline-block">
           Voltar
         </Link>

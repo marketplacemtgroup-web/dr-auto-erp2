@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AttachmentEntityType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { posix } from 'path';
@@ -7,6 +7,8 @@ import { SupabaseStorageService } from '../storage/supabase-storage.service';
 
 @Injectable()
 export class AttachmentsService {
+  private readonly logger = new Logger(AttachmentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: SupabaseStorageService,
@@ -20,11 +22,15 @@ export class AttachmentsService {
     row: T,
   ) {
     const bucket = this.storage.bucketForEntity(row.entityType);
-    let url: string;
-    if (this.storage.isCloudStorage()) {
-      url = await this.storage.createSignedUrl(bucket, row.storagePath);
-    } else {
-      url = `/api/uploads/${this.storage.normalizeStoragePath(row.storagePath)}`;
+    let url = '';
+    try {
+      if (this.storage.isCloudStorage()) {
+        url = await this.storage.createSignedUrl(bucket, row.storagePath);
+      } else {
+        url = `/api/uploads/${this.storage.normalizeStoragePath(row.storagePath)}`;
+      }
+    } catch {
+      /* arquivo ausente no storage (ex.: upload local antes do Supabase) */
     }
     return { ...row, url };
   }
@@ -44,6 +50,21 @@ export class AttachmentsService {
     };
   }
 
+  private async findServiceOrder(organizationId: string, serviceOrderId: string) {
+    const so = await this.prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, organizationId, deletedAt: null },
+    });
+    if (!so) {
+      this.logger.warn(
+        `OS não encontrada: id=${serviceOrderId} org=${organizationId}`,
+      );
+      throw new NotFoundException(
+        'Ordem de serviço não encontrada para sua oficina. Abra a OS pelo ERP (não pelo id do Supabase) ou reenvie após novo login.',
+      );
+    }
+    return so;
+  }
+
   async prepareServiceOrderUpload(
     organizationId: string,
     serviceOrderId: string,
@@ -55,10 +76,7 @@ export class AttachmentsService {
       showOnQuote?: boolean;
     },
   ) {
-    const so = await this.prisma.serviceOrder.findFirst({
-      where: { id: serviceOrderId, organizationId },
-    });
-    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+    const so = await this.findServiceOrder(organizationId, serviceOrderId);
 
     const { storagePath, bucket } = this.buildServiceOrderStoragePath(
       organizationId,
@@ -90,10 +108,7 @@ export class AttachmentsService {
       showOnQuote?: boolean;
     },
   ) {
-    const so = await this.prisma.serviceOrder.findFirst({
-      where: { id: serviceOrderId, organizationId },
-    });
-    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+    await this.findServiceOrder(organizationId, serviceOrderId);
 
     const storagePath = this.storage.normalizeStoragePath(dto.storagePath);
     const expectedPrefix = `${organizationId}/${serviceOrderId}/`;
@@ -132,10 +147,7 @@ export class AttachmentsService {
       userId?: string;
     },
   ) {
-    const so = await this.prisma.serviceOrder.findFirst({
-      where: { id: serviceOrderId, organizationId },
-    });
-    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+    await this.findServiceOrder(organizationId, serviceOrderId);
 
     const { storagePath, bucket } = this.buildServiceOrderStoragePath(
       organizationId,
