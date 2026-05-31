@@ -126,9 +126,12 @@ Redeploy da API.
 ### Portal: "blocked by CORS policy"
 
 1. Abra `https://SUA-API.vercel.app/api/ping` no navegador.
+   - **404 em `/api/portal/login` ou `/api/auth/...`** → rotas aninhadas não chegavam ao Nest (catch-all da Vercel). O `vercel.json` da API usa **rewrite** de `/api/(.*)` → `/api/index`; faça redeploy da API após puxar essa correção.
    - **500 + log `URL must start with postgresql://`** → `DATABASE_URL` na Vercel está vazia, com aspas, ou a **senha tem `@` sem encode** (`@` → `%40`).
    - **500 / FUNCTION_INVOCATION_FAILED** (outro erro) → veja logs da função.
    - **`{"ok":true}`** → API viva; confira `VITE_API_URL` no portal (sem `/api` no final) e redeploy do portal.
+
+1b. Teste `https://SUA-API.vercel.app/api/env-check` — se `issues` incluir **`DATABASE_URL não deve ter aspas`**, remova aspas `"` do valor na Vercel (Settings → Environment Variables) e redeploy.
 
 2. Na Vercel → projeto **API** → **Settings → Environment Variables**:
    - `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL` preenchidos
