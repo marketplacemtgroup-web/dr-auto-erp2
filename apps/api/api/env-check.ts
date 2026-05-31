@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
 import { applyEdgeCors } from './cors';
+
+const REQUIRED_BUCKETS = ['os-media', 'vehicle-photos', 'documents'] as const;
 
 function checkDatabaseUrl(name: string): string[] {
   const raw = process.env[name]?.trim() ?? '';
@@ -31,8 +34,24 @@ function checkDatabaseUrl(name: string): string[] {
   return issues;
 }
 
+async function checkStorageBuckets(): Promise<string[]> {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url) return ['SUPABASE_URL não definida'];
+  if (!key) return ['SUPABASE_SERVICE_ROLE_KEY não definida'];
+
+  const client = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await client.storage.listBuckets();
+  if (error) return [`Supabase Storage inacessível: ${error.message}`];
+
+  const ids = new Set((data ?? []).map((b) => b.id));
+  return REQUIRED_BUCKETS.filter((id) => !ids.has(id)).map(
+    (id) => `Bucket "${id}" não existe — rode scripts/supabase-storage-buckets.sql no Supabase`,
+  );
+}
+
 /** Diagnóstico de env — não carrega Prisma/Nest. */
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyEdgeCors(req, res)) return;
 
   const issues = [
@@ -40,11 +59,18 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     ...checkDatabaseUrl('DIRECT_URL'),
   ];
   if (!process.env.JWT_SECRET?.trim()) issues.push('JWT_SECRET não definida');
-  if (!process.env.SUPABASE_URL?.trim()) issues.push('SUPABASE_URL não definida');
+
+  if (issues.length === 0) {
+    issues.push(...(await checkStorageBuckets()));
+  }
 
   res.status(issues.length ? 503 : 200).json({
     ok: issues.length === 0,
     issues,
     nodeEnv: process.env.NODE_ENV ?? null,
+    storage: {
+      buckets: [...REQUIRED_BUCKETS],
+      directUpload: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+    },
   });
 }

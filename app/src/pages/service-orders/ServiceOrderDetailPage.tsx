@@ -13,6 +13,7 @@ import { portalAccessUrl, portalPublicQuoteUrl, routes } from "../../lib/routes"
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
 import { attachmentFileUrl } from "../../lib/mediaUrl";
+import { isImageMime, isVideoMime } from "../../lib/mediaTypes";
 import ServiceOrderPrintSheet from "../../components/service-orders/ServiceOrderPrintSheet";
 
 const STATUS_OPTIONS = [
@@ -473,13 +474,13 @@ export default function ServiceOrderDetailPage() {
       {tab === "midia" && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-5">
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm font-medium text-[#1E293B]">Fotos e anexos</p>
+            <p className="text-sm font-medium text-[#1E293B]">Fotos, vídeos e anexos</p>
             <label className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm cursor-pointer">
               <Upload size={16} />
-              {uploading ? "Enviando..." : "Enviar foto"}
+              {uploading ? "Enviando..." : "Enviar mídia"}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 className="hidden"
                 disabled={uploading}
                 onChange={(e) => {
@@ -499,11 +500,18 @@ export default function ServiceOrderDetailPage() {
                 rel="noreferrer"
                 className="block rounded-lg border border-[#E2E8F0] overflow-hidden"
               >
-                {a.mimeType.startsWith("image/") ? (
+                {isImageMime(a.mimeType) ? (
                   <img
                     src={attachmentFileUrl(a)}
                     alt={a.fileName}
                     className="w-full h-32 object-cover"
+                  />
+                ) : isVideoMime(a.mimeType) ? (
+                  <video
+                    src={attachmentFileUrl(a)}
+                    controls
+                    className="w-full h-32 object-cover bg-black"
+                    preload="metadata"
                   />
                 ) : (
                   <div className="h-32 flex items-center justify-center text-xs text-[#64748B] p-2">

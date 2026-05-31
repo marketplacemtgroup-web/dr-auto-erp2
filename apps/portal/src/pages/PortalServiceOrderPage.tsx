@@ -6,6 +6,7 @@ import StatusBadge from "../components/StatusBadge";
 import { ApiError, api, type PortalServiceOrderDetail } from "../lib/api";
 import { formatDateTime, formatMoney } from "../lib/format";
 import { resolveMediaUrl } from "../lib/mediaUrl";
+import { isImageMime, isVideoMime } from "../lib/mediaTypes";
 import { routes } from "../lib/routes";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel, quoteStatusVariant } from "../lib/service-order-status";
 import { whatsappUrl } from "../lib/whatsapp";
@@ -143,11 +144,12 @@ export default function PortalServiceOrderPage() {
 
           {data.attachments.length > 0 && (
             <section className="bg-white rounded-xl border border-[#E2E8F0] p-4">
-              <h2 className="text-sm font-semibold mb-3">Fotos e documentos</h2>
+              <h2 className="text-sm font-semibold mb-3">Fotos, vídeos e documentos</h2>
               <div className="grid grid-cols-2 gap-2">
                 {data.attachments.map((a) => {
                   const src = resolveMediaUrl(a.url);
-                  const isImage = a.mimeType.startsWith("image/");
+                  const isImage = isImageMime(a.mimeType);
+                  const isVideo = isVideoMime(a.mimeType);
                   return (
                     <a
                       key={a.id}
@@ -158,6 +160,13 @@ export default function PortalServiceOrderPage() {
                     >
                       {isImage ? (
                         <img src={src} alt={a.fileName} className="w-full h-28 object-cover" />
+                      ) : isVideo ? (
+                        <video
+                          src={src}
+                          controls
+                          className="w-full h-28 object-cover bg-black"
+                          preload="metadata"
+                        />
                       ) : (
                         <div className="h-28 flex items-center justify-center text-xs text-[#64748B] p-2 text-center">
                           {a.fileName}

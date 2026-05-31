@@ -6,6 +6,7 @@ import StatusBadge from "../components/StatusBadge";
 import { ApiError, api, type PortalQuoteRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { resolveMediaUrl } from "../lib/mediaUrl";
+import { isImageMime, isVideoMime } from "../lib/mediaTypes";
 import { routes } from "../lib/routes";
 import { quoteStatusLabel, quoteStatusVariant, osStatusLabel } from "../lib/service-order-status";
 import { whatsappUrl } from "../lib/whatsapp";
@@ -204,11 +205,19 @@ export default function PortalHomePage() {
                 rel="noreferrer"
                 className="rounded-lg overflow-hidden border border-[#E2E8F0]"
               >
-                {a.mimeType.startsWith("image/") ? (
+                {isImageMime(a.mimeType) ? (
                   <img
                     src={resolveMediaUrl(a.url)}
                     alt={a.fileName}
                     className="w-full h-20 object-cover"
+                  />
+                ) : isVideoMime(a.mimeType) ? (
+                  <video
+                    src={resolveMediaUrl(a.url)}
+                    className="w-full h-20 object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
                   />
                 ) : (
                   <div className="h-20 flex items-center justify-center text-[10px] text-[#64748B] p-1 text-center">

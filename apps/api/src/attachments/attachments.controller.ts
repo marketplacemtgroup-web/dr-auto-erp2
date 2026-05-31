@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -14,12 +15,30 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
+import {
+  ConfirmAttachmentUploadDto,
+  PrepareAttachmentUploadDto,
+} from './dto/prepare-attachment-upload.dto';
 import { AttachmentsService } from './attachments.service';
+import { SupabaseStorageService } from '../storage/supabase-storage.service';
 
 @Controller('attachments')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AttachmentsController {
-  constructor(private readonly attachmentsService: AttachmentsService) {}
+  constructor(
+    private readonly attachmentsService: AttachmentsService,
+    private readonly storage: SupabaseStorageService,
+  ) {}
+
+  @Get('storage-info')
+  @RequirePermissions('service_orders.manage', 'dashboard.view', 'vehicles.manage')
+  storageInfo() {
+    return {
+      cloud: this.storage.isCloudStorage(),
+      directUpload: this.storage.isCloudStorage(),
+      maxUploadMb: this.storage.isCloudStorage() ? 50 : 10,
+    };
+  }
 
   @Get('service-order/:serviceOrderId')
   @RequirePermissions('service_orders.manage', 'dashboard.view')
@@ -44,9 +63,38 @@ export class AttachmentsController {
     return { url };
   }
 
+  @Post('service-order/:serviceOrderId/prepare-upload')
+  @RequirePermissions('service_orders.manage')
+  prepareUpload(
+    @CurrentUser() user: { organizationId: string },
+    @Param('serviceOrderId') serviceOrderId: string,
+    @Body() dto: PrepareAttachmentUploadDto,
+  ) {
+    return this.attachmentsService.prepareServiceOrderUpload(
+      user.organizationId,
+      serviceOrderId,
+      dto,
+    );
+  }
+
+  @Post('service-order/:serviceOrderId/confirm-upload')
+  @RequirePermissions('service_orders.manage')
+  confirmUpload(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('serviceOrderId') serviceOrderId: string,
+    @Body() dto: ConfirmAttachmentUploadDto,
+  ) {
+    return this.attachmentsService.confirmServiceOrderUpload(
+      user.organizationId,
+      serviceOrderId,
+      user.userId,
+      dto,
+    );
+  }
+
   @Post('service-order/:serviceOrderId')
   @RequirePermissions('service_orders.manage')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
   upload(
     @CurrentUser() user: { organizationId: string; userId: string },
     @Param('serviceOrderId') serviceOrderId: string,

@@ -35,6 +35,92 @@ export class AttachmentsService {
     return Promise.all(rows.map((r) => this.enrichForClient(r)));
   }
 
+  private buildServiceOrderStoragePath(organizationId: string, serviceOrderId: string, fileName: string) {
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+    const stored = `${randomUUID()}-${safeName}`;
+    return {
+      storagePath: posix.join(organizationId, serviceOrderId, stored),
+      bucket: this.storage.bucketForEntity(AttachmentEntityType.SERVICE_ORDER),
+    };
+  }
+
+  async prepareServiceOrderUpload(
+    organizationId: string,
+    serviceOrderId: string,
+    dto: {
+      fileName: string;
+      mimeType: string;
+      category?: string;
+      visibleToCustomer?: boolean;
+      showOnQuote?: boolean;
+    },
+  ) {
+    const so = await this.prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, organizationId },
+    });
+    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+
+    const { storagePath, bucket } = this.buildServiceOrderStoragePath(
+      organizationId,
+      serviceOrderId,
+      dto.fileName,
+    );
+    const signed = await this.storage.createSignedUploadUrl(bucket, storagePath);
+
+    return {
+      uploadUrl: signed.signedUrl,
+      storagePath,
+      bucket,
+      token: signed.token,
+      method: 'PUT' as const,
+      headers: { 'Content-Type': dto.mimeType },
+    };
+  }
+
+  async confirmServiceOrderUpload(
+    organizationId: string,
+    serviceOrderId: string,
+    userId: string | undefined,
+    dto: {
+      storagePath: string;
+      fileName: string;
+      mimeType: string;
+      category?: string;
+      visibleToCustomer?: boolean;
+      showOnQuote?: boolean;
+    },
+  ) {
+    const so = await this.prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, organizationId },
+    });
+    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+
+    const storagePath = this.storage.normalizeStoragePath(dto.storagePath);
+    const expectedPrefix = `${organizationId}/${serviceOrderId}/`;
+    if (!storagePath.startsWith(expectedPrefix)) {
+      throw new NotFoundException('Caminho de upload inválido');
+    }
+
+    const row = await this.prisma.attachment.create({
+      data: {
+        organizationId,
+        entityType: AttachmentEntityType.SERVICE_ORDER,
+        entityId: serviceOrderId,
+        serviceOrderId,
+        category: dto.category ?? 'general',
+        fileName: dto.fileName,
+        mimeType: dto.mimeType,
+        storagePath,
+        visibleToCustomer: dto.visibleToCustomer ?? false,
+        showOnQuote: dto.showOnQuote ?? false,
+        uploadedByUserId: userId ?? null,
+      },
+      include: { uploadedBy: { select: { id: true, name: true } } },
+    });
+
+    return this.enrichForClient(row);
+  }
+
   async uploadForServiceOrder(
     organizationId: string,
     serviceOrderId: string,
@@ -51,10 +137,11 @@ export class AttachmentsService {
     });
     if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
 
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
-    const stored = `${randomUUID()}-${safeName}`;
-    const storagePath = posix.join(organizationId, serviceOrderId, stored);
-    const bucket = this.storage.bucketForEntity(AttachmentEntityType.SERVICE_ORDER);
+    const { storagePath, bucket } = this.buildServiceOrderStoragePath(
+      organizationId,
+      serviceOrderId,
+      file.originalname,
+    );
 
     await this.storage.upload(bucket, storagePath, file.buffer, file.mimetype);
 

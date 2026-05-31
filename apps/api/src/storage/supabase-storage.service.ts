@@ -81,6 +81,22 @@ export class SupabaseStorageService {
     }
   }
 
+  async createSignedUploadUrl(
+    bucket: string,
+    storagePath: string,
+  ): Promise<{ signedUrl: string; path: string; token: string }> {
+    const path = this.normalizeStoragePath(storagePath);
+    if (!this.isCloudStorage()) {
+      throw new Error('Upload direto só está disponível com Supabase Storage configurado');
+    }
+    const { data, error } = await this.getClient().storage.from(bucket).createSignedUploadUrl(path);
+    if (error || !data?.signedUrl) {
+      this.logger.error(`Signed upload URL falhou: ${error?.message}`);
+      throw new Error('Não foi possível preparar upload no storage');
+    }
+    return { signedUrl: data.signedUrl, path: data.path, token: data.token };
+  }
+
   async createSignedUrl(bucket: string, storagePath: string, expiresIn = SIGNED_URL_TTL_SEC): Promise<string> {
     const path = this.normalizeStoragePath(storagePath);
     if (!this.isCloudStorage()) {

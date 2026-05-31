@@ -741,6 +741,48 @@ export const api = {
     file: File,
     opts?: { category?: string; visibleToCustomer?: boolean; showOnQuote?: boolean },
   ) => {
+    const payload = {
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      category: opts?.category,
+      visibleToCustomer: opts?.visibleToCustomer,
+      showOnQuote: opts?.showOnQuote,
+    };
+
+    try {
+      const storageInfo = await request<{ directUpload: boolean }>(
+        "/attachments/storage-info",
+        { method: "GET" },
+        token,
+      );
+      if (storageInfo.directUpload) {
+        const prep = await request<{
+          uploadUrl: string;
+          storagePath: string;
+          headers: { "Content-Type": string };
+        }>(
+          `/attachments/service-order/${serviceOrderId}/prepare-upload`,
+          { method: "POST", body: JSON.stringify(payload) },
+          token,
+        );
+        const putRes = await fetch(prep.uploadUrl, {
+          method: "PUT",
+          headers: prep.headers,
+          body: file,
+        });
+        if (!putRes.ok) {
+          throw new ApiError("Falha ao enviar arquivo para o Supabase Storage", putRes.status);
+        }
+        return request<AttachmentRow>(
+          `/attachments/service-order/${serviceOrderId}/confirm-upload`,
+          { method: "POST", body: JSON.stringify({ ...payload, storagePath: prep.storagePath }) },
+          token,
+        );
+      }
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+    }
+
     const form = new FormData();
     form.append("file", file);
     const params = new URLSearchParams();
