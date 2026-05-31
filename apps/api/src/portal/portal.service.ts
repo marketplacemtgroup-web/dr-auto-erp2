@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -45,6 +46,8 @@ const STATUS_PT: Record<string, string> = {
 
 @Injectable()
 export class PortalService {
+  private readonly logger = new Logger(PortalService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -65,13 +68,23 @@ export class PortalService {
     }>,
   ) {
     return Promise.all(
-      rows.map(async (a) => ({
-        id: a.id,
-        fileName: a.fileName,
-        mimeType: a.mimeType,
-        url: await this.attachments.resolvePortalUrl(a),
-        createdAt: a.createdAt,
-      })),
+      rows.map(async (a) => {
+        let url = '';
+        try {
+          url = await this.attachments.resolvePortalUrl(a);
+        } catch (err) {
+          this.logger.warn(
+            `URL do anexo ${a.id} indisponível: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+        return {
+          id: a.id,
+          fileName: a.fileName,
+          mimeType: a.mimeType,
+          url,
+          createdAt: a.createdAt,
+        };
+      }),
     );
   }
 
@@ -281,7 +294,10 @@ export class PortalService {
         year: vehicle.year,
         color: vehicle.color,
       },
-      serviceOrders,
+      serviceOrders: serviceOrders.map((so) => ({
+        ...so,
+        totalAmount: Number(so.totalAmount),
+      })),
       quotes,
       attachments: await this.mapPortalAttachments(attachments),
     };
@@ -465,14 +481,18 @@ export class PortalService {
   ) {
     const lines =
       q.lines.length > 0
-        ? q.lines
+        ? q.lines.map((line) => ({
+            ...line,
+            unitPrice: Number(line.unitPrice),
+            discount: Number(line.discount),
+          }))
         : q.serviceOrder.items.map((item, idx) => ({
             id: item.id,
             description: item.description,
             lineType: item.itemType,
             quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discount: new Prisma.Decimal(0),
+            unitPrice: Number(item.unitPrice),
+            discount: 0,
             approved: null as boolean | null,
             sortOrder: idx,
           }));
@@ -481,7 +501,7 @@ export class PortalService {
       id: q.id,
       number: q.number,
       status: q.status,
-      amount: q.amount,
+      amount: Number(q.amount),
       validUntil: q.validUntil,
       terms: q.terms,
       createdAt: q.createdAt,
@@ -490,22 +510,32 @@ export class PortalService {
         id: q.serviceOrder.id,
         number: q.serviceOrder.number,
         status: q.serviceOrder.status,
-        totalAmount: q.serviceOrder.totalAmount,
+        totalAmount: Number(q.serviceOrder.totalAmount),
         customerVisibleNotes: q.serviceOrder.customerVisibleNotes,
-        items: q.serviceOrder.items,
+        items: q.serviceOrder.items.map((item) => ({
+          ...item,
+          unitPrice: Number(item.unitPrice),
+        })),
       },
       canRespond: q.status === 'PENDING',
     };
   }
 
   async listQuotes(ctx: { organizationId: string; vehicleId: string }) {
-    await this.quotesSync.syncForVehicle(ctx.organizationId, ctx.vehicleId);
+    try {
+      await this.quotesSync.syncForVehicle(ctx.organizationId, ctx.vehicleId);
+    } catch (err) {
+      this.logger.warn(
+        `Sincronização de orçamentos ignorada: ${err instanceof Error ? err.message : err}`,
+      );
+    }
 
     const rows = await this.prisma.quote.findMany({
       where: {
         organizationId: ctx.organizationId,
         serviceOrder: { vehicleId: ctx.vehicleId },
         status: { not: 'DRAFT' },
+        deletedAt: null,
       },
       include: {
         lines: { orderBy: { sortOrder: 'asc' } },
