@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router";
+import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { api, ApiError } from "../../lib/api";
 import BrandHeader from "../../components/BrandHeader";
 import { branding } from "../../lib/branding";
@@ -8,6 +8,8 @@ import { useAuthStore } from "../../stores/authStore";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const setupInfo = (location.state as { info?: string } | null)?.info;
   const session = useAuthStore((s) => s.session);
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
@@ -72,6 +74,12 @@ export default function LoginPage() {
           <p className="text-[#64748B] text-sm mb-6">
             Acesse o painel da sua oficina
           </p>
+
+          {setupInfo && (
+            <p className="text-sm text-[#0E7490] bg-cyan-50 border border-cyan-200 px-3 py-2 rounded-lg mb-4">
+              {setupInfo}
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

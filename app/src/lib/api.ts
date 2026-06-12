@@ -793,12 +793,33 @@ function requestNullable<T>(
   return request<T>(path, options, token, { allowEmpty: true });
 }
 
+export interface AuthSetupStatus {
+  hasOrganization: boolean;
+  singleTenant: boolean;
+  organizationCount?: number;
+  dbReady?: boolean;
+  error?: string;
+  detail?: string;
+  hint?: string;
+}
+
+async function fetchSetupStatus(): Promise<AuthSetupStatus> {
+  const res = await fetchWithTimeout(`${API_URL}/api/setup-status`, { method: "GET" });
+  const text = await res.text();
+  let body: AuthSetupStatus = { hasOrganization: false, singleTenant: true };
+  if (text.trim()) {
+    try {
+      body = JSON.parse(text) as AuthSetupStatus;
+    } catch {
+      /* resposta não-JSON */
+    }
+  }
+  if (res.ok || body.error || body.hint) return body;
+  throw new ApiError(formatApiErrorMessage(body.error), res.status);
+}
+
 export const api = {
-  authSetupStatus: () =>
-    request<{ hasOrganization: boolean; singleTenant: boolean; error?: string; detail?: string }>(
-      "/setup-status",
-      { method: "GET" },
-    ),
+  authSetupStatus: fetchSetupStatus,
 
   publicBranding: () =>
     request<{

@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import { applyEdgeCors } from './cors';
-import { normalizeDatabaseEnv } from './db-env';
+import { normalizeDatabaseEnv, stripEnvQuotes } from './db-env';
 
 const REQUIRED_BUCKETS = ['os-media', 'vehicle-photos', 'documents'] as const;
 
@@ -13,15 +13,15 @@ function checkDatabaseUrl(name: string): string[] {
     issues.push(`${name} não definida na Vercel`);
     return issues;
   }
-  if (raw.startsWith('"') || raw.endsWith('"')) {
-    issues.push(`${name} não deve ter aspas na Vercel`);
+  if (raw !== stripEnvQuotes(raw)) {
+    issues.push(`${name} não deve ter aspas na Vercel — cole só postgresql://... sem " no início/fim`);
   }
-  if (!/^postgres(ql)?:\/\//i.test(raw.replace(/^"+|"+$/g, ''))) {
+  if (!/^postgres(ql)?:\/\//i.test(stripEnvQuotes(raw))) {
     issues.push(`${name} deve começar com postgresql:// (senha com @ precisa ser %40)`);
     return issues;
   }
   try {
-    const normalized = raw.replace(/^"+|"+$/g, '');
+    const normalized = stripEnvQuotes(raw);
     const parsed = new URL(normalized);
     if (!parsed.hostname) issues.push(`${name} hostname inválido`);
     if (normalized.includes('@') && normalized.indexOf('@') !== normalized.lastIndexOf('@')) {
@@ -43,6 +43,18 @@ async function checkDatabaseConnection(): Promise<string[]> {
     normalizeDatabaseEnv();
     const prisma = new PrismaClient();
     await prisma.$queryRaw`SELECT 1`;
+    try {
+      await prisma.organization.count();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/does not exist/i.test(msg)) {
+        issues.push(
+          'Tabela organizations não existe — remova aspas de DATABASE_URL/DIRECT_URL na Vercel, confira o mesmo projeto Supabase do .env local e rode npm run db:deploy no PC.',
+        );
+      } else {
+        issues.push(`Schema incompleto: ${msg.slice(0, 120)}`);
+      }
+    }
     await prisma.$disconnect();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

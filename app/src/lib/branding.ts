@@ -1,4 +1,9 @@
+import { resolveAssetUrl } from "./assetUrl";
+
 const TAGLINE = "Studio especializado em linhas premium";
+
+/** URLs de logo antigas — ignoradas em favor do logo do deploy. */
+const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png"]);
 
 /** Instância dedicada (ex.: WTEC Motors) — uma empresa por deploy. */
 export const branding = {
@@ -16,6 +21,12 @@ export const branding = {
     instagram: "@wtecmotors",
   },
 } as const;
+
+export function resolveBrandingLogoUrl(path: string | null | undefined): string {
+  const trimmed = path?.trim();
+  if (!trimmed || LEGACY_LOGO_URLS.has(trimmed)) return branding.logoUrl;
+  return resolveAssetUrl(trimmed) ?? branding.logoUrl;
+}
 
 export const pageTitle = `${branding.appName} - ${branding.appTagline}`;
 

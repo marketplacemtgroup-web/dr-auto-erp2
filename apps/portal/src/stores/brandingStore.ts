@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { branding as staticBranding } from "../lib/branding";
-import { resolveAssetUrl } from "../lib/assetUrl";
+import { branding as staticBranding, resolveBrandingLogoUrl } from "../lib/branding";
 
 export interface PublicBranding {
   name: string | null;
@@ -20,8 +19,7 @@ interface BrandingState {
 
 function toDisplay(data: PublicBranding | null | undefined) {
   const name = data?.tradeName?.trim() || data?.name?.trim() || staticBranding.appName;
-  const resolved = resolveAssetUrl(data?.logoUrl) ?? staticBranding.logoUrl;
-  return { appName: name, logoUrl: resolved };
+  return { appName: name, logoUrl: resolveBrandingLogoUrl(data?.logoUrl) };
 }
 
 export const useBrandingStore = create<BrandingState>((set) => ({

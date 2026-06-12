@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { applyEdgeCors } from './cors';
-import { normalizeDatabaseEnv } from './db-env';
+import { normalizeDatabaseEnv, stripEnvQuotes } from './db-env';
 import { handleSetupStatus } from './setup-status-handler';
 
 function validateDbEnv(): string[] {
@@ -11,7 +11,7 @@ function validateDbEnv(): string[] {
       issues.push(`${name} ausente`);
       continue;
     }
-    const value = raw.replace(/^"+|"+$/g, '');
+    const value = stripEnvQuotes(raw);
     if (!/^postgres(ql)?:\/\//i.test(value)) {
       issues.push(`${name} inválida (use postgresql://; @ na senha → %40)`);
     }

@@ -40,11 +40,20 @@ export default function RegisterOrganizationPage() {
     api
       .authSetupStatus()
       .then((s) => {
-        if (s?.hasOrganization) setBlocked(true);
+        if (s?.hasOrganization) {
+          setBlocked(true);
+          return;
+        }
+        if (s?.error || s?.hint || s?.dbReady === false) {
+          setStatusWarning(
+            [s.hint, s.error].filter(Boolean).join(" — ") ||
+              "Banco sem schema na API. Corrija DATABASE_URL na Vercel (sem aspas) e redeploy.",
+          );
+        }
       })
       .catch(() => {
         setStatusWarning(
-          "Não foi possível verificar se a oficina já existe (API ou banco). Se for a primeira configuração, preencha o formulário abaixo. Confira DATABASE_URL na Vercel e rode as migrations no banco novo.",
+          "API indisponível. Confira https://dr-auto-erp2-api.vercel.app/api/env-check — remova aspas de DATABASE_URL e DIRECT_URL na Vercel (projeto API) e redeploy.",
         );
       })
       .finally(() => setStatusLoading(false));
@@ -61,7 +70,15 @@ export default function RegisterOrganizationPage() {
   }
 
   if (!statusLoading && blocked) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{
+          info: "A oficina já está configurada neste banco. Entre com o e-mail e senha do administrador.",
+        }}
+      />
+    );
   }
 
   if (statusLoading) {
@@ -197,8 +214,7 @@ export default function RegisterOrganizationPage() {
                 type={type}
                 value={form[key as keyof typeof form]}
                 onChange={(e) => update(key, e.target.value)}
-                readOnly={key === "organizationName" && branding.singleTenant}
-                className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#0E7490] read-only:bg-[#F8FAFC]"
+                className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#0E7490]"
                 required={key === "name" || key === "password"}
               />
             </div>
