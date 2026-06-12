@@ -3,7 +3,7 @@ import { resolveAssetUrl } from "./assetUrl";
 const TAGLINE = "Studio especializado em linhas premium";
 
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
-const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png"]);
+const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
 
 /** Instância dedicada (ex.: WTEC Motors) — uma empresa por deploy. */
 export const branding = {

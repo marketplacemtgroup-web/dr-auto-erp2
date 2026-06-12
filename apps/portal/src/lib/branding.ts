@@ -2,8 +2,16 @@ import { resolveAssetUrl } from "./assetUrl";
 
 const TAGLINE = "Portal do Cliente";
 
+const DEFAULT_LOGO_URL = "/logo-oficinascalibur.png";
+
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
-const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png"]);
+const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
+
+function resolveDeployLogoUrl(): string {
+  const fromEnv = (import.meta.env.VITE_BRAND_LOGO_URL as string | undefined)?.trim();
+  if (fromEnv && !LEGACY_LOGO_URLS.has(fromEnv)) return fromEnv;
+  return DEFAULT_LOGO_URL;
+}
 
 /** Instância dedicada (ex.: WTEC Motors) — uma empresa por deploy. */
 export const branding = {
@@ -12,12 +20,12 @@ export const branding = {
   defaultOrganizationName:
     import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "WTEC Motors",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
-  /** Logo em public/logo-oficinascalibur.png (ou VITE_BRAND_LOGO_URL) */
-  logoUrl: import.meta.env.VITE_BRAND_LOGO_URL ?? "/logo-oficinascalibur.png",
+  /** Logo em public/logo-oficinascalibur.png */
+  logoUrl: resolveDeployLogoUrl(),
   /** Fundo — troque em public/branding/background.webp ou via VITE_BRAND_BACKGROUND_URL */
   backgroundUrl: import.meta.env.VITE_BRAND_BACKGROUND_URL ?? "/branding/background.webp",
   /** Compatibilidade com referências antigas */
-  legacyLogoUrl: "/logo-oficinascalibur.png",
+  legacyLogoUrl: DEFAULT_LOGO_URL,
 } as const;
 
 export function resolveBrandingLogoUrl(path: string | null | undefined): string {
