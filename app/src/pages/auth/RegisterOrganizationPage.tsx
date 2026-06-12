@@ -24,12 +24,12 @@ export default function RegisterOrganizationPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [domainTouched, setDomainTouched] = useState(false);
   const [form, setForm] = useState({
-    organizationName: branding.defaultOrganizationName,
+    organizationName: "",
     tradeName: branding.appName,
     document: "",
     name: "",
     loginUsername: "admin",
-    loginEmailDomain: suggestLoginEmailDomain(branding.defaultOrganizationName),
+    loginEmailDomain: "",
     phone: "",
     password: "",
   });
@@ -146,8 +146,7 @@ export default function RegisterOrganizationPage() {
         <BrandHeader context="auth" className="mb-6" subtitle="Configuração inicial" />
 
         <p className="text-[13px] text-[#64748B] mb-4">
-          Crie o administrador da <strong>{branding.defaultOrganizationName}</strong>.
-          Este passo só é feito uma vez nesta instalação.
+          Crie o administrador da sua oficina. Este passo só é feito uma vez nesta instalação.
         </p>
 
         {statusWarning && (
@@ -214,8 +213,13 @@ export default function RegisterOrganizationPage() {
                 type={type}
                 value={form[key as keyof typeof form]}
                 onChange={(e) => update(key, e.target.value)}
+                placeholder={
+                  key === "organizationName"
+                    ? branding.defaultOrganizationName
+                    : undefined
+                }
                 className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#0E7490]"
-                required={key === "name" || key === "password"}
+                required={key === "organizationName" || key === "name" || key === "password"}
               />
             </div>
           ))}
