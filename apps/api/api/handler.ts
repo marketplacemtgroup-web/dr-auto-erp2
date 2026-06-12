@@ -1,14 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { applyEdgeCors } from './cors';
-
-/** Vercel às vezes grava DATABASE_URL com aspas — Prisma falha se não limpar. */
-function normalizeDatabaseEnv(): void {
-  for (const name of ['DATABASE_URL', 'DIRECT_URL'] as const) {
-    const raw = process.env[name]?.trim();
-    if (!raw) continue;
-    process.env[name] = raw.replace(/^"+|"+$/g, '');
-  }
-}
+import { normalizeDatabaseEnv } from './db-env';
+import { handleSetupStatus } from './setup-status-handler';
 
 function validateDbEnv(): string[] {
   const issues: string[] = [];
@@ -35,6 +28,11 @@ export default async function vercelHandler(req: VercelRequest, res: VercelRespo
   const path = (req.url ?? '').split('?')[0] ?? '';
   if (path === '/api/ping' || path.endsWith('/ping')) {
     res.status(200).json({ ok: true, ts: Date.now() });
+    return;
+  }
+
+  if (path === '/api/setup-status' || path === '/api/auth/setup-status') {
+    await handleSetupStatus(res);
     return;
   }
 

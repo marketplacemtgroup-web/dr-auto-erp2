@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import { applyEdgeCors } from './cors';
+import { normalizeDatabaseEnv } from './db-env';
 
 const REQUIRED_BUCKETS = ['os-media', 'vehicle-photos', 'documents'] as const;
 
@@ -30,6 +32,23 @@ function checkDatabaseUrl(name: string): string[] {
     }
   } catch {
     issues.push(`${name} não é uma URL válida`);
+  }
+  return issues;
+}
+
+async function checkDatabaseConnection(): Promise<string[]> {
+  const issues: string[] = [];
+  if (!process.env.DATABASE_URL?.trim()) return issues;
+  try {
+    normalizeDatabaseEnv();
+    const prisma = new PrismaClient();
+    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$disconnect();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    issues.push(
+      `Banco inacessível na Vercel: ${msg.slice(0, 180)}. Use DATABASE_URL pooler :6543?pgbouncer=true (senha @ → %40).`,
+    );
   }
   return issues;
 }
@@ -64,6 +83,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   issues.push(...checkPushEnv());
 
   if (dbIssues.length === 0) {
+    issues.push(...(await checkDatabaseConnection()));
+  }
+
+  if (dbIssues.length === 0 && !issues.some((i) => i.startsWith('Banco inacessível'))) {
     issues.push(...(await checkStorageBuckets()));
   }
 

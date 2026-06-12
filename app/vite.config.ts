@@ -49,7 +49,7 @@ export default defineConfig({
       },
       includeAssets: [
         "favicon.png",
-        "logo-wtecmotors.png",
+        "logo-oficinascalibur.png",
         "pwa-192x192.png",
         "pwa-512x512.png",
       ],
@@ -68,19 +68,19 @@ export default defineConfig({
         lang: "pt-BR",
         icons: [
           {
-            src: "logo-wtecmotors.png",
+            src: "logo-oficinascalibur.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "logo-wtecmotors.png",
+            src: "logo-oficinascalibur.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "logo-wtecmotors.png",
+            src: "logo-oficinascalibur.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

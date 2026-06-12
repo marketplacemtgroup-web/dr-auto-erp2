@@ -20,8 +20,8 @@ export default function LoginPage() {
     if (!branding.singleTenant) return;
     api
       .authSetupStatus()
-      .then((s) => setCanRegister(s ? !s.hasOrganization : false))
-      .catch(() => setCanRegister(false));
+      .then((s) => setCanRegister(s ? !s.hasOrganization : true))
+      .catch(() => setCanRegister(true));
   }, []);
 
   if (session?.accessToken) {

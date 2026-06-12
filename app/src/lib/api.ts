@@ -795,8 +795,8 @@ function requestNullable<T>(
 
 export const api = {
   authSetupStatus: () =>
-    request<{ hasOrganization: boolean; singleTenant: boolean }>(
-      "/auth/setup-status",
+    request<{ hasOrganization: boolean; singleTenant: boolean; error?: string; detail?: string }>(
+      "/setup-status",
       { method: "GET" },
     ),
 

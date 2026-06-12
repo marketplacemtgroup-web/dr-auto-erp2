@@ -7,9 +7,9 @@ export const branding = {
   defaultOrganizationName:
     import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "WTEC Motors",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
-  /** Logo em public/logo-wtecmotors.png */
-  logoUrl: "/logo-wtecmotors.png",
-  watermarkUrl: "/logo-wtecmotors.png",
+  /** Logo em public/logo-oficinascalibur.png */
+  logoUrl: "/logo-oficinascalibur.png",
+  watermarkUrl: "/logo-oficinascalibur.png",
   printContact: {
     address: "Rua Azarias de Melo, 490 - Taquaral - Campinas/SP - CEP 13076-008",
     email: "wtecmotors@gmail.com",

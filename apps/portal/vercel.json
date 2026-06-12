@@ -2,5 +2,5 @@
   "installCommand": "cd ../.. && npm ci --include=dev",
   "buildCommand": "cd ../.. && npm run build -w @autocore/portal",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!assets/|manifest.webmanifest|sw.js|workbox-|push-sw|favicon|pwa-|logo-wtecmotors).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!assets/|manifest.webmanifest|sw.js|workbox-|push-sw|favicon|pwa-|logo-oficinascalibur).*)", "destination": "/index.html" }]
 }

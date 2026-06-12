@@ -12,7 +12,7 @@ export const branding = {
   /** Fundo — troque em public/branding/background.webp ou via VITE_BRAND_BACKGROUND_URL */
   backgroundUrl: import.meta.env.VITE_BRAND_BACKGROUND_URL ?? "/branding/background.webp",
   /** Compatibilidade com referências antigas */
-  legacyLogoUrl: "/logo-wtecmotors.png",
+  legacyLogoUrl: "/logo-oficinascalibur.png",
 } as const;
 
 export const pageTitle = `${branding.appName} - ${branding.appTagline}`;

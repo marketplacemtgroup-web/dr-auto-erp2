@@ -18,6 +18,8 @@ export default function RegisterOrganizationPage() {
   const applyBranding = useBrandingStore((s) => s.apply);
   const fileRef = useRef<HTMLInputElement>(null);
   const [blocked, setBlocked] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusWarning, setStatusWarning] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [domainTouched, setDomainTouched] = useState(false);
@@ -40,7 +42,12 @@ export default function RegisterOrganizationPage() {
       .then((s) => {
         if (s?.hasOrganization) setBlocked(true);
       })
-      .catch(() => setBlocked(true));
+      .catch(() => {
+        setStatusWarning(
+          "Não foi possível verificar se a oficina já existe (API ou banco). Se for a primeira configuração, preencha o formulário abaixo. Confira DATABASE_URL na Vercel e rode as migrations no banco novo.",
+        );
+      })
+      .finally(() => setStatusLoading(false));
   }, []);
 
   useEffect(() => {
@@ -53,8 +60,16 @@ export default function RegisterOrganizationPage() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (blocked) {
+  if (!statusLoading && blocked) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (statusLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9] text-sm text-[#64748B]">
+        Verificando instalação...
+      </div>
+    );
   }
 
   function update(field: string, value: string) {
@@ -117,6 +132,12 @@ export default function RegisterOrganizationPage() {
           Crie o administrador da <strong>{branding.defaultOrganizationName}</strong>.
           Este passo só é feito uma vez nesta instalação.
         </p>
+
+        {statusWarning && (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg mb-4">
+            {statusWarning}
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
