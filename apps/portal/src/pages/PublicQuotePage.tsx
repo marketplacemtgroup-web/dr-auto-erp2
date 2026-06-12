@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Loader2, Printer, X } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { ApiError, api, type QuoteLineRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
@@ -98,16 +98,34 @@ export default function PublicQuotePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
-      <header className="bg-[#0F3D4C] text-white px-4 py-5">
-        <div className="max-w-lg mx-auto">
-          <p className="text-[11px] uppercase tracking-wider text-white/70">Orçamento online</p>
-          <h1 className="text-lg font-semibold mt-0.5">{data.organizationName}</h1>
-          <p className="text-sm text-white/80 mt-1">
-            {data.customerName} · {data.vehicle.plate}
-          </p>
+    <div className="min-h-screen bg-[#F1F5F9] public-quote-page">
+      <header className="bg-[#0F3D4C] text-white px-4 py-5 print:hidden">
+        <div className="max-w-lg mx-auto flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-white/70">Orçamento online</p>
+            <h1 className="text-lg font-semibold mt-0.5">{data.organizationName}</h1>
+            <p className="text-sm text-white/80 mt-1">
+              {data.customerName} · {data.vehicle.plate}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-sm"
+          >
+            <Printer size={16} />
+            PDF
+          </button>
         </div>
       </header>
+
+      <div className="hidden print:block px-4 py-3 border-b border-[#E2E8F0]">
+        <p className="text-xs uppercase text-[#64748B]">Orçamento online</p>
+        <h1 className="text-lg font-semibold">{data.organizationName}</h1>
+        <p className="text-sm text-[#64748B]">
+          {data.customerName} · {data.vehicle.plate}
+        </p>
+      </div>
 
       <main className="max-w-lg mx-auto px-4 py-5 space-y-4">
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-4">
@@ -158,7 +176,7 @@ export default function PublicQuotePage() {
         )}
 
         {canRespond && (
-          <div className="flex gap-3">
+          <div className="flex gap-3 print:hidden">
             <button
               type="button"
               disabled={acting}

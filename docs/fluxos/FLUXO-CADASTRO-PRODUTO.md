@@ -1,6 +1,6 @@
 # Fluxo de cadastro — Produtos e estoque
 
-Manual para cadastrar **peças e materiais** no estoque do Scalibur ERP, controlar quantidades, estoque mínimo e uso nas Ordens de Serviço.
+Manual para cadastrar **peças e materiais** no estoque do WTEC Motors ERP, controlar quantidades, estoque mínimo e uso nas Ordens de Serviço.
 
 ---
 

@@ -126,13 +126,119 @@ enum CashMovementType {
   PAYMENT_OUT
 }
 
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EmploymentType {
+  CLT
+  AUTONOMO
+  MEI
+  TERCEIRIZADO
+  DIARISTA
+  COMISSIONADO
+  OUTRO
+}
+
+enum EmployeePaymentType {
+  FIXO
+  FIXO_MAIS_COMISSAO
+  SOMENTE_COMISSAO
+  DIARIA
+  POR_SERVICO
+  TERCEIRIZADO
+}
+
+enum PaymentPeriodicity {
+  MENSAL
+  QUINZENAL
+  SEMANAL
+}
+
+enum CommissionRuleType {
+  PERCENTUAL
+  VALOR_FIXO
+  META
+  MANUAL
+}
+
+enum CommissionBase {
+  MAO_DE_OBRA
+  PECAS
+  TOTAL_OS
+  SERVICO_ESPECIFICO
+  PRODUTO_ESPECIFICO
+  VENDA_BALCAO
+  OS_FINALIZADA
+}
+
+enum CommissionTrigger {
+  ORCAMENTO_APROVADO
+  SERVICO_FINALIZADO
+  OS_FINALIZADA
+  OS_ENTREGUE
+  PAGAMENTO_RECEBIDO
+}
+
+enum GeneratedCommissionStatus {
+  PENDENTE
+  APROVADA
+  PAGA
+  CANCELADA
+  ESTORNADA
+}
+
+enum CommissionItemType {
+  SERVICO
+  PECA
+  OS
+  MANUAL
+}
+
+enum EmployeeEntryType {
+  VALE
+  ADIANTAMENTO
+  BONUS
+  DESCONTO
+  AJUSTE_POSITIVO
+  AJUSTE_NEGATIVO
+  DIARIA
+  AJUDA_CUSTO
+}
+
+enum EmployeeEntryStatus {
+  PENDENTE
+  APLICADO
+  CANCELADO
+  PAGO
+}
+
+enum PayrollStatus {
+  ABERTA
+  FECHADA
+  PAGA
+  CANCELADA
+}
+
+enum PayrollItemType {
+  SALARIO
+  COMISSAO
+  BONUS
+  VALE
+  ADIANTAMENTO
+  DESCONTO
+  AJUSTE
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
   tradeName String?  @map("trade_name")
   document  String?  // CNPJ
-  email     String?
-  phone     String?
+  email             String?
+  loginEmailDomain  String?  @map("login_email_domain")
+  phone             String?
   plan      String   @default("professional")
   logoUrl           String?  @map("logo_url")
   primaryColor      String   @default("#0E7490") @map("primary_color")
@@ -163,6 +269,7 @@ model Organization {
   dailyRevenues DailyRevenue[]
   purchaseOrders PurchaseOrder[]
   financialEntries FinancialEntry[]
+  financialPaymentSplits FinancialPaymentSplit[]
   serviceCatalog ServiceCatalog[]
   stockMovements StockMovement[]
   appointments Appointment[]
@@ -170,7 +277,17 @@ model Organization {
   cashMovements CashRegisterMovement[]
   portalAccessTokens PortalAccessToken[]
   pushSubscriptions PushSubscription[]
+  portalNotifications PortalNotification[]
+  fcmTokens FcmToken[]
   officeNotifications OfficeNotification[]
+  jobTitles JobTitle[]
+  employees Employee[]
+  employeePaymentConfigs EmployeePaymentConfig[]
+  commissionRules EmployeeCommissionRule[]
+  generatedCommissions GeneratedCommission[]
+  employeeEntries EmployeeEntry[]
+  payrolls Payroll[]
+  teamActionLogs TeamActionLog[]
 
   @@map("organizations")
 }
@@ -243,6 +360,7 @@ model OrganizationMember {
   consultantOrders ServiceOrder[] @relation("ConsultantOrders")
   mechanicOrders   ServiceOrder[] @relation("MechanicOrders")
   appointments     Appointment[]
+  employee         Employee?
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -339,6 +457,7 @@ model Customer {
   vehicles     Vehicle[]
   contacts     CustomerContact[]
   financialEntries FinancialEntry[]
+  portalNotifications PortalNotification[]
 
   @@index([organizationId])
   @@index([organizationId, name])
@@ -389,6 +508,8 @@ model Vehicle {
   appointments  Appointment[]
   portalAccessTokens PortalAccessToken[]
   pushSubscriptions PushSubscription[]
+  portalNotifications PortalNotification[]
+  fcmTokens FcmToken[]
 
   @@unique([organizationId, plate])
   @@index([organizationId])
@@ -402,6 +523,12 @@ model ServiceOrder {
   vehicleId            String               @map("vehicle_id")
   consultantMemberId   String?              @map("consultant_member_id")
   mechanicMemberId     String?              @map("mechanic_member_id")
+  generalResponsibleId String?              @map("general_responsible_id")
+  checklistById        String?              @map("checklist_by_id")
+  diagnosisById        String?              @map("diagnosis_by_id")
+  quoteById            String?              @map("quote_by_id")
+  executionById        String?              @map("execution_by_id")
+  finalizedById        String?              @map("finalized_by_id")
   number               Int
   status               ServiceOrderStatus   @default(RECEIVED)
   priority             ServiceOrderPriority @default(NORMAL)
@@ -414,6 +541,7 @@ model ServiceOrder {
   diagnosis            String?
   internalNotes        String?              @map("internal_notes")
   customerVisibleNotes String?              @map("customer_visible_notes")
+  paymentAgreement     String?              @map("payment_agreement")
   estimatedAt          DateTime?            @map("estimated_at")
   totalAmount          Decimal              @default(0) @map("total_amount") @db.Decimal(12, 2)
   deletedAt            DateTime?            @map("deleted_at")
@@ -425,7 +553,14 @@ model ServiceOrder {
   vehicle      Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   consultant   OrganizationMember? @relation("ConsultantOrders", fields: [consultantMemberId], references: [id], onDelete: SetNull)
   mechanic     OrganizationMember? @relation("MechanicOrders", fields: [mechanicMemberId], references: [id], onDelete: SetNull)
+  generalResponsible Employee? @relation("OsGeneralResponsible", fields: [generalResponsibleId], references: [id], onDelete: SetNull)
+  checklistBy        Employee? @relation("OsChecklistBy", fields: [checklistById], references: [id], onDelete: SetNull)
+  diagnosisBy        Employee? @relation("OsDiagnosisBy", fields: [diagnosisById], references: [id], onDelete: SetNull)
+  quoteBy            Employee? @relation("OsQuoteBy", fields: [quoteById], references: [id], onDelete: SetNull)
+  executionBy        Employee? @relation("OsExecutionBy", fields: [executionById], references: [id], onDelete: SetNull)
+  finalizedBy        Employee? @relation("OsFinalizedBy", fields: [finalizedById], references: [id], onDelete: SetNull)
   quotes       Quote[]
+  generatedCommissions GeneratedCommission[]
   items        ServiceOrderItem[]
   statusHistory ServiceOrderStatusHistory[]
   checklistItems ServiceOrderChecklistItem[]
@@ -514,16 +649,29 @@ model ServiceOrderItem {
   catalogItemId  String?              @map("catalog_item_id")
   description    String
   itemType       ServiceOrderItemType @default(SERVICE) @map("item_type")
-  quantity       Int                  @default(1)
-  unitPrice      Decimal              @default(0) @map("unit_price") @db.Decimal(12, 2)
-  createdAt      DateTime             @default(now()) @map("created_at")
+  quantity           Int                  @default(1)
+  unitPrice          Decimal              @default(0) @map("unit_price") @db.Decimal(12, 2)
+  discount           Decimal              @default(0) @db.Decimal(12, 2)
+  executorId         String?              @map("executor_id")
+  soldById           String?              @map("sold_by_id")
+  appliedById        String?              @map("applied_by_id")
+  separatedById      String?              @map("separated_by_id")
+  expectedCommission Decimal?             @map("expected_commission") @db.Decimal(12, 2)
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
   product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   catalogItem  ServiceCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  executor     Employee?    @relation("ItemExecutor", fields: [executorId], references: [id], onDelete: SetNull)
+  soldBy       Employee?    @relation("ItemSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
+  appliedBy    Employee?    @relation("ItemAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  separatedBy  Employee?    @relation("ItemSeparatedBy", fields: [separatedById], references: [id], onDelete: SetNull)
+  generatedCommissions GeneratedCommission[]
 
   @@index([serviceOrderId])
+  @@index([executorId])
   @@map("service_order_items")
 }
 
@@ -536,6 +684,7 @@ model Quote {
   amount         Decimal     @db.Decimal(12, 2)
   validUntil     DateTime?   @map("valid_until") @db.Date
   terms          String?
+  paymentAgreement String?  @map("payment_agreement")
   customerComment String?    @map("customer_comment")
   deletedAt      DateTime?   @map("deleted_at")
   createdAt      DateTime    @default(now()) @map("created_at")
@@ -546,6 +695,7 @@ model Quote {
   lines        QuoteLine[]
   accessTokens QuoteAccessToken[]
   financialEntries FinancialEntry[]
+  generatedCommissions GeneratedCommission[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
@@ -636,6 +786,43 @@ model PushSubscription {
   @@map("push_subscriptions")
 }
 
+model PortalNotification {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  customerId     String    @map("customer_id")
+  vehicleId      String    @map("vehicle_id")
+  serviceOrderId String?   @map("service_order_id")
+  quoteId        String?   @map("quote_id")
+  type           String
+  title          String
+  body           String
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, readAt, createdAt])
+  @@map("portal_notifications")
+}
+
+model FcmToken {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  vehicleId      String   @map("vehicle_id")
+  token          String   @unique
+  platform       String   @default("android")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@map("fcm_tokens")
+}
+
 model OfficeNotification {
   id             String    @id @default(cuid())
   organizationId String    @map("organization_id")
@@ -666,6 +853,7 @@ model ServiceCatalog {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   orderItems   ServiceOrderItem[]
+  commissionRules EmployeeCommissionRule[]
 
   @@index([organizationId, isActive])
   @@map("service_catalog")
@@ -692,6 +880,7 @@ model Product {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   orderItems   ServiceOrderItem[]
   movements    StockMovement[]
+  commissionRules EmployeeCommissionRule[]
 
   @@index([organizationId])
   @@map("products")
@@ -785,6 +974,9 @@ model FinancialEntry {
   dueDate           DateTime             @map("due_date") @db.Date
   paidAt            DateTime?            @map("paid_at")
   amount            Decimal              @db.Decimal(12, 2)
+  discountAmount    Decimal              @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  discountPercent   Decimal?             @map("discount_percent") @db.Decimal(5, 2)
+  amountReceived    Decimal?             @map("amount_received") @db.Decimal(12, 2)
   installmentNumber Int                  @default(1) @map("installment_number")
   installmentTotal  Int                  @default(1) @map("installment_total")
   createdAt         DateTime             @default(now()) @map("created_at")
@@ -796,6 +988,7 @@ model FinancialEntry {
   quote        Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   parentEntry  FinancialEntry? @relation("Installments", fields: [parentEntryId], references: [id], onDelete: Cascade)
   installments FinancialEntry[] @relation("Installments")
+  paymentSplits FinancialPaymentSplit[]
   cashMovements CashRegisterMovement[]
 
   @@index([organizationId, dueDate])
@@ -803,6 +996,21 @@ model FinancialEntry {
   @@index([customerId])
   @@index([serviceOrderId])
   @@map("financial_entries")
+}
+
+model FinancialPaymentSplit {
+  id               String        @id @default(cuid())
+  organizationId   String        @map("organization_id")
+  financialEntryId String        @map("financial_entry_id")
+  paymentMethod    PaymentMethod @map("payment_method")
+  amount           Decimal       @db.Decimal(12, 2)
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  financialEntry FinancialEntry @relation(fields: [financialEntryId], references: [id], onDelete: Cascade)
+
+  @@index([financialEntryId])
+  @@map("financial_payment_splits")
 }
 
 model CashRegisterSession {
@@ -844,4 +1052,268 @@ model CashRegisterMovement {
 
   @@index([sessionId])
   @@map("cash_register_movements")
+}
+
+model JobTitle {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  description    String?
+  isTechnical    Boolean  @default(false) @map("is_technical")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("job_titles")
+}
+
+model Employee {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  memberId       String?        @unique @map("member_id")
+  jobTitleId     String?        @map("job_title_id")
+  name           String
+  cpf            String?
+  rg             String?
+  phone          String?
+  whatsapp       String?
+  email          String?
+  birthDate      DateTime?      @map("birth_date") @db.Date
+  address        String?
+  employmentType EmploymentType @default(CLT) @map("employment_type")
+  hireDate       DateTime?      @map("hire_date") @db.Date
+  terminationDate DateTime?     @map("termination_date") @db.Date
+  status         EmployeeStatus @default(ACTIVE)
+  photoUrl       String?        @map("photo_url")
+  accessProfile  String?        @map("access_profile")
+  isTechnical    Boolean        @default(false) @map("is_technical")
+  notes          String?
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member       OrganizationMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  jobTitle     JobTitle?    @relation(fields: [jobTitleId], references: [id], onDelete: SetNull)
+  paymentConfig EmployeePaymentConfig?
+  commissionRules EmployeeCommissionRule[]
+  generatedCommissions GeneratedCommission[]
+  entries      EmployeeEntry[]
+  payrolls     Payroll[]
+  documents    EmployeeDocument[]
+  actionLogs   TeamActionLog[]
+
+  osGeneralResponsible ServiceOrder[] @relation("OsGeneralResponsible")
+  osChecklistBy        ServiceOrder[] @relation("OsChecklistBy")
+  osDiagnosisBy        ServiceOrder[] @relation("OsDiagnosisBy")
+  osQuoteBy            ServiceOrder[] @relation("OsQuoteBy")
+  osExecutionBy        ServiceOrder[] @relation("OsExecutionBy")
+  osFinalizedBy        ServiceOrder[] @relation("OsFinalizedBy")
+  executedItems        ServiceOrderItem[] @relation("ItemExecutor")
+  soldItems            ServiceOrderItem[] @relation("ItemSoldBy")
+  appliedItems         ServiceOrderItem[] @relation("ItemAppliedBy")
+  separatedItems       ServiceOrderItem[] @relation("ItemSeparatedBy")
+
+  @@index([organizationId, status])
+  @@index([organizationId, name])
+  @@map("employees")
+}
+
+model EmployeePaymentConfig {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  employeeId     String              @unique @map("employee_id")
+  paymentType    EmployeePaymentType @map("payment_type")
+  fixedSalary    Decimal?            @map("fixed_salary") @db.Decimal(12, 2)
+  paymentDay     Int?                @map("payment_day")
+  periodicity    PaymentPeriodicity? @default(MENSAL)
+  paymentMethod  PaymentMethod?      @map("payment_method")
+  bankName       String?             @map("bank_name")
+  pixKey         String?             @map("pix_key")
+  allowBonus     Boolean             @default(true) @map("allow_bonus")
+  allowDiscount  Boolean             @default(true) @map("allow_discount")
+  allowAdvance   Boolean             @default(true) @map("allow_advance")
+  notes          String?
+  isActive       Boolean             @default(true) @map("is_active")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("employee_payment_configs")
+}
+
+model EmployeeCommissionRule {
+  id                    String              @id @default(cuid())
+  organizationId        String              @map("organization_id")
+  employeeId            String              @map("employee_id")
+  ruleType              CommissionRuleType  @map("rule_type")
+  baseCalculation       CommissionBase      @map("base_calculation")
+  percentage            Decimal?            @db.Decimal(5, 2)
+  fixedAmount           Decimal?            @map("fixed_amount") @db.Decimal(12, 2)
+  catalogItemId         String?             @map("catalog_item_id")
+  productId             String?             @map("product_id")
+  trigger               CommissionTrigger   @default(OS_FINALIZADA)
+  considerDiscount      Boolean             @default(true) @map("consider_discount")
+  considerOnlyReceived  Boolean             @default(false) @map("consider_only_received")
+  isActive              Boolean             @default(true) @map("is_active")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  catalogItem  ServiceCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId])
+  @@index([employeeId, isActive])
+  @@map("employee_commission_rules")
+}
+
+model GeneratedCommission {
+  id             String                    @id @default(cuid())
+  organizationId String                    @map("organization_id")
+  employeeId     String                    @map("employee_id")
+  serviceOrderId String?                   @map("service_order_id")
+  quoteId        String?                   @map("quote_id")
+  itemId         String?                   @map("item_id")
+  itemType       CommissionItemType        @map("item_type")
+  ruleType       CommissionRuleType?         @map("rule_type")
+  description    String
+  baseAmount     Decimal                   @map("base_amount") @db.Decimal(12, 2)
+  percentage     Decimal?                  @db.Decimal(5, 2)
+  fixedAmount    Decimal?                  @map("fixed_amount") @db.Decimal(12, 2)
+  commissionAmount Decimal                 @map("commission_amount") @db.Decimal(12, 2)
+  status         GeneratedCommissionStatus @default(PENDENTE)
+  generatedAt    DateTime                  @default(now()) @map("generated_at")
+  approvedAt     DateTime?                 @map("approved_at")
+  paidAt         DateTime?                 @map("paid_at")
+  payrollId      String?                   @map("payroll_id")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  quote        Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  serviceOrderItem ServiceOrderItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  payroll      Payroll?     @relation(fields: [payrollId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId, status])
+  @@index([serviceOrderId])
+  @@map("generated_commissions")
+}
+
+model EmployeeEntry {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  employeeId     String              @map("employee_id")
+  entryType      EmployeeEntryType   @map("entry_type")
+  description    String
+  amount         Decimal             @db.Decimal(12, 2)
+  entryDate      DateTime            @map("entry_date") @db.Date
+  competence     DateTime?           @db.Date
+  status         EmployeeEntryStatus @default(PENDENTE)
+  paymentMethod  PaymentMethod?      @map("payment_method")
+  attachmentUrl  String?             @map("attachment_url")
+  notes          String?
+  createdByUserId String?            @map("created_by_user_id")
+  payrollId      String?             @map("payroll_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payroll      Payroll?     @relation(fields: [payrollId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId])
+  @@index([entryDate])
+  @@map("employee_entries")
+}
+
+model Payroll {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  employeeId     String        @map("employee_id")
+  periodStart    DateTime      @map("period_start") @db.Date
+  periodEnd      DateTime      @map("period_end") @db.Date
+  fixedSalary    Decimal       @default(0) @map("fixed_salary") @db.Decimal(12, 2)
+  totalCommissions Decimal     @default(0) @map("total_commissions") @db.Decimal(12, 2)
+  totalBonus     Decimal       @default(0) @map("total_bonus") @db.Decimal(12, 2)
+  totalDiscounts Decimal       @default(0) @map("total_discounts") @db.Decimal(12, 2)
+  totalAdvances  Decimal       @default(0) @map("total_advances") @db.Decimal(12, 2)
+  netTotal       Decimal       @default(0) @map("net_total") @db.Decimal(12, 2)
+  status         PayrollStatus @default(ABERTA)
+  paidAt         DateTime?     @map("paid_at")
+  paymentMethod  PaymentMethod? @map("payment_method")
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  items        PayrollItem[]
+  commissions  GeneratedCommission[]
+  entries      EmployeeEntry[]
+
+  @@index([organizationId, periodStart, periodEnd])
+  @@index([employeeId, status])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id          String          @id @default(cuid())
+  payrollId   String          @map("payroll_id")
+  itemType    PayrollItemType @map("item_type")
+  description String
+  amount      Decimal         @db.Decimal(12, 2)
+  referenceId String?         @map("reference_id")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+
+  @@index([payrollId])
+  @@map("payroll_items")
+}
+
+model EmployeeDocument {
+  id         String   @id @default(cuid())
+  employeeId String   @map("employee_id")
+  docType    String   @map("doc_type")
+  fileName   String   @map("file_name")
+  fileUrl    String   @map("file_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employee_documents")
+}
+
+model TeamActionLog {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String?  @map("user_id")
+  employeeId     String?  @map("employee_id")
+  module         String
+  action         String
+  entity         String?
+  entityId       String?  @map("entity_id")
+  description    String
+  ipAddress      String?  @map("ip_address")
+  device         String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([employeeId])
+  @@map("team_action_logs")
 }

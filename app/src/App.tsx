@@ -1,5 +1,7 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { Navigate, Route, Routes } from "react-router";
+import BrandingBootstrap from "./components/BrandingBootstrap";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PageLoader from "./components/PageLoader";
 import AppShell from "./layouts/AppShell";
@@ -7,22 +9,32 @@ import LoginPage from "./pages/auth/LoginPage";
 import RegisterOrganizationPage from "./pages/auth/RegisterOrganizationPage";
 import { routes } from "./lib/routes";
 
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const AdminDashboardPage = lazy(() => import("./pages/admin/AdminDashboardPage"));
-const CustomersPage = lazy(() => import("./pages/customers/CustomersPage"));
-const CustomerDetailPage = lazy(() => import("./pages/customers/CustomerDetailPage"));
-const VehiclesPage = lazy(() => import("./pages/vehicles/VehiclesPage"));
-const VehicleDetailPage = lazy(() => import("./pages/vehicles/VehicleDetailPage"));
-const ServiceOrdersPage = lazy(() => import("./pages/service-orders/ServiceOrdersPage"));
-const ServiceOrderDetailPage = lazy(() => import("./pages/service-orders/ServiceOrderDetailPage"));
-const QuotesPage = lazy(() => import("./pages/quotes/QuotesPage"));
-const ServicesPage = lazy(() => import("./pages/services/ServicesPage"));
-const InventoryPage = lazy(() => import("./pages/inventory/InventoryPage"));
-const AgendaPage = lazy(() => import("./pages/agenda/AgendaPage"));
-const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
-const PurchasesPage = lazy(() => import("./pages/purchases/PurchasesPage"));
-const FinancialPage = lazy(() => import("./pages/financial/FinancialPage"));
-const ReportsPage = lazy(() => import("./pages/reports/ReportsPage"));
+const DashboardPage = lazyWithRetry(() => import("./pages/DashboardPage"));
+const AdminDashboardPage = lazyWithRetry(() => import("./pages/admin/AdminDashboardPage"));
+const CustomersPage = lazyWithRetry(() => import("./pages/customers/CustomersPage"));
+const CustomerDetailPage = lazyWithRetry(() => import("./pages/customers/CustomerDetailPage"));
+const VehiclesPage = lazyWithRetry(() => import("./pages/vehicles/VehiclesPage"));
+const VehicleDetailPage = lazyWithRetry(() => import("./pages/vehicles/VehicleDetailPage"));
+const ServiceOrdersPage = lazyWithRetry(() => import("./pages/service-orders/ServiceOrdersPage"));
+const ServiceOrderDetailPage = lazyWithRetry(() => import("./pages/service-orders/ServiceOrderDetailPage"));
+const QuotesPage = lazyWithRetry(() => import("./pages/quotes/QuotesPage"));
+const QuoteDetailPage = lazyWithRetry(() => import("./pages/quotes/QuoteDetailPage"));
+const ServicesPage = lazyWithRetry(() => import("./pages/services/ServicesPage"));
+const InventoryPage = lazyWithRetry(() => import("./pages/inventory/InventoryPage"));
+const AgendaPage = lazyWithRetry(() => import("./pages/agenda/AgendaPage"));
+const SettingsPage = lazyWithRetry(() => import("./pages/settings/SettingsPage"));
+const PurchasesPage = lazyWithRetry(() => import("./pages/purchases/PurchasesPage"));
+const FinancialPage = lazyWithRetry(() => import("./pages/financial/FinancialPage"));
+const ReportsPage = lazyWithRetry(() => import("./pages/reports/ReportsPage"));
+const TeamLayout = lazyWithRetry(() => import("./layouts/TeamLayout"));
+const EmployeesPage = lazyWithRetry(() => import("./pages/team/EmployeesPage"));
+const EmployeeDetailPage = lazyWithRetry(() => import("./pages/team/EmployeeDetailPage"));
+const JobTitlesPage = lazyWithRetry(() => import("./pages/team/JobTitlesPage"));
+const PermissionsPage = lazyWithRetry(() => import("./pages/team/PermissionsPage"));
+const CommissionRulesPage = lazyWithRetry(() => import("./pages/team/CommissionRulesPage"));
+const TeamEntriesPage = lazyWithRetry(() => import("./pages/team/TeamEntriesPage"));
+const PayrollPage = lazyWithRetry(() => import("./pages/team/PayrollPage"));
+const ProductivityPage = lazyWithRetry(() => import("./pages/team/ProductivityPage"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
@@ -30,7 +42,9 @@ function Lazy({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <BrandingBootstrap />
+      <Routes>
       <Route path="/" element={<Navigate to={routes.login} replace />} />
       <Route path={routes.login} element={<LoginPage />} />
       <Route path={routes.register} element={<RegisterOrganizationPage />} />
@@ -110,6 +124,14 @@ export default function App() {
             }
           />
           <Route
+            path="orcamentos/:id"
+            element={
+              <Lazy>
+                <QuoteDetailPage />
+              </Lazy>
+            }
+          />
+          <Route
             path="servicos"
             element={
               <Lazy>
@@ -158,6 +180,80 @@ export default function App() {
             }
           />
           <Route
+            path="equipe"
+            element={
+              <Lazy>
+                <TeamLayout />
+              </Lazy>
+            }
+          >
+            <Route index element={<Navigate to="funcionarios" replace />} />
+            <Route
+              path="funcionarios"
+              element={
+                <Lazy>
+                  <EmployeesPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="funcionarios/:id"
+              element={
+                <Lazy>
+                  <EmployeeDetailPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="cargos"
+              element={
+                <Lazy>
+                  <JobTitlesPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="permissoes"
+              element={
+                <Lazy>
+                  <PermissionsPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="regras-comissao"
+              element={
+                <Lazy>
+                  <CommissionRulesPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="lancamentos"
+              element={
+                <Lazy>
+                  <TeamEntriesPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="fechamentos"
+              element={
+                <Lazy>
+                  <PayrollPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="produtividade"
+              element={
+                <Lazy>
+                  <ProductivityPage />
+                </Lazy>
+              }
+            />
+          </Route>
+          <Route
             path="configuracoes"
             element={
               <Lazy>
@@ -170,5 +266,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to={routes.login} replace />} />
     </Routes>
+    </>
   );
 }

@@ -1,12 +1,18 @@
+import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { FinancialEntryType, PaymentMethod } from '@prisma/client';
 
@@ -48,6 +54,19 @@ export class CreateInstallmentsDto extends CreateFinancialEntryDto {
   installments!: number;
 }
 
+export class PayFinancialSplitDto {
+  @IsEnum(PaymentMethod)
+  paymentMethod!: PaymentMethod;
+
+  @IsNumber()
+  @Min(0.01)
+  amount!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  registerInCash?: boolean;
+}
+
 export class PayFinancialEntryDto {
   @IsOptional()
   @IsEnum(PaymentMethod)
@@ -58,5 +77,24 @@ export class PayFinancialEntryDto {
   paidAt?: string;
 
   @IsOptional()
+  @IsBoolean()
   registerInCash?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => PayFinancialSplitDto)
+  splits?: PayFinancialSplitDto[];
 }

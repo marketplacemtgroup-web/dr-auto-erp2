@@ -34,24 +34,31 @@ export interface AuthSession {
   permissions: string[];
 }
 
-export interface DashboardKpis {
+export interface DashboardOperationalKpis {
   openServiceOrders: number;
   openServiceOrdersTrend: number;
   vehiclesInShop: number;
   vehiclesInShopTrend: number;
   pendingQuotes: number;
   pendingQuotesTrend: number;
-  dailyRevenue: number;
-  dailyRevenueTrend: number;
   lowStockParts: number;
   lowStockPartsTrend: number;
   delayedServices: number;
   waitingClients: number;
+}
+
+export interface DashboardFinancialKpis {
+  dailyRevenue: number;
+  dailyRevenueTrend: number;
   invoicesThisMonth: number;
   averageTicket: number;
   monthlyRevenue: number;
   averageServiceTimeMinutes: number;
+  partsProfit: number;
+  servicesProfit: number;
 }
+
+export type DashboardKpis = DashboardOperationalKpis & DashboardFinancialKpis;
 
 export interface AdminStats {
   activeUsers: number;
@@ -186,6 +193,7 @@ export interface QuoteLineRow {
   discount?: string | number;
   approved?: boolean | null;
   sortOrder?: number;
+  serviceOrderItemId?: string | null;
 }
 
 export interface PortalQuoteItemRow {
@@ -262,6 +270,20 @@ export type PaymentMethod =
   | "TRANSFER"
   | "OTHER";
 
+export interface FinancialReceiveQueueOrder {
+  serviceOrderId: string;
+  number: number;
+  status: string;
+  totalAmount: number;
+  customerName: string;
+  plate: string;
+}
+
+export interface FinancialReceiveQueue {
+  readyToBill: FinancialReceiveQueueOrder[];
+  openReceivables: FinancialEntryRow[];
+}
+
 export interface FinancialEntryRow {
   id: string;
   description: string;
@@ -271,6 +293,14 @@ export interface FinancialEntryRow {
   amount: string | number;
   createdAt: string;
   paymentMethod?: PaymentMethod | null;
+  discountAmount?: string | number;
+  discountPercent?: string | number | null;
+  amountReceived?: string | number | null;
+  paymentSplits?: Array<{
+    id: string;
+    paymentMethod: PaymentMethod;
+    amount: string | number;
+  }>;
   paidAt?: string | null;
   installmentNumber?: number;
   installmentTotal?: number;
@@ -328,12 +358,256 @@ export interface ReportsSummary {
   lowStockCount: number;
 }
 
+export interface ReportsQueryParams {
+  from?: string;
+  to?: string;
+  compare?: boolean;
+}
+
+export interface ReportsFull {
+  period: { from: string; to: string };
+  comparison: {
+    period: { from: string; to: string };
+    revenueChange: number;
+    profitChange: number;
+    averageTicketChange: number;
+    deliveredOrdersChange: number;
+    previousRevenue: number;
+    previousProfit: number;
+  } | null;
+  financial: {
+    revenueToday: number;
+    revenue: number;
+    expense: number;
+    result: number;
+    partsProfit: number;
+    servicesProfit: number;
+    totalProfit: number;
+    partsRevenue: number;
+    servicesRevenue: number;
+    discountsGiven: number;
+    openReceivables: { count: number; amount: number };
+    openPayables: { count: number; amount: number };
+    overdueReceivables: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      dueDate: string;
+      customerName: string | null;
+      serviceOrderNumber: number | null;
+    }>;
+    paymentMethods: Array<{ method: PaymentMethod; amount: number; count: number }>;
+    cashFlow: {
+      paymentIn: number;
+      supply: number;
+      withdrawal: number;
+      paymentOut: number;
+      netCash: number;
+    };
+    dreByMonth: Array<{ month: string; revenue: number; expense: number; result: number }>;
+    revenueByDay: Array<{ date: string; amount: number }>;
+    paymentReceipts: Array<{
+      paymentMethod: PaymentMethod;
+      amount: number;
+      customerName: string | null;
+      description: string;
+      serviceOrderNumber: number | null;
+      paidAt: string | null;
+    }>;
+  };
+  operations: {
+    ordersByStatus: Array<{ status: string; count: number }>;
+    openOrdersCount: number;
+    deliveredCount: number;
+    averageTicket: number;
+    averageDeliveryDays: number;
+    delayedOrders: Array<{
+      id: string;
+      number: number;
+      status: string;
+      customerName: string;
+      plate: string;
+      estimatedAt: string | null;
+    }>;
+    ordersByMechanic: Array<{
+      name: string;
+      count: number;
+      total: number;
+      deliveredCount: number;
+      averageDeliveryDays: number;
+    }>;
+    topServices: Array<{ description: string; count: number; revenue: number }>;
+    topParts: Array<{ description: string; count: number; revenue: number; profit: number }>;
+    marginByOrder: Array<{
+      id: string;
+      number: number;
+      customerName: string;
+      plate: string;
+      revenue: number;
+      cost: number;
+      margin: number;
+      marginPercent: number;
+      deliveredAt: string;
+    }>;
+    ordersHeatmap: Array<{ dow: number; hour: number; dayLabel: string; count: number }>;
+    ordersCreatedCount: number;
+  };
+  commercial: {
+    totalCustomers: number;
+    totalVehicles: number;
+    quoteFunnel: { DRAFT: number; PENDING: number; APPROVED: number; REJECTED: number; total: number };
+    quoteConversion: { total: number; approved: number; rate: number };
+    topCustomers: Array<{ id: string; name: string; revenue: number; orderCount: number }>;
+    customersByOrigin: Array<{ origin: string; count: number }>;
+    returningCustomers: {
+      count: number;
+      rate: number;
+      list: Array<{ id: string; name: string; revenue: number; orderCount: number }>;
+    };
+    inactiveCustomers: Array<{ id: string; name: string; phone: string | null }>;
+  };
+  inventory: {
+    lowStockCount: number;
+    lowStock: Array<{
+      name: string;
+      sku: string | null;
+      stock: number;
+      reservedStock: number;
+      minStock: number;
+      salePrice: number;
+    }>;
+    stockValue: number;
+    reorderSuggestion: Array<{
+      name: string;
+      sku: string | null;
+      currentStock: number;
+      minStock: number;
+      suggestedQty: number;
+    }>;
+    topMovingProducts: Array<{
+      name: string;
+      sku: string | null;
+      soldQty: number;
+      revenue: number;
+    }>;
+    slowMovingProducts: Array<{
+      name: string;
+      sku: string | null;
+      stock: number;
+      stockValue: number;
+    }>;
+    purchasesBySupplier: Array<{ supplier: string; count: number; total: number }>;
+    purchases: Array<{
+      number: string;
+      supplierName: string;
+      status: string;
+      totalAmount: number;
+      createdAt: string;
+    }>;
+  };
+}
+
+export interface EmployeeMini {
+  id: string;
+  name: string;
+  photoUrl?: string | null;
+}
+
+export interface EmployeeRow {
+  id: string;
+  name: string;
+  cpf: string | null;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  accessProfile: string | null;
+  photoUrl: string | null;
+  isTechnical: boolean;
+  jobTitle?: { id: string; name: string } | null;
+  paymentConfig?: {
+    paymentType: string;
+    fixedSalary: string | number | null;
+  } | null;
+  member?: {
+    id: string;
+    isActive: boolean;
+    user: { name: string; email: string; isActive: boolean };
+    role: { name: string; slug: string };
+  } | null;
+  pendingCommission?: number;
+  osInProgress?: number;
+  monthToPay?: number;
+}
+
+export interface JobTitleRow {
+  id: string;
+  name: string;
+  description: string | null;
+  isTechnical: boolean;
+  isActive: boolean;
+  _count?: { employees: number };
+}
+
+export interface CommissionRuleRow {
+  id: string;
+  employeeId: string;
+  ruleType: string;
+  baseCalculation: string;
+  percentage: string | number | null;
+  fixedAmount: string | number | null;
+  trigger: string;
+  isActive: boolean;
+  employee?: { id: string; name: string; paymentConfig?: { paymentType: string } | null };
+  catalogItem?: { id: string; name: string } | null;
+  product?: { id: string; name: string } | null;
+}
+
+export interface EmployeeEntryRow {
+  id: string;
+  employeeId: string;
+  entryType: string;
+  description: string;
+  amount: string | number;
+  entryDate: string;
+  status: string;
+  employee?: { id: string; name: string };
+}
+
+export interface PayrollRow {
+  id: string;
+  employeeId: string;
+  periodStart: string;
+  periodEnd: string;
+  fixedSalary: string | number;
+  totalCommissions: string | number;
+  totalBonus: string | number;
+  totalDiscounts: string | number;
+  totalAdvances: string | number;
+  netTotal: string | number;
+  status: string;
+  employee?: EmployeeRow;
+}
+
+export interface TeamStats {
+  activeEmployees: number;
+  pendingCommissions: number;
+  monthPayments: number;
+  osInProgress: number;
+}
+
 export interface ServiceOrderItemRow {
   id: string;
   description: string;
   itemType: "SERVICE" | "PART";
   quantity: number;
   unitPrice: string | number;
+  discount?: string | number;
+  expectedCommission?: string | number | null;
+  executor?: EmployeeMini | null;
+  soldBy?: EmployeeMini | null;
+  appliedBy?: EmployeeMini | null;
+  separatedBy?: EmployeeMini | null;
+  catalogItem?: { id: string; name: string } | null;
   product?: { id: string; name: string } | null;
 }
 
@@ -342,11 +616,18 @@ export interface ServiceOrderDetail extends ServiceOrderRow {
   diagnosis: string | null;
   internalNotes: string | null;
   customerVisibleNotes?: string | null;
+  paymentAgreement?: string | null;
   entryKm?: number | null;
   enteredAt?: string | null;
   bay?: string | null;
   priority?: string;
   createdAt: string;
+  generalResponsible?: EmployeeMini | null;
+  checklistBy?: EmployeeMini | null;
+  diagnosisBy?: EmployeeMini | null;
+  quoteBy?: EmployeeMini | null;
+  executionBy?: EmployeeMini | null;
+  finalizedBy?: EmployeeMini | null;
   items: ServiceOrderItemRow[];
   quotes: Array<{
     id: string;
@@ -354,6 +635,7 @@ export interface ServiceOrderDetail extends ServiceOrderRow {
     status: string;
     amount: string | number;
     createdAt: string;
+    paymentAgreement?: string | null;
     lines?: QuoteLineRow[];
   }>;
   checklistItems?: ChecklistItemRow[];
@@ -437,7 +719,7 @@ export interface VehicleDetail extends VehicleRow {
   timeline: CustomerTimelineRow[];
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
     super(message);
@@ -445,22 +727,47 @@ class ApiError extends Error {
   }
 }
 
+function formatApiErrorMessage(
+  message: string | string[] | undefined,
+  fallback = "Erro na requisição",
+): string {
+  if (!message) return fallback;
+  if (Array.isArray(message)) return message.join(". ");
+  return message;
+}
+
+export function getErrorMessage(err: unknown, fallback = "Erro na requisição"): string {
+  if (err instanceof ApiError) return err.message;
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
+type RequestOptions = {
+  allowEmpty?: boolean;
+  timeoutMs?: number;
+};
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   token?: string | null,
-  allowEmpty = false,
+  requestOpts: RequestOptions = {},
 ): Promise<T> {
+  const { allowEmpty = false, timeoutMs } = requestOpts;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetchWithTimeout(`${API_URL}/api${path}`, {
-    ...options,
-    headers,
-  });
+  const res = await fetchWithTimeout(
+    `${API_URL}/api${path}`,
+    {
+      ...options,
+      headers,
+    },
+    timeoutMs,
+  );
 
   if (!res.ok) {
     const errText = await res.text();
@@ -472,10 +779,7 @@ async function request<T>(
         body = { message: errText };
       }
     }
-    throw new ApiError(
-      body.message?.toString() ?? "Erro na requisição",
-      res.status,
-    );
+    throw new ApiError(formatApiErrorMessage(body.message), res.status);
   }
 
   return parseJsonBody<T>(res, { allowEmpty });
@@ -486,7 +790,7 @@ function requestNullable<T>(
   options: RequestInit = {},
   token?: string | null,
 ): Promise<T> {
-  return request<T>(path, options, token, true);
+  return request<T>(path, options, token, { allowEmpty: true });
 }
 
 export const api = {
@@ -496,31 +800,95 @@ export const api = {
       { method: "GET" },
     ),
 
+  publicBranding: () =>
+    request<{
+      name: string | null;
+      tradeName: string | null;
+      logoUrl: string | null;
+      primaryColor?: string;
+      accentColor?: string;
+    }>("/auth/branding", { method: "GET" }),
+
   login: (email: string, password: string) =>
     request<AuthSession>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
 
-  registerOrganization: (data: {
-    organizationName: string;
-    tradeName?: string;
-    document?: string;
-    email: string;
-    password: string;
-    name: string;
-    phone?: string;
-  }) =>
-    request<AuthSession>("/auth/register-organization", {
+  registerOrganization: async (
+    data: {
+      organizationName: string;
+      tradeName?: string;
+      document?: string;
+      loginUsername: string;
+      loginEmailDomain: string;
+      password: string;
+      name: string;
+      phone?: string;
+    },
+    logo?: File | null,
+  ) => {
+    const form = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") form.append(key, value);
+    });
+    if (logo) form.append("logo", logo);
+
+    const res = await fetchWithTimeout(`${API_URL}/api/auth/register-organization`, {
       method: "POST",
-      body: JSON.stringify(data),
-    }),
+      body: form,
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      let body: { message?: string | string[] } = {};
+      if (errText.trim()) {
+        try {
+          body = JSON.parse(errText) as { message?: string | string[] };
+        } catch {
+          body = { message: errText };
+        }
+      }
+      throw new ApiError(body.message?.toString() ?? "Erro no cadastro", res.status);
+    }
+    return parseJsonBody<AuthSession>(res);
+  },
+
+  uploadOrganizationLogo: async (token: string, file: File) => {
+    const form = new FormData();
+    form.append("logo", file);
+    const res = await fetchWithTimeout(`${API_URL}/api/organizations/current/logo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      let body: { message?: string | string[] } = {};
+      if (errText.trim()) {
+        try {
+          body = JSON.parse(errText) as { message?: string | string[] };
+        } catch {
+          body = { message: errText };
+        }
+      }
+      throw new ApiError(body.message?.toString() ?? "Erro no upload", res.status);
+    }
+    return parseJsonBody<OrganizationDetail>(res);
+  },
 
   me: (token: string) =>
     request<AuthSession>("/auth/me", { method: "GET" }, token),
 
-  dashboardKpis: (token: string) =>
-    request<DashboardKpis>("/dashboard/kpis", { method: "GET" }, token),
+  dashboardOperationalKpis: (token: string) =>
+    request<DashboardOperationalKpis>("/dashboard/kpis", { method: "GET" }, token),
+
+  dashboardFinancialKpis: (token: string) =>
+    request<DashboardFinancialKpis>(
+      "/dashboard/kpis/financial",
+      { method: "GET" },
+      token,
+      { timeoutMs: 45_000 },
+    ),
 
   dashboardServiceOrdersInProgress: (token: string) =>
     request<ServiceOrderRow[]>("/dashboard/service-orders-in-progress", { method: "GET" }, token),
@@ -712,10 +1080,17 @@ export const api = {
       diagnosis: string;
       internalNotes: string;
       customerVisibleNotes: string;
+      paymentAgreement: string;
       entryKm: number;
       bay: string;
       priority: string;
       statusReason: string;
+      generalResponsibleId: string | null;
+      checklistById: string | null;
+      diagnosisById: string | null;
+      quoteById: string | null;
+      executionById: string | null;
+      finalizedById: string | null;
     }>,
   ) =>
     request<ServiceOrderDetail>(
@@ -824,11 +1199,38 @@ export const api = {
       unitPrice: number;
       productId?: string;
       catalogItemId?: string;
+      discount?: number;
+      executorId?: string;
+      soldById?: string;
+      appliedById?: string;
+      separatedById?: string;
     },
   ) =>
     request<ServiceOrderDetail>(
       `/service-orders/${serviceOrderId}/items`,
       { method: "POST", body: JSON.stringify(data) },
+      token,
+    ),
+
+  updateServiceOrderItem: (
+    token: string,
+    serviceOrderId: string,
+    itemId: string,
+    data: {
+      description?: string;
+      itemType?: "SERVICE" | "PART";
+      quantity?: number;
+      unitPrice?: number;
+      discount?: number;
+      executorId?: string | null;
+      soldById?: string | null;
+      appliedById?: string | null;
+      separatedById?: string | null;
+    },
+  ) =>
+    request<ServiceOrderDetail>(
+      `/service-orders/${serviceOrderId}/items/${itemId}`,
+      { method: "PATCH", body: JSON.stringify(data) },
       token,
     ),
 
@@ -855,32 +1257,53 @@ export const api = {
       token,
     ),
 
-  quotes: (token: string, search?: string, status?: string) => {
+  quotes: (
+    token: string,
+    search?: string,
+    status?: string,
+    includeApproved?: boolean,
+  ) => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (status) params.set("status", status);
+    if (includeApproved) params.set("includeApproved", "true");
     const q = params.toString();
     return request<QuoteRow[]>(`/quotes${q ? `?${q}` : ""}`, { method: "GET" }, token);
   },
 
+  quote: (token: string, id: string) =>
+    request<QuoteDetail>(`/quotes/${id}`, { method: "GET" }, token),
+
   createQuote: (
     token: string,
-    data: { serviceOrderId: string; amount: number; status?: string },
+    data: {
+      vehicleId?: string;
+      serviceOrderId?: string;
+      complaint?: string;
+      amount?: number;
+      status?: string;
+    },
   ) =>
-    request<QuoteRow>("/quotes", { method: "POST", body: JSON.stringify(data) }, token),
+    request<QuoteDetail>("/quotes", { method: "POST", body: JSON.stringify(data) }, token),
 
   updateQuote: (
     token: string,
     id: string,
-    data: Partial<{ status: string; amount: number }>,
+    data: Partial<{ status: string; amount: number; paymentAgreement: string }>,
   ) =>
     request<QuoteRow>(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
+
+  approveQuote: (token: string, id: string) =>
+    request<QuoteRow>(`/quotes/${id}/approve`, { method: "PATCH" }, token),
+
+  rejectQuote: (token: string, id: string) =>
+    request<QuoteRow>(`/quotes/${id}/reject`, { method: "PATCH" }, token),
 
   deleteQuote: (token: string, id: string) =>
     request<{ ok: boolean }>(`/quotes/${id}`, { method: "DELETE" }, token),
 
   createQuoteShareLink: (token: string, quoteId: string) =>
-    request<{ token: string; expiresAt: string; path: string }>(
+    request<{ token: string; expiresAt: string; path: string; whatsappMessage?: string }>(
       `/quotes/${quoteId}/share-link`,
       { method: "POST" },
       token,
@@ -1104,7 +1527,18 @@ export const api = {
   payFinancialEntry: (
     token: string,
     id: string,
-    data?: { paymentMethod?: PaymentMethod; paidAt?: string; registerInCash?: boolean },
+    data?: {
+      paymentMethod?: PaymentMethod;
+      paidAt?: string;
+      registerInCash?: boolean;
+      discountAmount?: number;
+      discountPercent?: number;
+      splits?: Array<{
+        paymentMethod: PaymentMethod;
+        amount: number;
+        registerInCash?: boolean;
+      }>;
+    },
   ) =>
     request<FinancialEntryRow>(`/financial/${id}/pay`, {
       method: "PATCH",
@@ -1132,6 +1566,9 @@ export const api = {
     request<FinancialEntryRow>(`/financial/from-service-order/${serviceOrderId}`, {
       method: "POST",
     }, token),
+
+  financialReceiveQueue: (token: string) =>
+    request<FinancialReceiveQueue>("/financial/receive-queue", { method: "GET" }, token),
 
   financialCashFlow: (token: string) =>
     request<Array<{ type: string; amount: string | number; paidAt: string; paymentMethod: string | null }>>(
@@ -1165,14 +1602,43 @@ export const api = {
       body: JSON.stringify(data),
     }, token),
 
-  reportsSummary: (token: string) =>
-    request<ReportsSummary>("/reports/summary", { method: "GET" }, token),
+  reportsFull: (token: string, params?: ReportsQueryParams) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.compare) q.set("compare", "true");
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<ReportsFull>(
+      `/reports/full${suffix}`,
+      { method: "GET" },
+      token,
+      { timeoutMs: 60_000 },
+    );
+  },
 
-  reportsBi: (token: string) =>
-    request<ReportsBi>("/reports/bi", { method: "GET" }, token),
+  reportsSummary: (token: string, params?: ReportsQueryParams) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<ReportsSummary>(`/reports/summary${suffix}`, { method: "GET" }, token);
+  },
 
-  reportsExport: (token: string, type: string) =>
-    request<unknown[]>(`/reports/export/${type}`, { method: "GET" }, token),
+  reportsBi: (token: string, params?: ReportsQueryParams) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<ReportsBi>(`/reports/bi${suffix}`, { method: "GET" }, token);
+  },
+
+  reportsExport: (token: string, type: string, params?: ReportsQueryParams) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<unknown[]>(`/reports/export/${type}${suffix}`, { method: "GET" }, token);
+  },
 
   organizationMembers: (token: string) =>
     request<OrganizationMemberRow[]>("/users/members", { method: "GET" }, token),
@@ -1259,6 +1725,193 @@ export const api = {
 
   deleteAppointment: (token: string, id: string) =>
     request<{ ok: boolean }>(`/appointments/${id}`, { method: "DELETE" }, token),
+
+  teamStats: (token: string) =>
+    request<TeamStats>("/team/stats", { method: "GET" }, token),
+
+  teamLoginEmailDomain: (token: string) =>
+    request<{ loginEmailDomain: string }>("/team/login-email-domain", { method: "GET" }, token),
+
+  employees: (
+    token: string,
+    params?: { status?: string; jobTitleId?: string; search?: string },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.jobTitleId) q.set("jobTitleId", params.jobTitleId);
+    if (params?.search) q.set("search", params.search);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<EmployeeRow[]>(`/team/employees${suffix}`, { method: "GET" }, token);
+  },
+
+  employeeTechnicians: (token: string) =>
+    request<EmployeeMini[]>("/team/employees/technicians", { method: "GET" }, token),
+
+  employee: (token: string, id: string) =>
+    request<EmployeeRow & Record<string, unknown>>(`/team/employees/${id}`, { method: "GET" }, token),
+
+  createEmployee: (token: string, data: Record<string, unknown>) =>
+    request<EmployeeRow>("/team/employees", { method: "POST", body: JSON.stringify(data) }, token),
+
+  updateEmployee: (token: string, id: string, data: Record<string, unknown>) =>
+    request<EmployeeRow>(`/team/employees/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
+
+  upsertEmployeePaymentConfig: (token: string, id: string, data: Record<string, unknown>) =>
+    request<unknown>(`/team/employees/${id}/payment-config`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  createEmployeeAccess: (
+    token: string,
+    id: string,
+    data: {
+      loginUsername: string;
+      password: string;
+      accessProfile: string;
+      accessActive?: boolean;
+    },
+  ) =>
+    request<EmployeeRow>(`/team/employees/${id}/access`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  updateEmployeeAccess: (
+    token: string,
+    id: string,
+    data: { accessProfile?: string; accessActive?: boolean },
+  ) =>
+    request<EmployeeRow>(`/team/employees/${id}/access`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }, token),
+
+  resetEmployeePassword: (token: string, id: string, password: string) =>
+    request<{ ok: boolean }>(`/team/employees/${id}/access/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }, token),
+
+  jobTitles: (token: string) =>
+    request<JobTitleRow[]>("/team/job-titles", { method: "GET" }, token),
+
+  createJobTitle: (token: string, data: { name: string; description?: string; isTechnical?: boolean }) =>
+    request<JobTitleRow>("/team/job-titles", { method: "POST", body: JSON.stringify(data) }, token),
+
+  commissionRules: (token: string, employeeId?: string) =>
+    request<CommissionRuleRow[]>(
+      `/team/commission-rules${employeeId ? `?employeeId=${employeeId}` : ""}`,
+      { method: "GET" },
+      token,
+    ),
+
+  createCommissionRule: (token: string, data: Record<string, unknown>) =>
+    request<CommissionRuleRow>("/team/commission-rules", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  updateCommissionRule: (token: string, id: string, data: Record<string, unknown>) =>
+    request<CommissionRuleRow>(`/team/commission-rules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }, token),
+
+  duplicateCommissionRule: (token: string, id: string) =>
+    request<CommissionRuleRow>(`/team/commission-rules/${id}/duplicate`, { method: "POST" }, token),
+
+  teamEntries: (
+    token: string,
+    params?: { employeeId?: string; entryType?: string; from?: string; to?: string },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.entryType) q.set("entryType", params.entryType);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<EmployeeEntryRow[]>(`/team/entries${suffix}`, { method: "GET" }, token);
+  },
+
+  createTeamEntry: (token: string, data: Record<string, unknown>) =>
+    request<EmployeeEntryRow>("/team/entries", { method: "POST", body: JSON.stringify(data) }, token),
+
+  payrolls: (
+    token: string,
+    params?: { periodStart?: string; periodEnd?: string; employeeId?: string; status?: string },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.periodStart) q.set("periodStart", params.periodStart);
+    if (params?.periodEnd) q.set("periodEnd", params.periodEnd);
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<PayrollRow[]>(`/team/payroll${suffix}`, { method: "GET" }, token);
+  },
+
+  payrollPreview: (
+    token: string,
+    employeeId: string,
+    periodStart: string,
+    periodEnd: string,
+  ) =>
+    request<Record<string, unknown>>(
+      `/team/payroll/preview?employeeId=${employeeId}&periodStart=${periodStart}&periodEnd=${periodEnd}`,
+      { method: "GET" },
+      token,
+    ),
+
+  payroll: (token: string, id: string) =>
+    request<Record<string, unknown>>(`/team/payroll/${id}`, { method: "GET" }, token),
+
+  createPayroll: (token: string, data: Record<string, unknown>) =>
+    request<PayrollRow>("/team/payroll", { method: "POST", body: JSON.stringify(data) }, token),
+
+  closePayroll: (token: string, id: string) =>
+    request<PayrollRow>(`/team/payroll/${id}/close`, { method: "PATCH" }, token),
+
+  markPayrollPaid: (token: string, id: string, paymentMethod?: string) =>
+    request<PayrollRow>(`/team/payroll/${id}/paid`, {
+      method: "PATCH",
+      body: JSON.stringify({ paymentMethod }),
+    }, token),
+
+  teamProductivity: (
+    token: string,
+    periodStart: string,
+    periodEnd: string,
+    employeeId?: string,
+  ) => {
+    const q = new URLSearchParams({ periodStart, periodEnd });
+    if (employeeId) q.set("employeeId", employeeId);
+    return request<unknown[]>(`/team/productivity?${q}`, { method: "GET" }, token);
+  },
+
+  roles: (token: string) =>
+    request<
+      Array<{
+        id: string;
+        name: string;
+        slug: string;
+        permissions: Array<{ permission: { slug: string; name: string; module: string } }>;
+      }>
+    >("/roles", { method: "GET" }, token),
+
+  permissions: (token: string) =>
+    request<Array<{ id: string; slug: string; name: string; module: string }>>(
+      "/roles/permissions",
+      { method: "GET" },
+      token,
+    ),
+
+  generatedCommissions: (token: string, params?: { employeeId?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<unknown[]>(`/team/commissions${suffix}`, { method: "GET" }, token);
+  },
 };
 
 export interface CustomerRow {
@@ -1295,21 +1948,58 @@ export interface ServiceOrderRow {
     model: string | null;
     year?: number | null;
     color?: string | null;
-    customer: { name: string; phone?: string | null };
+    customer: PrintCustomerSummary;
   };
+}
+
+export interface PrintCustomerSummary {
+  name: string;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  street?: string | null;
+  addressNumber?: string | null;
+  complement?: string | null;
+  district?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
 }
 
 export interface QuoteRow {
   id: string;
+  number?: number | null;
   status: string;
   amount: string | number;
   createdAt: string;
   serviceOrder: {
+    id?: string;
     number: number;
     vehicle: {
       plate: string;
       customer: { name: string };
     };
+  };
+}
+
+export interface QuoteDetail extends QuoteRow {
+  validUntil?: string | null;
+  terms?: string | null;
+  paymentAgreement?: string | null;
+  lines?: QuoteLineRow[];
+  serviceOrder: {
+    id: string;
+    number: number;
+    complaint?: string | null;
+    vehicle: {
+      plate: string;
+      brand?: string | null;
+      model?: string | null;
+      year?: number | null;
+      color?: string | null;
+      customer: PrintCustomerSummary;
+    };
+    items?: ServiceOrderItemRow[];
   };
 }
 
@@ -1432,5 +2122,3 @@ export interface BranchRow {
   code: string | null;
   isMain: boolean;
 }
-
-export { ApiError };

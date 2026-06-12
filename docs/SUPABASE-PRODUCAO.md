@@ -1,8 +1,8 @@
 # Supabase — migração direta (produção)
 
-**Deploy atual:** instância dedicada **Scalibur Oficinas** (uma empresa por projeto Supabase).
+**Deploy atual:** instância dedicada **WTEC Motors** (uma empresa por projeto Supabase).
 
-Guia da Scalibur: [INSTALACAO-SCALIBUR.md](./INSTALACAO-SCALIBUR.md)
+Guia da WTEC Motors: [INSTALACAO-WTEC-MOTORS.md](./INSTALACAO-WTEC-MOTORS.md)
 
 Use o **Postgres do Supabase** como banco principal. O Docker local fica só para desenvolvimento, se quiser.
 

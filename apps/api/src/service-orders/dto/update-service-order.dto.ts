@@ -49,6 +49,30 @@ export class UpdateServiceOrderDto {
   mechanicMemberId?: string | null;
 
   @IsOptional()
+  @IsString()
+  generalResponsibleId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  checklistById?: string | null;
+
+  @IsOptional()
+  @IsString()
+  diagnosisById?: string | null;
+
+  @IsOptional()
+  @IsString()
+  quoteById?: string | null;
+
+  @IsOptional()
+  @IsString()
+  executionById?: string | null;
+
+  @IsOptional()
+  @IsString()
+  finalizedById?: string | null;
+
+  @IsOptional()
   @IsDateString()
   estimatedAt?: string | null;
 
@@ -71,6 +95,11 @@ export class UpdateServiceOrderDto {
   @IsString()
   @MaxLength(4000)
   customerVisibleNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  paymentAgreement?: string;
 
   @IsOptional()
   @IsString()

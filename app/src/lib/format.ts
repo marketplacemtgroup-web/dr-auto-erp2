@@ -1,4 +1,15 @@
-export function formatMoney(value: string | number | null | undefined) {
+import { canViewMoney } from "./permissions";
+import { useAuthStore } from "../stores/authStore";
+
+export function canViewMoneyValues(): boolean {
+  return canViewMoney(useAuthStore.getState().session?.permissions);
+}
+
+export function formatMoney(
+  value: string | number | null | undefined,
+  options?: { forceHide?: boolean },
+) {
+  if (options?.forceHide || !canViewMoneyValues()) return "—";
   const n = Number(value ?? 0);
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

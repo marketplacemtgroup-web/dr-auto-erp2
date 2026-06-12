@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "cd ../.. && npm ci --include=dev",
-  "buildCommand": "cd ../.. && npm run build -w @autocore/database && npm run generate -w @autocore/database && npm run build -w @autocore/api && node apps/api/scripts/prepare-api-vercel.mjs",
+  "buildCommand": "cd ../.. && npm run build -w @autocore/database && npm run generate -w @autocore/database && node apps/api/scripts/prepare-api-vercel.mjs && npm run build -w @autocore/api",
   "rewrites": [
     {
       "source": "/api/(.*)",

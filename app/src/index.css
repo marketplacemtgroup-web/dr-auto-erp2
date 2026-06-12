@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -60,7 +60,7 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background-image: url("/sem%20fundo.png");
+    background-image: url("/logo-wtecmotors.png");
     background-repeat: no-repeat;
     background-position: center center;
     background-size: min(1560px, 156vmin);
@@ -70,6 +70,55 @@
   .brand-watermark-bg > * {
     position: relative;
     z-index: 1;
+  }
+
+  /* Logo + slogan — espaçamento limpo abaixo do escudo */
+  .brand-header-mark {
+    gap: 0.625rem;
+  }
+
+  .brand-header-mark .brand-tagline {
+    margin-top: -0.75rem;
+    padding-top: 0.25rem;
+  }
+
+  .brand-header-mark--auth .brand-tagline {
+    margin-top: -1rem;
+  }
+
+  .brand-header-mark--dashboard .brand-tagline {
+    margin-top: -0.5rem;
+  }
+  .brand-logo {
+    line-height: 0;
+  }
+
+  .brand-logo__img {
+    vertical-align: bottom;
+  }
+
+  .brand-logo--auth {
+    width: clamp(12.5rem, min(88vw, 22.5rem), 22.5rem);
+  }
+
+  @media (min-width: 640px) {
+    .brand-logo--auth {
+      width: clamp(16rem, 42vw, 22.5rem);
+    }
+  }
+
+  .brand-logo--dashboard {
+    width: clamp(10rem, 92%, 13rem);
+  }
+
+  @media (min-width: 1024px) {
+    .brand-logo--dashboard {
+      width: clamp(11rem, 92%, 13.5rem);
+    }
+  }
+
+  .brand-logo--compact {
+    width: clamp(3rem, 14vw, 4rem);
   }
 
   .brand-watermark-bg--login::before {
@@ -114,7 +163,18 @@
   outline: none !important;
 }
 
-/* Impressao — folha de OS e esconder shell do ERP */
+/* Folha de impressao — fora da tela no ERP, visivel somente ao imprimir */
+.service-order-print,
+.quote-print {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 210mm;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Impressao — folha de OS/orcamento e esconder shell do ERP */
 @media print {
   @page {
     margin: 12mm;
@@ -123,6 +183,36 @@
 
   body {
     background: #fff !important;
+  }
+
+  body.printing-os,
+  body.printing-quote,
+  body.printing-reports {
+    visibility: hidden;
+  }
+
+  body.printing-os .service-order-print,
+  body.printing-os .service-order-print *,
+  body.printing-quote .quote-print,
+  body.printing-quote .quote-print *,
+  body.printing-reports .reports-print,
+  body.printing-reports .reports-print * {
+    visibility: visible;
+  }
+
+  body.printing-os .service-order-print,
+  body.printing-quote .quote-print,
+  body.printing-reports .reports-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block !important;
+    max-width: none !important;
+    visibility: visible;
+    pointer-events: auto;
+    padding: 0;
+    background: #fff;
   }
 
   .brand-watermark-bg::before {
@@ -139,8 +229,13 @@
     padding: 0 !important;
   }
 
-  .service-order-print {
-    display: block !important;
-    padding: 0;
+  .print-legal-terms {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-signatures {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

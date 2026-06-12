@@ -78,9 +78,9 @@ npm run dev
 npm run supabase:up
 ```
 
-## 6. Primeiro acesso Scalibur
+## 6. Primeiro acesso WTEC Motors
 
-1. http://localhost:3000/cadastro — **uma vez** (admin da Scalibur)
+1. http://localhost:3000/cadastro — **uma vez** (admin da WTEC Motors)
 2. Depois só http://localhost:3000/login
 3. Portal cliente: http://localhost:3000/
 

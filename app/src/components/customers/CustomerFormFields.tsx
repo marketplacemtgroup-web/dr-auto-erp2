@@ -1,3 +1,5 @@
+import { useCallback, useRef, useState } from "react";
+import { fetchAddressByCep, formatCepInput, normalizeCep } from "../../lib/cep";
 import { FormField, inputClass, selectClass } from "../modules/FormDrawer";
 
 export type CustomerFormState = {
@@ -71,6 +73,47 @@ type Props = {
 };
 
 export default function CustomerFormFields({ form, setForm }: Props) {
+  const lastLookupRef = useRef("");
+  const numberInputRef = useRef<HTMLInputElement>(null);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
+
+  const lookupCep = useCallback(
+    async (rawCep: string) => {
+      const digits = normalizeCep(rawCep);
+      if (digits.length !== 8 || digits === lastLookupRef.current) return;
+
+      lastLookupRef.current = digits;
+      setCepLoading(true);
+      setCepError(null);
+
+      try {
+        const address = await fetchAddressByCep(digits);
+        if (!address) {
+          setCepError("CEP não encontrado");
+          lastLookupRef.current = "";
+          return;
+        }
+
+        setForm((f) => ({
+          ...f,
+          zipCode: address.zipCode,
+          street: address.street || f.street,
+          district: address.district || f.district,
+          city: address.city || f.city,
+          state: address.state || f.state,
+        }));
+        numberInputRef.current?.focus();
+      } catch {
+        setCepError("Não foi possível consultar o CEP");
+        lastLookupRef.current = "";
+      } finally {
+        setCepLoading(false);
+      }
+    },
+    [setForm],
+  );
+
   return (
     <>
       <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-1">
@@ -107,41 +150,45 @@ export default function CustomerFormFields({ form, setForm }: Props) {
         </FormField>
       </div>
 
-      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-2">
+      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-1">
         Contato
       </p>
-      <FormField label="Telefone">
-        <input
-          className={inputClass}
-          value={form.phone}
-          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-        />
-      </FormField>
-      <FormField label="WhatsApp">
-        <input
-          className={inputClass}
-          value={form.whatsapp}
-          onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
-        />
-      </FormField>
-      <FormField label="E-mail">
-        <input
-          type="email"
-          className={inputClass}
-          value={form.email}
-          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-        />
-      </FormField>
-      <FormField label="Como conheceu a oficina (origem)">
-        <input
-          className={inputClass}
-          value={form.origin}
-          onChange={(e) => setForm((f) => ({ ...f, origin: e.target.value }))}
-          placeholder="Indicação, Google, passagem..."
-        />
-      </FormField>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Telefone">
+          <input
+            className={inputClass}
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+          />
+        </FormField>
+        <FormField label="WhatsApp">
+          <input
+            className={inputClass}
+            value={form.whatsapp}
+            onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
+          />
+        </FormField>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="E-mail">
+          <input
+            type="email"
+            className={inputClass}
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          />
+        </FormField>
+        <FormField label="Como conheceu (origem)">
+          <input
+            className={inputClass}
+            value={form.origin}
+            onChange={(e) => setForm((f) => ({ ...f, origin: e.target.value }))}
+            placeholder="Indicação, Google..."
+          />
+        </FormField>
+      </div>
 
-      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-2">
+      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-1">
         Endereço
       </p>
       <div className="grid grid-cols-3 gap-3">
@@ -149,8 +196,28 @@ export default function CustomerFormFields({ form, setForm }: Props) {
           <input
             className={inputClass}
             value={form.zipCode}
-            onChange={(e) => setForm((f) => ({ ...f, zipCode: e.target.value }))}
+            placeholder="00000-000"
+            maxLength={9}
+            inputMode="numeric"
+            onChange={(e) => {
+              const formatted = formatCepInput(e.target.value);
+              setForm((f) => ({ ...f, zipCode: formatted }));
+              const digits = normalizeCep(formatted);
+              if (digits.length !== 8) {
+                lastLookupRef.current = "";
+                setCepError(null);
+                return;
+              }
+              void lookupCep(formatted);
+            }}
+            onBlur={() => void lookupCep(form.zipCode)}
           />
+          {cepLoading && (
+            <p className="text-[11px] text-[#64748B] mt-1">Buscando endereço...</p>
+          )}
+          {cepError && !cepLoading && (
+            <p className="text-[11px] text-[#DC2626] mt-1">{cepError}</p>
+          )}
         </FormField>
         <FormField label="Cidade" className="col-span-2">
           <input
@@ -170,6 +237,7 @@ export default function CustomerFormFields({ form, setForm }: Props) {
       <div className="grid grid-cols-3 gap-3">
         <FormField label="Número">
           <input
+            ref={numberInputRef}
             className={inputClass}
             value={form.addressNumber}
             onChange={(e) => setForm((f) => ({ ...f, addressNumber: e.target.value }))}
@@ -203,7 +271,7 @@ export default function CustomerFormFields({ form, setForm }: Props) {
         </FormField>
       </div>
 
-      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-2">
+      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-1">
         Classificação
       </p>
       <div className="flex flex-wrap gap-4 text-sm">
@@ -235,7 +303,8 @@ export default function CustomerFormFields({ form, setForm }: Props) {
 
       <FormField label="Observações internas">
         <textarea
-          className={`${inputClass} min-h-[72px] py-2`}
+          className={`${inputClass} min-h-[52px] py-1.5`}
+          rows={2}
           value={form.notes}
           onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
         />

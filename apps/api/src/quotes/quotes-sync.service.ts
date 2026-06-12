@@ -103,8 +103,14 @@ export class QuotesSyncService {
     }
 
     const quoteNumber = await this.nextQuoteNumber(organizationId);
-    const quote = await this.prisma.$transaction(async (tx) => {
-      const q = await tx.quote.create({
+    const nextStatus =
+      so.status === 'RECEIVED' ||
+      so.status === 'DIAGNOSIS' ||
+      so.status === 'AWAITING_QUOTE'
+        ? 'AWAITING_APPROVAL'
+        : so.status;
+    const [quote] = await this.prisma.$transaction([
+      this.prisma.quote.create({
         data: {
           organizationId,
           serviceOrderId: so.id,
@@ -112,20 +118,12 @@ export class QuotesSyncService {
           amount: new Prisma.Decimal(total),
           status: 'PENDING',
         },
-      });
-      await tx.serviceOrder.update({
+      }),
+      this.prisma.serviceOrder.update({
         where: { id: so.id },
-        data: {
-          status:
-            so.status === 'RECEIVED' ||
-            so.status === 'DIAGNOSIS' ||
-            so.status === 'AWAITING_QUOTE'
-              ? 'AWAITING_APPROVAL'
-              : so.status,
-        },
-      });
-      return q;
-    });
+        data: { status: nextStatus },
+      }),
+    ]);
 
     await this.syncQuoteLines(quote.id, serviceOrderId, organizationId);
     return quote.id;

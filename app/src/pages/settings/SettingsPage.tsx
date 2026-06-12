@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import { branding, subscription } from "../../lib/branding";
-import { api, type OrganizationDetail } from "../../lib/api";
+import { resolveAssetUrl } from "../../lib/assetUrl";
+import { api, ApiError, type OrganizationDetail } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
+import { useBrandingStore } from "../../stores/brandingStore";
 import { routes } from "../../lib/routes";
+
+const LOGO_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp";
 
 const AUDIT_LABELS: Record<string, string> = {
   login: "Login",
@@ -39,9 +43,13 @@ function orgToForm(org: OrganizationDetail) {
 export default function SettingsPage() {
   const navigate = useNavigate();
   const token = useAuthStore((s) => s.session?.accessToken ?? null);
+  const applyBranding = useBrandingStore((s) => s.apply);
   const queryClient = useQueryClient();
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<"dados" | "visual" | "termos" | "auditoria">("dados");
   const [editOpen, setEditOpen] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState("");
   const [form, setForm] = useState({
     name: "",
     tradeName: "",
@@ -81,6 +89,30 @@ export default function SettingsPage() {
     },
   });
 
+  async function handleLogoUpload(file: File | null) {
+    if (!file || !token) return;
+    setLogoError("");
+    setLogoUploading(true);
+    try {
+      const updated = await api.uploadOrganizationLogo(token, file);
+      applyBranding({
+        name: updated.name,
+        tradeName: updated.tradeName,
+        logoUrl: updated.logoUrl ?? null,
+        primaryColor: updated.primaryColor,
+        accentColor: updated.accentColor,
+      });
+      void queryClient.invalidateQueries({ queryKey: ["organization"] });
+    } catch (err) {
+      setLogoError(err instanceof ApiError ? String(err.message) : "Falha no upload do logo");
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  const logoSrc = resolveAssetUrl(org?.logoUrl);
+
   return (
     <>
       <ModulePageShell
@@ -92,7 +124,7 @@ export default function SettingsPage() {
         <div className="flex gap-2 mb-4 border-b border-[#E2E8F0]">
           {(
             [
-              ["dados", "Oficina"],
+              ["dados", "Empresa"],
               ["visual", "Visual"],
               ["termos", "Termos"],
               ["auditoria", "Auditoria"],
@@ -130,7 +162,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className="bg-white rounded-xl card-shadow p-5">
-              <h3 className="text-[14px] font-semibold text-[#1E293B] mb-4">Oficina</h3>
+              <h3 className="text-[14px] font-semibold text-[#1E293B] mb-4">Empresa</h3>
               <dl className="space-y-3 text-[13px]">
                 <Row label="Razao social" value={org?.name} />
                 <Row label="Nome fantasia" value={org?.tradeName} />
@@ -161,15 +193,39 @@ export default function SettingsPage() {
         {tab === "visual" && (
           <div className="bg-white rounded-xl card-shadow p-5 max-w-lg">
             <h3 className="text-[14px] font-semibold mb-4">Identidade visual</h3>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept={LOGO_ACCEPT}
+              className="hidden"
+              onChange={(e) => void handleLogoUpload(e.target.files?.[0] ?? null)}
+            />
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              {logoSrc ? (
+                <img src={logoSrc} alt="Logo" className="h-14 object-contain" />
+              ) : (
+                <p className="text-[13px] text-[#64748B]">Nenhum logo enviado.</p>
+              )}
+              <button
+                type="button"
+                disabled={logoUploading}
+                onClick={() => logoInputRef.current?.click()}
+                className="h-9 px-3 rounded-lg border border-[#E2E8F0] text-sm text-[#0E7490] font-medium hover:bg-[#F8FAFC] disabled:opacity-60"
+              >
+                {logoUploading ? "Enviando..." : "Trocar logo"}
+              </button>
+            </div>
+            {logoError ? (
+              <p className="text-sm text-[#DC2626] mb-3">{logoError}</p>
+            ) : null}
+            <p className="text-[11px] text-[#94A3B8] mb-4">
+              PNG, JPEG, JPG ou WebP — até 5 MB. Atualiza ERP, portal e impressões.
+            </p>
             <dl className="space-y-3 text-[13px]">
-              <Row label="Logo (URL)" value={org?.logoUrl} />
               <Row label="Cor primaria" value={org?.primaryColor} />
               <Row label="Cor destaque" value={org?.accentColor} />
               <Row label="Rodape" value={org?.footerText} />
             </dl>
-            {org?.logoUrl ? (
-              <img src={org.logoUrl} alt="Logo" className="mt-4 h-12 object-contain" />
-            ) : null}
             <div className="flex gap-2 mt-4">
               <span className="w-8 h-8 rounded" style={{ background: org?.primaryColor ?? "#0E7490" }} />
               <span className="w-8 h-8 rounded" style={{ background: org?.accentColor ?? "#0F3D4C" }} />

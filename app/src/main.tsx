@@ -3,8 +3,10 @@ import { BrowserRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
 import App from "./App.tsx";
+import { setupChunkReloadHandlers } from "./lib/lazyWithRetry";
 import { setupPwa } from "./pwa/register";
 
+setupChunkReloadHandlers();
 setupPwa();
 
 const queryClient = new QueryClient({

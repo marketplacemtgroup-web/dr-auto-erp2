@@ -12,6 +12,7 @@ const entryInclude = {
   customer: { select: { id: true, name: true } },
   serviceOrder: { select: { id: true, number: true } },
   quote: { select: { id: true, number: true } },
+  paymentSplits: { orderBy: { createdAt: 'asc' as const } },
 };
 
 @Injectable()
@@ -111,6 +112,58 @@ export class FinancialService {
     });
   }
 
+  async receiveQueue(organizationId: string) {
+    const billableStatuses = ['FINISHED', 'DELIVERED', 'AWAITING_PAYMENT'] as const;
+
+    const orders = await this.prisma.serviceOrder.findMany({
+      where: {
+        organizationId,
+        status: { in: [...billableStatuses] },
+        totalAmount: { gt: 0 },
+        deletedAt: null,
+      },
+      include: {
+        vehicle: { include: { customer: { select: { name: true } } } },
+        financialEntries: {
+          where: {
+            type: 'RECEIVABLE',
+            status: 'OPEN',
+            parentEntryId: null,
+          },
+          take: 1,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+    });
+
+    const readyToBill = orders
+      .filter((o) => o.financialEntries.length === 0)
+      .map((o) => ({
+        serviceOrderId: o.id,
+        number: o.number,
+        status: o.status,
+        totalAmount: Number(o.totalAmount),
+        customerName: o.vehicle.customer.name,
+        plate: o.vehicle.plate,
+      }));
+
+    const openReceivables = await this.prisma.financialEntry.findMany({
+      where: {
+        organizationId,
+        type: 'RECEIVABLE',
+        status: 'OPEN',
+        parentEntryId: null,
+        serviceOrderId: { not: null },
+      },
+      include: entryInclude,
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      take: 50,
+    });
+
+    return { readyToBill, openReceivables };
+  }
+
   async createFromServiceOrder(organizationId: string, serviceOrderId: string) {
     const so = await this.prisma.serviceOrder.findFirst({
       where: { id: serviceOrderId, organizationId },
@@ -120,6 +173,7 @@ export class FinancialService {
 
     const existing = await this.prisma.financialEntry.findFirst({
       where: { organizationId, serviceOrderId, type: 'RECEIVABLE', status: 'OPEN' },
+      include: entryInclude,
     });
     if (existing) return existing;
 
@@ -136,6 +190,20 @@ export class FinancialService {
     });
   }
 
+  private roundMoney(value: number) {
+    return Math.round(value * 100) / 100;
+  }
+
+  private resolveDiscount(gross: number, dto: PayFinancialEntryDto) {
+    if (dto.discountAmount != null && dto.discountAmount > 0) {
+      return this.roundMoney(Math.min(dto.discountAmount, gross));
+    }
+    if (dto.discountPercent != null && dto.discountPercent > 0) {
+      return this.roundMoney(Math.min((gross * dto.discountPercent) / 100, gross));
+    }
+    return 0;
+  }
+
   async markPaid(
     organizationId: string,
     id: string,
@@ -146,87 +214,179 @@ export class FinancialService {
       where: { id, organizationId },
     });
     if (!entry) throw new NotFoundException('Lançamento não encontrado');
+    if (entry.status === 'PAID') {
+      throw new BadRequestException('Lançamento já foi baixado');
+    }
+
+    const gross = Number(entry.amount);
+    const discount = this.resolveDiscount(gross, dto);
+    const netDue = this.roundMoney(gross - discount);
+
+    let splits =
+      dto.splits?.map((split) => ({
+        paymentMethod: split.paymentMethod,
+        amount: this.roundMoney(split.amount),
+        registerInCash: split.registerInCash ?? false,
+      })) ?? [];
+
+    if (splits.length === 0) {
+      const method = (dto.paymentMethod ?? entry.paymentMethod ?? 'PIX') as PaymentMethod;
+      splits = [
+        {
+          paymentMethod: method,
+          amount: netDue,
+          registerInCash: dto.registerInCash ?? false,
+        },
+      ];
+    }
+
+    const splitTotal = this.roundMoney(splits.reduce((sum, split) => sum + split.amount, 0));
+    if (Math.abs(splitTotal - netDue) > 0.01) {
+      throw new BadRequestException(
+        `A soma dos pagamentos (R$ ${splitTotal.toFixed(2)}) deve ser igual ao valor liquido (R$ ${netDue.toFixed(2)})`,
+      );
+    }
 
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
-    const paymentMethod = dto.paymentMethod ?? entry.paymentMethod ?? 'PIX';
+    const primaryMethod = splits.length === 1 ? splits[0].paymentMethod : null;
 
-    const updated = await this.prisma.financialEntry.update({
-      where: { id },
-      data: {
-        status: 'PAID',
-        paidAt,
-        paymentMethod,
-      },
-      include: entryInclude,
-    });
-
-    if (dto.registerInCash && entry.type === 'RECEIVABLE' && paymentMethod === 'CASH') {
-      const session = await this.prisma.cashRegisterSession.findFirst({
-        where: { organizationId, status: 'OPEN' },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.financialPaymentSplit.createMany({
+        data: splits.map((split) => ({
+          organizationId,
+          financialEntryId: id,
+          paymentMethod: split.paymentMethod,
+          amount: new Prisma.Decimal(split.amount),
+        })),
       });
-      if (session) {
-        await this.prisma.cashRegisterMovement.create({
-          data: {
-            organizationId,
-            sessionId: session.id,
-            financialEntryId: id,
-            movementType: 'PAYMENT_IN',
-            amount: entry.amount,
-            description: entry.description,
-          },
+
+      const row = await tx.financialEntry.update({
+        where: { id },
+        data: {
+          status: 'PAID',
+          paidAt,
+          paymentMethod: primaryMethod,
+          discountAmount: new Prisma.Decimal(discount),
+          discountPercent:
+            dto.discountPercent != null && dto.discountPercent > 0
+              ? new Prisma.Decimal(dto.discountPercent)
+              : null,
+          amountReceived: new Prisma.Decimal(netDue),
+        },
+        include: entryInclude,
+      });
+
+      if (entry.type === 'RECEIVABLE') {
+        const session = await tx.cashRegisterSession.findFirst({
+          where: { organizationId, status: 'OPEN' },
         });
+
+        for (const split of splits) {
+          if (split.paymentMethod === 'CASH' && split.registerInCash && session) {
+            await tx.cashRegisterMovement.create({
+              data: {
+                organizationId,
+                sessionId: session.id,
+                financialEntryId: id,
+                movementType: 'PAYMENT_IN',
+                amount: new Prisma.Decimal(split.amount),
+                description: `${entry.description} (dinheiro)`,
+              },
+            });
+          }
+        }
+
+        if (entry.serviceOrderId) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          await tx.dailyRevenue.upsert({
+            where: {
+              organizationId_date: { organizationId, date: today },
+            },
+            create: {
+              organizationId,
+              date: today,
+              amount: new Prisma.Decimal(netDue),
+            },
+            update: {
+              amount: { increment: new Prisma.Decimal(netDue) },
+            },
+          });
+        }
       }
-    }
+
+      return row;
+    });
 
     await this.audit.log(organizationId, 'financial.pay', 'financial_entry', {
       userId,
       metadata: {
         entryId: id,
         description: entry.description,
-        amount: Number(entry.amount),
-        paymentMethod,
+        gross,
+        discount,
+        amountReceived: netDue,
+        splits,
       },
     });
-
-    if (entry.type === 'RECEIVABLE' && entry.serviceOrderId) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      await this.prisma.dailyRevenue.upsert({
-        where: {
-          organizationId_date: { organizationId, date: today },
-        },
-        create: {
-          organizationId,
-          date: today,
-          amount: entry.amount,
-        },
-        update: {
-          amount: { increment: entry.amount },
-        },
-      });
-    }
 
     return updated;
   }
 
-  cashFlow(organizationId: string, months = 6) {
+  async cashFlow(organizationId: string, months = 6) {
     const start = new Date();
     start.setMonth(start.getMonth() - (months - 1));
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
 
-    return this.prisma.financialEntry.findMany({
-      where: {
-        organizationId,
-        status: 'PAID',
-        paidAt: { gte: start },
-      },
-      select: {
-        type: true,
-        amount: true,
-        paidAt: true,
-        paymentMethod: true,
-      },
-    });
+    const [splitRows, legacyRows] = await Promise.all([
+      this.prisma.financialPaymentSplit.findMany({
+        where: {
+          organizationId,
+          financialEntry: {
+            status: 'PAID',
+            type: 'RECEIVABLE',
+            paidAt: { gte: start },
+          },
+        },
+        select: {
+          paymentMethod: true,
+          amount: true,
+          financialEntry: { select: { paidAt: true, type: true } },
+        },
+      }),
+      this.prisma.financialEntry.findMany({
+        where: {
+          organizationId,
+          status: 'PAID',
+          type: 'RECEIVABLE',
+          paidAt: { gte: start },
+          paymentMethod: { not: null },
+          paymentSplits: { none: {} },
+        },
+        select: {
+          type: true,
+          amount: true,
+          paidAt: true,
+          paymentMethod: true,
+        },
+      }),
+    ]);
+
+    const fromSplits = splitRows.map((row) => ({
+      type: row.financialEntry.type,
+      amount: row.amount,
+      paidAt: row.financialEntry.paidAt,
+      paymentMethod: row.paymentMethod,
+    }));
+
+    const fromLegacy = legacyRows.map((row) => ({
+      type: row.type,
+      amount: row.amount,
+      paidAt: row.paidAt,
+      paymentMethod: row.paymentMethod,
+    }));
+
+    return [...fromSplits, ...fromLegacy];
   }
 }

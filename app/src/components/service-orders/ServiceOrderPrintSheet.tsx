@@ -2,6 +2,10 @@ import type { OrganizationDetail, ServiceOrderDetail } from "../../lib/api";
 import { attachmentFileUrl } from "../../lib/mediaUrl";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { osStatusLabel } from "../../lib/service-order-status";
+import PrintCustomerVehicleCards from "../print/PrintCustomerVehicleCards";
+import PrintLegalTerms from "../print/PrintLegalTerms";
+import PrintOrgHeader from "../print/PrintOrgHeader";
+import { resolvePrintBranding } from "../../lib/printBranding";
 
 type Props = {
   os: ServiceOrderDetail;
@@ -12,53 +16,37 @@ type Props = {
 export default function ServiceOrderPrintSheet({ os, org }: Props) {
   const images = (os.attachments ?? []).filter((a) => a.mimeType.startsWith("image/"));
 
-  const orgName = org?.tradeName || org?.name || "Oficina";
-  const terms = org?.termsServiceOrder?.trim();
+  const printInfo = resolvePrintBranding(org);
+  const extraTerms = org?.termsServiceOrder?.trim();
 
   return (
-    <div className="service-order-print hidden print:block bg-white text-[#111] text-[11px] leading-snug">
-      <header className="flex justify-between items-start gap-4 border-b-2 border-[#0F3D4C] pb-3 mb-4">
-        <div className="flex gap-3 items-start min-w-0">
-          {org?.logoUrl ? (
-            <img src={org.logoUrl} alt="" className="h-12 w-auto object-contain shrink-0" />
-          ) : null}
-          <div>
-            <h1 className="text-lg font-bold text-[#0F3D4C]">{orgName}</h1>
-            {org?.document && <p className="text-[10px] text-[#555]">CNPJ: {org.document}</p>}
-            {(org?.phone || org?.email) && (
-              <p className="text-[10px] text-[#555]">
-                {[org.phone, org.email].filter(Boolean).join(" · ")}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-[10px] uppercase tracking-wide text-[#64748B]">Ordem de servico</p>
-          <p className="text-2xl font-bold text-[#0F3D4C]">#{os.number}</p>
-          <p className="text-[10px] mt-1">{osStatusLabel(os.status)}</p>
-          <p className="text-[10px] text-[#64748B]">
-            Abertura: {os.enteredAt ? formatDateTime(os.enteredAt) : formatDateTime(os.createdAt)}
-          </p>
-        </div>
-      </header>
+    <div className="service-order-print bg-white text-[#111] text-[11px] leading-snug">
+      <PrintOrgHeader
+        org={org}
+        right={
+          <>
+            <p className="text-[10px] uppercase tracking-wide text-[#64748B]">Ordem de servico</p>
+            <p className="text-2xl text-[#0F3D4C]">#{os.number}</p>
+            <p className="text-[10px] mt-1">{osStatusLabel(os.status)}</p>
+            <p className="text-[10px] text-[#64748B]">
+              Abertura: {os.enteredAt ? formatDateTime(os.enteredAt) : formatDateTime(os.createdAt)}
+            </p>
+          </>
+        }
+      />
 
-      <section className="grid grid-cols-2 gap-4 mb-4">
-        <div className="border border-[#E2E8F0] rounded p-3">
-          <p className="text-[10px] font-semibold uppercase text-[#64748B] mb-1">Cliente</p>
-          <p className="font-semibold">{os.vehicle.customer.name}</p>
-          {os.vehicle.customer.phone && <p>Tel: {os.vehicle.customer.phone}</p>}
-        </div>
-        <div className="border border-[#E2E8F0] rounded p-3">
-          <p className="text-[10px] font-semibold uppercase text-[#64748B] mb-1">Veiculo</p>
-          <p className="font-semibold">{os.vehicle.plate}</p>
-          <p>
-            {[os.vehicle.brand, os.vehicle.model, os.vehicle.year].filter(Boolean).join(" ")}
-            {os.vehicle.color ? ` · ${os.vehicle.color}` : ""}
-          </p>
-          {os.entryKm != null && <p>KM entrada: {os.entryKm}</p>}
-          {os.bay && <p>Box: {os.bay}</p>}
-        </div>
-      </section>
+      <PrintCustomerVehicleCards
+        customer={os.vehicle.customer}
+        vehicle={{
+          plate: os.vehicle.plate,
+          brand: os.vehicle.brand,
+          model: os.vehicle.model,
+          year: os.vehicle.year,
+          color: os.vehicle.color,
+          entryKm: os.entryKm,
+          bay: os.bay,
+        }}
+      />
 
       {(os.complaint || os.diagnosis) && (
         <section className="mb-4 space-y-2">
@@ -138,18 +126,28 @@ export default function ServiceOrderPrintSheet({ os, org }: Props) {
         </section>
       )}
 
-      <footer className="mt-6 pt-4 border-t border-[#E2E8F0] break-inside-avoid">
+      {os.paymentAgreement?.trim() && (
+        <section className="mb-4">
+          <p className="text-[10px] font-semibold uppercase text-[#64748B]">Pagamento combinado</p>
+          <p className="whitespace-pre-wrap">{os.paymentAgreement.trim()}</p>
+        </section>
+      )}
+
+      <footer className="mt-4 pt-3 border-t border-[#E2E8F0]">
         <div className="min-w-0">
-          {terms ? (
-            <div className="mb-3">
-              <p className="text-[10px] font-semibold uppercase text-[#64748B] mb-1">Termos</p>
-              <p className="text-[9px] whitespace-pre-wrap text-[#555]">{terms}</p>
+          <PrintLegalTerms />
+          {extraTerms ? (
+            <div className="mt-2 mb-2">
+              <p className="text-[12px] font-bold text-[#111] mb-0.5">Termos complementares</p>
+              <p className="text-[11px] leading-[1.35] whitespace-pre-wrap text-[#444] text-justify">
+                {extraTerms}
+              </p>
             </div>
           ) : null}
-          {org?.footerText && (
-            <p className="text-[9px] text-[#555]">{org.footerText}</p>
+          {printInfo.footerText && (
+            <p className="text-[11px] text-[#555] mb-3">{printInfo.footerText}</p>
           )}
-          <div className="mt-6 grid grid-cols-2 gap-8">
+          <div className="print-signatures mt-6 grid grid-cols-2 gap-8">
             <div>
               <div className="border-t border-[#333] pt-1 mt-8 text-[10px]">Assinatura do cliente</div>
             </div>

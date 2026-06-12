@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { Loader2 } from "lucide-react";
+import MotoBackground from "../components/portal/MotoBackground";
 import { ApiError } from "../lib/api";
 import { routes } from "../lib/routes";
 import { usePortalStore } from "../stores/portalStore";
@@ -41,25 +42,29 @@ export default function PortalAccessPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center p-6">
-        <div className="bg-white rounded-xl p-6 max-w-sm text-center shadow-sm">
-          <p className="text-[#DC2626] font-medium">{error}</p>
-          <button
-            type="button"
-            className="mt-4 text-[#0E7490] text-sm underline"
-            onClick={() => navigate(routes.login)}
-          >
-            Entrar com CPF e placa
-          </button>
+      <MotoBackground>
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="portal-card p-6 max-w-sm text-center">
+            <p className="text-red-600 font-medium">{error}</p>
+            <button
+              type="button"
+              className="mt-4 portal-accent text-sm underline"
+              onClick={() => navigate(routes.login)}
+            >
+              Entrar com CPF e placa
+            </button>
+          </div>
         </div>
-      </div>
+      </MotoBackground>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center gap-2 text-[#64748B]">
-      <Loader2 className="animate-spin" size={24} />
-      Abrindo portal...
-    </div>
+    <MotoBackground>
+      <div className="min-h-screen flex items-center justify-center gap-2 portal-text-muted">
+        <Loader2 className="animate-spin" size={24} />
+        Abrindo portal...
+      </div>
+    </MotoBackground>
   );
 }

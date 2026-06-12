@@ -196,7 +196,7 @@ export class PortalService {
       token,
       expiresAt,
       path: `/acesso/${token}`,
-      whatsappMessage: `Olá! Acompanhe seu veículo ${so.vehicle.plate} pela oficina. Acesse: {url}`,
+      whatsappMessage: `Olá! Acompanhe seu veículo ${so.vehicle.plate} pela oficina. Acesse: {url}\n\nNo celular você pode acompanhar status e orçamentos.`,
     };
   }
 
@@ -244,7 +244,7 @@ export class PortalService {
     });
     if (!vehicle) throw new UnauthorizedException();
 
-    const [quotes, serviceOrders] = await Promise.all([
+    const [quotes, serviceOrders, mainBranch] = await Promise.all([
       this.listQuotes(ctx),
       this.prisma.serviceOrder.findMany({
         where: { organizationId: ctx.organizationId, vehicleId: ctx.vehicleId, ...notDeleted },
@@ -260,6 +260,10 @@ export class PortalService {
           updatedAt: true,
           createdAt: true,
         },
+      }),
+      this.prisma.branch.findFirst({
+        where: { organizationId: ctx.organizationId, isMain: true },
+        select: { address: true },
       }),
     ]);
 
@@ -281,6 +285,10 @@ export class PortalService {
         phone: vehicle.organization.phone,
         email: vehicle.organization.email,
         portalWelcome: vehicle.organization.portalWelcome,
+        address: mainBranch?.address ?? null,
+        logoUrl: vehicle.organization.logoUrl,
+        primaryColor: vehicle.organization.primaryColor,
+        accentColor: vehicle.organization.accentColor,
       },
       customer: {
         name: vehicle.customer.name,
@@ -288,11 +296,14 @@ export class PortalService {
         whatsapp: vehicle.customer.whatsapp,
       },
       vehicle: {
+        id: vehicle.id,
         plate: vehicle.plate,
         brand: vehicle.brand,
         model: vehicle.model,
         year: vehicle.year,
         color: vehicle.color,
+        currentKm: vehicle.currentKm,
+        vehicleKind: vehicle.vehicleKind,
       },
       serviceOrders: serviceOrders.map((so) => ({
         ...so,
@@ -334,12 +345,43 @@ export class PortalService {
     });
     if (!so) throw new NotFoundException('OS não encontrada');
 
+    const normalizedItems = so.items.map((item) => ({
+      ...item,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+    }));
+
+    const timeline =
+      so.statusHistory.length > 0
+        ? so.statusHistory.map((h) => ({
+            id: h.id,
+            fromStatus: h.fromStatus,
+            toStatus: h.toStatus,
+            fromLabel: h.fromStatus ? STATUS_PT[h.fromStatus] : null,
+            toLabel: STATUS_PT[h.toStatus] ?? h.toStatus,
+            notes: h.notes ?? h.reason ?? null,
+            userName: h.user?.name ?? null,
+            createdAt: h.createdAt,
+          }))
+        : [
+            {
+              id: `${so.id}-opened`,
+              fromStatus: null,
+              toStatus: so.status,
+              fromLabel: null,
+              toLabel: STATUS_PT[so.status] ?? so.status,
+              notes: 'OS aberta',
+              userName: null,
+              createdAt: so.createdAt,
+            },
+          ];
+
     return {
       id: so.id,
       number: so.number,
       status: so.status,
       statusLabel: STATUS_PT[so.status] ?? so.status,
-      totalAmount: so.totalAmount,
+      totalAmount: Number(so.totalAmount),
       complaint: so.complaint,
       diagnosis: so.diagnosis,
       customerVisibleNotes: so.customerVisibleNotes,
@@ -347,17 +389,8 @@ export class PortalService {
       entryKm: so.entryKm,
       createdAt: so.createdAt,
       updatedAt: so.updatedAt,
-      items: so.items,
-      timeline: so.statusHistory.map((h) => ({
-        id: h.id,
-        fromStatus: h.fromStatus,
-        toStatus: h.toStatus,
-        fromLabel: h.fromStatus ? STATUS_PT[h.fromStatus] : null,
-        toLabel: STATUS_PT[h.toStatus] ?? h.toStatus,
-        notes: h.notes,
-        userName: h.user?.name ?? null,
-        createdAt: h.createdAt,
-      })),
+      items: normalizedItems,
+      timeline,
       attachments: await this.mapPortalAttachments(so.attachments),
       quotes: so.quotes.map((q) =>
         this.mapQuoteResponse({
@@ -372,13 +405,25 @@ export class PortalService {
           },
         }),
       ),
+      vehicle: {
+        id: so.vehicle.id,
+        plate: so.vehicle.plate,
+        brand: so.vehicle.brand,
+        model: so.vehicle.model,
+        year: so.vehicle.year,
+        color: so.vehicle.color,
+        currentKm: so.vehicle.currentKm,
+        vehicleKind: so.vehicle.vehicleKind,
+      },
       organization: {
         phone: so.vehicle.organization.phone,
         name: so.vehicle.organization.name,
       },
       customer: {
-        whatsapp: so.vehicle.customer.whatsapp,
+        name: so.vehicle.customer.name,
         phone: so.vehicle.customer.phone,
+        whatsapp: so.vehicle.customer.whatsapp,
+        document: so.vehicle.customer.document,
       },
     };
   }
@@ -417,6 +462,7 @@ export class PortalService {
       pushTitle: 'Orçamento aprovado',
       pushBody: `OS #${so.number} aprovada pelo cliente`,
       pushUrl: `/os/${so.id}`,
+      customerPush: false,
     });
   }
 
@@ -441,6 +487,7 @@ export class PortalService {
       pushTitle: 'Orçamento recusado',
       pushBody: `OS #${so.number} — cliente recusou`,
       pushUrl: `/os/${so.id}`,
+      customerPush: false,
     });
   }
 
@@ -791,5 +838,114 @@ export class PortalService {
     }
 
     return this.rejectQuote(null, access.quoteId, comment, { byToken: true });
+  }
+
+  async listNotifications(
+    ctx: { organizationId: string; vehicleId: string },
+    unreadOnly?: boolean,
+  ) {
+    const rows = await this.prisma.portalNotification.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        vehicleId: ctx.vehicleId,
+        ...(unreadOnly ? { readAt: null } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    return rows.map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      read: n.readAt != null,
+      serviceOrderId: n.serviceOrderId,
+      quoteId: n.quoteId,
+      createdAt: n.createdAt,
+    }));
+  }
+
+  async markNotificationRead(ctx: { organizationId: string; vehicleId: string }, id: string) {
+    await this.prisma.portalNotification.updateMany({
+      where: { id, organizationId: ctx.organizationId, vehicleId: ctx.vehicleId },
+      data: { readAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  async markAllNotificationsRead(ctx: { organizationId: string; vehicleId: string }) {
+    await this.prisma.portalNotification.updateMany({
+      where: { organizationId: ctx.organizationId, vehicleId: ctx.vehicleId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  async listVehicles(ctx: { organizationId: string; customerId: string }) {
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        customerId: ctx.customerId,
+        deletedAt: null,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return vehicles.map((v) => ({
+      id: v.id,
+      plate: v.plate,
+      brand: v.brand,
+      model: v.model,
+      year: v.year,
+      color: v.color,
+      currentKm: v.currentKm,
+      vehicleKind: v.vehicleKind,
+    }));
+  }
+
+  async switchVehicle(ctx: {
+    organizationId: string;
+    customerId: string;
+    vehicleId: string;
+  }, targetVehicleId: string) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: {
+        id: targetVehicleId,
+        organizationId: ctx.organizationId,
+        customerId: ctx.customerId,
+        deletedAt: null,
+      },
+      include: { customer: true, organization: true },
+    });
+    if (!vehicle) throw new NotFoundException('Veículo não encontrado');
+
+    const payload = {
+      portal: true as const,
+      organizationId: vehicle.organizationId,
+      customerId: vehicle.customerId,
+      vehicleId: vehicle.id,
+    };
+    return this.buildPortalSession(
+      vehicle.organization.name,
+      vehicle.customer.name,
+      vehicle.plate,
+      payload,
+    );
+  }
+
+  async registerFcmToken(
+    ctx: { organizationId: string; vehicleId: string },
+    body: { token: string; platform?: string },
+  ) {
+    await this.push.saveFcmToken(ctx.organizationId, ctx.vehicleId, body.token, body.platform ?? 'android');
+    return { ok: true };
+  }
+
+  async getPushStatus(ctx: { vehicleId: string }) {
+    const tokens = await this.prisma.fcmToken.count({ where: { vehicleId: ctx.vehicleId } });
+    return {
+      ok: true,
+      fcmTokens: tokens,
+      pushReady: tokens > 0,
+    };
   }
 }

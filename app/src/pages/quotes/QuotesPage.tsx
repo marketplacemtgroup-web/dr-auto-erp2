@@ -1,65 +1,52 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import StatusBadge from "../../components/StatusBadge";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ModuleFilters, { FilterSelect } from "../../components/modules/ModuleFilters";
-import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
+import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
+import VehicleSearchSelect from "../../components/vehicles/VehicleSearchSelect";
 import { api, type QuoteRow } from "../../lib/api";
 import { formatDate, formatMoney } from "../../lib/format";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { quoteStatusLabel, quoteStatusVariant } from "../../lib/service-order-status";
+import { routes } from "../../lib/routes";
 
 export default function QuotesPage() {
+  const navigate = useNavigate();
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editing, setEditing] = useState<QuoteRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QuoteRow | null>(null);
-  const [form, setForm] = useState({ serviceOrderId: "", amount: "", status: "PENDING" });
+  const [form, setForm] = useState({ vehicleId: "", complaint: "" });
 
-  const { data: orders } = useApiQuery(["service-orders-all"], (t) => api.serviceOrders(t));
+  const { data: vehicles } = useApiQuery(["vehicles-all"], (t) => api.vehicles(t));
   const { data, isLoading, error } = useApiQuery(
     ["quotes", search, statusFilter],
     (t) => api.quotes(t, search || undefined, statusFilter || undefined),
   );
 
   const openCreate = () => {
-    setEditing(null);
-    setForm({ serviceOrderId: "", amount: "", status: "PENDING" });
+    setForm({ vehicleId: "", complaint: "" });
     setDrawerOpen(true);
   };
 
-  const openEdit = (q: QuoteRow) => {
-    setEditing(q);
-    setForm({
-      serviceOrderId: "",
-      amount: String(q.amount),
-      status: q.status,
-    });
-    setDrawerOpen(true);
-  };
-
-  const save = useMutation({
+  const create = useMutation({
     mutationFn: () =>
-      editing
-        ? api.updateQuote(token!, editing.id, {
-            amount: Number(form.amount),
-            status: form.status,
-          })
-        : api.createQuote(token!, {
-            serviceOrderId: form.serviceOrderId,
-            amount: Number(form.amount),
-            status: form.status,
-          }),
-    onSuccess: () => {
+      api.createQuote(token!, {
+        vehicleId: form.vehicleId,
+        complaint: form.complaint || undefined,
+        status: "PENDING",
+      }),
+    onSuccess: (quote) => {
       queryClient.invalidateQueries({ queryKey: ["quotes"] });
       setDrawerOpen(false);
-      setEditing(null);
+      navigate(routes.orcamentoDetalhe(quote.id));
     },
   });
 
@@ -78,9 +65,9 @@ export default function QuotesPage() {
   return (
     <>
       <ModulePageShell
-        title="Orcamentos"
-        description="Envio e aprovacao pelo portal do cliente"
-        actionLabel="Novo orcamento"
+        title="Orçamentos"
+        description="Monte o orçamento por cliente/veículo — ao aprovar, vira ordem de serviço"
+        actionLabel="Novo orçamento"
         onAction={openCreate}
         onSearch={setSearch}
       >
@@ -90,32 +77,43 @@ export default function QuotesPage() {
             value={statusFilter}
             onChange={setStatusFilter}
             options={[
-              { value: "", label: "Todos" },
-              { value: "PENDING", label: "Pendente" },
-              { value: "APPROVED", label: "Aprovado" },
-              { value: "REJECTED", label: "Rejeitado" },
+              { value: "", label: "Ativos (sem aprovados)" },
+              { value: "PENDING", label: "Aguardando aprovação" },
+              { value: "REJECTED", label: "Recusado" },
               { value: "DRAFT", label: "Rascunho" },
             ]}
           />
         </ModuleFilters>
         <KpiStrip
           items={[
-            { label: "Pendentes", value: String(pending), tone: "warning" },
+            { label: "Aguardando aprovação", value: String(pending), tone: "warning" },
             { label: "Valor pendente", value: formatMoney(pendingTotal), tone: "warning" },
-            { label: "Total", value: String(data?.length ?? 0) },
+            { label: "Ativos", value: String(data?.length ?? 0) },
           ]}
         />
         <DataTable
           columns={[
             {
-              key: "os",
-              header: "OS",
+              key: "client",
+              header: "Cliente",
               render: (q) => (
-                <span className="font-bold text-[#0E7490]">#{q.serviceOrder.number}</span>
+                <span className="font-medium text-[#1E293B]">
+                  {q.serviceOrder.vehicle.customer.name}
+                </span>
               ),
             },
-            { key: "client", header: "Cliente", render: (q) => q.serviceOrder.vehicle.customer.name },
-            { key: "plate", header: "Placa", render: (q) => q.serviceOrder.vehicle.plate },
+            {
+              key: "plate",
+              header: "Placa",
+              render: (q) => (
+                <span className="font-bold text-[#0E7490]">{q.serviceOrder.vehicle.plate}</span>
+              ),
+            },
+            {
+              key: "number",
+              header: "Orçamento",
+              render: (q) => `#${q.number ?? "—"}`,
+            },
             {
               key: "status",
               header: "Status",
@@ -139,83 +137,55 @@ export default function QuotesPage() {
           rows={data ?? []}
           loading={isLoading}
           error={error}
-          emptyMessage="Nenhum orcamento."
-          onEdit={openEdit}
+          emptyMessage="Nenhum orçamento ativo. Crie um novo selecionando cliente e placa."
+          onRowClick={(q) => navigate(routes.orcamentoDetalhe(q.id))}
           onDelete={setDeleteTarget}
         />
         <p className="text-xs text-[#94A3B8] mt-3">
-          O cliente aprova em {typeof window !== "undefined" ? window.location.origin : ""}/ com
-          CPF e placa cadastrados.
+          Orçamentos aprovados saem desta lista e aparecem em Ordens de Serviço. O cliente aprova
+          pelo app ou portal.
         </p>
       </ModulePageShell>
 
       <FormDrawer
         open={drawerOpen}
-        title={editing ? "Editar orcamento" : "Novo orcamento"}
-        subtitle="Cliente aprova no portal com CPF + placa"
+        title="Novo orçamento"
+        subtitle="Selecione o cliente pela placa do veículo"
         onClose={() => setDrawerOpen(false)}
         onSubmit={(e) => {
           e.preventDefault();
-          save.mutate();
+          create.mutate();
         }}
-        loading={save.isPending}
+        loading={create.isPending}
+        submitLabel="Criar e montar orçamento"
       >
-        {!editing && (
-          <FormField label="Ordem de servico *">
-            <select
-              className={selectClass}
-              value={form.serviceOrderId}
-              onChange={(e) => {
-                const os = orders?.find((o) => o.id === e.target.value);
-                setForm((f) => ({
-                  ...f,
-                  serviceOrderId: e.target.value,
-                  amount: os ? String(os.totalAmount) : f.amount,
-                }));
-              }}
-              required
-            >
-              <option value="">Selecione OS...</option>
-              {orders?.map((o) => (
-                <option key={o.id} value={o.id}>
-                  #{o.number} — {o.vehicle.plate} ({formatMoney(o.totalAmount)})
-                </option>
-              ))}
-            </select>
-          </FormField>
-        )}
-        <FormField label="Valor total (R$) *">
-          <input
-            type="number"
-            step="0.01"
-            className={inputClass}
-            value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+        <FormField label="Cliente / placa *">
+          <VehicleSearchSelect
+            vehicles={vehicles}
+            value={form.vehicleId}
+            onChange={(vehicleId) => setForm((f) => ({ ...f, vehicleId }))}
             required
+            placeholder="Digite o nome do cliente ou a placa..."
           />
         </FormField>
-        <FormField label="Status">
-          <select
-            className={selectClass}
-            value={form.status}
-            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-          >
-            <option value="PENDING">Pendente — cliente vê no portal e pode aprovar</option>
-            <option value="DRAFT">Rascunho — só na oficina (não aparece no portal)</option>
-            {editing && (
-              <>
-                <option value="APPROVED">Aprovado</option>
-                <option value="REJECTED">Rejeitado</option>
-              </>
-            )}
-          </select>
+        <FormField label="Relato do cliente (opcional)">
+          <textarea
+            className={`${inputClass} min-h-[56px] py-1.5`}
+            value={form.complaint}
+            onChange={(e) => setForm((f) => ({ ...f, complaint: e.target.value }))}
+            rows={3}
+          />
         </FormField>
+        <p className="text-xs text-[#94A3B8]">
+          O status já inicia como <strong>aguardando aprovação</strong>. Na próxima tela você
+          adiciona serviços e peças.
+        </p>
       </FormDrawer>
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="Excluir orcamento"
-        message="Confirma exclusao deste orcamento?"
+        title="Excluir orçamento"
+        message="Confirma exclusão deste orçamento?"
         loading={remove.isPending}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => remove.mutate()}

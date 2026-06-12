@@ -36,8 +36,14 @@ export class QuotesController {
     @CurrentUser() user: { organizationId: string },
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('includeApproved') includeApproved?: string,
   ) {
-    return this.quotesService.list(user.organizationId, search, status);
+    return this.quotesService.list(
+      user.organizationId,
+      search,
+      status,
+      includeApproved === 'true',
+    );
   }
 
   @Get(':id')
@@ -57,6 +63,24 @@ export class QuotesController {
     @Body() dto: UpdateQuoteDto,
   ) {
     return this.quotesService.update(user.organizationId, id, dto);
+  }
+
+  @Patch(':id/approve')
+  @RequirePermissions('quotes.manage')
+  approve(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+  ) {
+    return this.quotesService.approveFromOffice(user.organizationId, id, user.userId);
+  }
+
+  @Patch(':id/reject')
+  @RequirePermissions('quotes.manage')
+  reject(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+  ) {
+    return this.quotesService.rejectFromOffice(user.organizationId, id, user.userId);
   }
 
   @Post(':id/share-link')

@@ -11,7 +11,7 @@ export type OfficeLiveEvent = {
   id?: string;
 };
 
-const POLL_MS = 20_000;
+const POLL_MS = 10_000;
 
 /** Polling de notificações (substitui SSE — compatível com Vercel serverless). */
 export function useOfficeEvents(onEvent?: (ev: OfficeLiveEvent) => void) {

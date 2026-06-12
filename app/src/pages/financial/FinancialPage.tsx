@@ -1,20 +1,27 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router";
+import FinancialPayButton from "../../components/financial/FinancialPayButton";
+import PayEntryModal from "../../components/financial/PayEntryModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
 import { useAuthStore } from "../../stores/authStore";
-import { api, type CashSessionRow, type FinancialEntryRow, type PaymentMethod } from "../../lib/api";
+import {
+  api,
+  type CashSessionRow,
+  type FinancialEntryRow,
+  type FinancialReceiveQueue,
+  type FinancialReceiveQueueOrder,
+} from "../../lib/api";
 import { useDashboardKpis } from "../../hooks/useDashboardKpis";
-
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  CASH: "Dinheiro",
-  PIX: "PIX",
-  CARD: "Cartão",
-  BOLETO: "Boleto",
-  TRANSFER: "Transferência",
-  OTHER: "Outro",
-};
+import { serviceOrderStatusLabel } from "../../lib/labels";
+import {
+  computePayDiscount,
+  createDefaultPayForm,
+  formatPaymentSplitsLabel,
+  type PayEntryFormState,
+} from "../../lib/payEntry";
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -34,8 +41,16 @@ function cashBalance(session: CashSessionRow) {
   return balance;
 }
 
+type FinanceiroLocationState = {
+  tab?: "cash";
+  payEntry?: FinancialEntryRow;
+};
+
 export default function FinancialPage() {
   const token = useAuthStore((s) => s.session?.accessToken ?? null);
+  const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { data: kpis } = useDashboardKpis();
   const [tab, setTab] = useState<"entries" | "cash">("entries");
   const [rows, setRows] = useState<FinancialEntryRow[]>([]);
@@ -45,10 +60,7 @@ export default function FinancialPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"RECEIVABLE" | "PAYABLE">("RECEIVABLE");
   const [payTarget, setPayTarget] = useState<FinancialEntryRow | null>(null);
-  const [payForm, setPayForm] = useState<{ paymentMethod: PaymentMethod; registerInCash: boolean }>({
-    paymentMethod: "PIX",
-    registerInCash: false,
-  });
+  const [payForm, setPayForm] = useState<PayEntryFormState>(() => createDefaultPayForm(0));
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [form, setForm] = useState({
     description: "",
@@ -57,6 +69,9 @@ export default function FinancialPage() {
     installments: "1",
   });
   const [cashForm, setCashForm] = useState({ openingBalance: "0", closingBalance: "", movementAmount: "", movementDesc: "" });
+  const [receiveQueue, setReceiveQueue] = useState<FinancialReceiveQueue | null>(null);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [chargingOrderId, setChargingOrderId] = useState<string | null>(null);
 
   async function loadEntries(nextSearch?: string) {
     if (!token) return;
@@ -77,10 +92,41 @@ export default function FinancialPage() {
     }
   }
 
+  async function loadReceiveQueue() {
+    if (!token) return;
+    setQueueLoading(true);
+    try {
+      setReceiveQueue(await api.financialReceiveQueue(token));
+    } finally {
+      setQueueLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadEntries();
     void loadCash();
+    void loadReceiveQueue();
   }, [token]);
+
+  useEffect(() => {
+    if (tab === "cash") void loadReceiveQueue();
+  }, [tab, token]);
+
+  useEffect(() => {
+    const state = location.state as FinanceiroLocationState | null;
+    if (!state?.tab && !state?.payEntry) return;
+
+    if (state.tab === "cash") setTab("cash");
+
+    if (state.payEntry) {
+      setPayTarget(state.payEntry);
+      setPayForm(
+        createDefaultPayForm(Number(state.payEntry.amount), state.tab === "cash"),
+      );
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   const create = useMutation({
     mutationFn: () => {
@@ -102,14 +148,34 @@ export default function FinancialPage() {
   });
 
   const pay = useMutation({
-    mutationFn: () =>
-      api.payFinancialEntry(token!, payTarget!.id, {
-        paymentMethod: payForm.paymentMethod,
-        registerInCash: payForm.registerInCash && payForm.paymentMethod === "CASH",
-      }),
+    mutationFn: () => {
+      const gross = Number(payTarget!.amount);
+      const discount = computePayDiscount(
+        gross,
+        payForm.discountMoney,
+        payForm.discountPercent,
+      );
+      const splits = payForm.splits.map((row) => ({
+        paymentMethod: row.paymentMethod,
+        amount: Number(row.amount.replace(",", ".")) || 0,
+        registerInCash: row.registerInCash && row.paymentMethod === "CASH",
+      }));
+
+      return api.payFinancialEntry(token!, payTarget!.id, {
+        discountAmount: discount > 0 && payForm.discountMoney ? discount : undefined,
+        discountPercent:
+          discount > 0 && payForm.discountPercent
+            ? Number(payForm.discountPercent.replace(",", "."))
+            : undefined,
+        splits,
+      });
+    },
     onSuccess: () => {
       void loadEntries(search);
       void loadCash();
+      void loadReceiveQueue();
+      void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       setPayTarget(null);
     },
   });
@@ -139,9 +205,22 @@ export default function FinancialPage() {
     setDrawerOpen(true);
   }
 
-  function openPay(row: FinancialEntryRow) {
+  function openPay(row: FinancialEntryRow, preferCash = tab === "cash") {
     setPayTarget(row);
-    setPayForm({ paymentMethod: "PIX", registerInCash: !!cashSession });
+    setPayForm(createDefaultPayForm(Number(row.amount), preferCash && !!cashSession));
+  }
+
+  async function chargeOrder(order: FinancialReceiveQueueOrder) {
+    if (!token) return;
+    setChargingOrderId(order.serviceOrderId);
+    try {
+      const entry = await api.financialFromServiceOrder(token, order.serviceOrderId);
+      openPay(entry);
+      void loadReceiveQueue();
+      void loadEntries(search);
+    } finally {
+      setChargingOrderId(null);
+    }
   }
 
   return (
@@ -216,8 +295,11 @@ export default function FinancialPage() {
                             {r.installmentTotal && r.installmentTotal > 1 ? (
                               <span className="ml-2 text-[11px] text-[#94A3B8]">({r.installmentTotal}x)</span>
                             ) : null}
-                            {r.status === "PAID" && r.paymentMethod ? (
-                              <div className="text-[11px] text-[#94A3B8]">{PAYMENT_LABELS[r.paymentMethod]}</div>
+                            {r.status === "PAID" &&
+                            (r.paymentSplits?.length || r.paymentMethod) ? (
+                              <div className="text-[11px] text-[#94A3B8]">
+                                {formatPaymentSplitsLabel(r.paymentSplits, r.paymentMethod)}
+                              </div>
                             ) : null}
                           </td>
                           <td className="px-4 py-3 text-[12px] text-[#64748B]">
@@ -232,14 +314,17 @@ export default function FinancialPage() {
                                 Parcelas
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              disabled={r.status === "PAID" || !token}
-                              onClick={() => openPay(r)}
-                              className="text-[12px] text-[#0E7490] hover:underline disabled:text-[#94A3B8]"
-                            >
-                              Baixar
-                            </button>
+                            {r.status === "PAID" ? (
+                              <span className="inline-flex items-center h-8 px-3 text-[11px] font-medium text-[#94A3B8]">
+                                Pago
+                              </span>
+                            ) : (
+                              <FinancialPayButton
+                                type={r.type}
+                                disabled={!token}
+                                onClick={() => openPay(r)}
+                              />
+                            )}
                           </td>
                         </tr>
                         {expandedId === r.id && r.installments?.map((p) => (
@@ -250,7 +335,7 @@ export default function FinancialPage() {
                             <td className="px-4 py-2 text-right text-[12px]">{formatCurrency(Number(p.amount))}</td>
                             <td className="px-4 py-2 text-right">
                               {p.status === "OPEN" ? (
-                                <button type="button" className="text-[12px] text-[#0E7490]" onClick={() => openPay(p)}>Baixar</button>
+                                <FinancialPayButton type={p.type} onClick={() => openPay(p)} />
                               ) : (
                                 <span className="text-[11px] text-[#94A3B8]">Pago</span>
                               )}
@@ -265,7 +350,97 @@ export default function FinancialPage() {
             </div>
           </>
         ) : (
-          <div className="bg-white rounded-xl card-shadow p-5 max-w-xl">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2 space-y-4">
+              <div className="bg-white rounded-xl card-shadow overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#E2E8F0]">
+                  <h3 className="text-[14px] font-semibold text-[#1E293B]">Receber pagamento</h3>
+                  <p className="text-[12px] text-[#64748B] mt-0.5">
+                    OS finalizadas ou entregues — gere o recebivel e baixe na hora
+                  </p>
+                </div>
+                {queueLoading ? (
+                  <p className="px-5 py-6 text-sm text-[#64748B]">Carregando...</p>
+                ) : (
+                  <>
+                    {(receiveQueue?.openReceivables.length ?? 0) > 0 && (
+                      <div className="px-5 py-3 border-b border-[#F1F5F9]">
+                        <p className="text-[11px] font-medium uppercase text-[#94A3B8] mb-2">
+                          Aguardando pagamento
+                        </p>
+                        <ul className="space-y-2">
+                          {receiveQueue!.openReceivables.map((r) => (
+                            <li
+                              key={r.id}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E2E8F0] px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-[#1E293B]">
+                                  OS #{r.serviceOrder?.number ?? "—"}
+                                  {r.customer?.name ? ` — ${r.customer.name}` : ""}
+                                </p>
+                                <p className="text-[12px] text-[#64748B]">{r.description}</p>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-sm font-bold text-[#16A34A]">
+                                  {formatCurrency(Number(r.amount))}
+                                </span>
+                                <FinancialPayButton
+                                  type="RECEIVABLE"
+                                  onClick={() => openPay(r)}
+                                />
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {(receiveQueue?.readyToBill.length ?? 0) > 0 ? (
+                      <div className="px-5 py-3">
+                        <p className="text-[11px] font-medium uppercase text-[#94A3B8] mb-2">
+                          OS prontas para cobrar
+                        </p>
+                        <ul className="space-y-2">
+                          {receiveQueue!.readyToBill.map((o) => (
+                            <li
+                              key={o.serviceOrderId}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E2E8F0] px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-[#1E293B]">
+                                  OS #{o.number} — {o.customerName}
+                                </p>
+                                <p className="text-[12px] text-[#64748B]">
+                                  {o.plate} · {serviceOrderStatusLabel[o.status] ?? o.status}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-sm font-bold text-[#0F3D4C]">
+                                  {formatCurrency(o.totalAmount)}
+                                </span>
+                                <FinancialPayButton
+                                  type="RECEIVABLE"
+                                  label="Cobrar"
+                                  loading={chargingOrderId === o.serviceOrderId}
+                                  disabled={chargingOrderId === o.serviceOrderId}
+                                  onClick={() => void chargeOrder(o)}
+                                />
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (receiveQueue?.openReceivables.length ?? 0) === 0 ? (
+                      <p className="px-5 py-6 text-sm text-[#94A3B8]">
+                        Nenhuma OS aguardando cobranca no momento.
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl card-shadow p-5">
             {!cashSession ? (
               <>
                 <h3 className="text-[14px] font-semibold mb-3">Abrir caixa</h3>
@@ -348,6 +523,7 @@ export default function FinancialPage() {
                 </button>
               </>
             )}
+            </div>
           </div>
         )}
       </ModulePageShell>
@@ -373,37 +549,16 @@ export default function FinancialPage() {
         </FormField>
       </FormDrawer>
 
-      <FormDrawer
+      <PayEntryModal
         open={!!payTarget}
-        title="Baixar lancamento"
-        onClose={() => setPayTarget(null)}
-        onSubmit={(e) => { e.preventDefault(); pay.mutate(); }}
+        entry={payTarget}
+        form={payForm}
+        cashOpen={!!cashSession}
         loading={pay.isPending}
-      >
-        <p className="text-sm text-[#64748B] mb-3">{payTarget?.description}</p>
-        <FormField label="Forma de pagamento">
-          <select
-            className={inputClass}
-            value={payForm.paymentMethod}
-            onChange={(e) => setPayForm((f) => ({ ...f, paymentMethod: e.target.value as PaymentMethod }))}
-          >
-            {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((k) => (
-              <option key={k} value={k}>{PAYMENT_LABELS[k]}</option>
-            ))}
-          </select>
-        </FormField>
-        {cashSession && payTarget?.type === "RECEIVABLE" ? (
-          <label className="flex items-center gap-2 text-sm text-[#64748B] mt-2">
-            <input
-              type="checkbox"
-              checked={payForm.registerInCash}
-              onChange={(e) => setPayForm((f) => ({ ...f, registerInCash: e.target.checked }))}
-              disabled={payForm.paymentMethod !== "CASH"}
-            />
-            Registrar no caixa (dinheiro)
-          </label>
-        ) : null}
-      </FormDrawer>
+        onFormChange={setPayForm}
+        onConfirm={() => pay.mutate()}
+        onClose={() => setPayTarget(null)}
+      />
     </>
   );
 }

@@ -45,14 +45,21 @@ export interface PortalDashboard {
     phone: string | null;
     email: string | null;
     portalWelcome: string | null;
+    address: string | null;
+    logoUrl: string | null;
+    primaryColor?: string;
+    accentColor?: string;
   };
   customer: { name: string; phone: string | null; whatsapp: string | null };
   vehicle: {
+    id: string;
     plate: string;
     brand: string | null;
     model: string | null;
     year: number | null;
     color: string | null;
+    currentKm: number | null;
+    vehicleKind: string | null;
   };
   serviceOrders: Array<{
     id: string;
@@ -135,6 +142,28 @@ export interface PortalQuoteItemRow {
   unitPrice: string | number;
 }
 
+export interface PortalNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  read: boolean;
+  serviceOrderId: string | null;
+  quoteId: string | null;
+  createdAt: string;
+}
+
+export interface PortalVehicle {
+  id: string;
+  plate: string;
+  brand: string | null;
+  model: string | null;
+  year: number | null;
+  color: string | null;
+  currentKm: number | null;
+  vehicleKind: string | null;
+}
+
 export interface PortalQuoteRow {
   id: string;
   number?: number | null;
@@ -197,6 +226,15 @@ async function request<T>(
 }
 
 export const api = {
+  publicBranding: () =>
+    request<{
+      name: string | null;
+      tradeName: string | null;
+      logoUrl: string | null;
+      primaryColor?: string;
+      accentColor?: string;
+    }>("/auth/branding", { method: "GET" }),
+
   portalLogin: (cpf: string, plate: string) =>
     request<PortalSession>("/portal/login", {
       method: "POST",
@@ -270,4 +308,26 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ comment }),
     }),
+
+  portalNotifications: (token: string, unreadOnly?: boolean) =>
+    request<PortalNotification[]>(
+      `/portal/notifications${unreadOnly ? "?unreadOnly=true" : ""}`,
+      { method: "GET" },
+      token,
+    ),
+
+  portalMarkNotificationRead: (token: string, id: string) =>
+    request<{ ok: boolean }>(`/portal/notifications/${id}/read`, { method: "PATCH" }, token),
+
+  portalMarkAllNotificationsRead: (token: string) =>
+    request<{ ok: boolean }>("/portal/notifications/read-all", { method: "PATCH" }, token),
+
+  portalVehicles: (token: string) =>
+    request<PortalVehicle[]>("/portal/vehicles", { method: "GET" }, token),
+
+  portalSwitchVehicle: (token: string, vehicleId: string) =>
+    request<PortalSession>("/portal/switch-vehicle", {
+      method: "POST",
+      body: JSON.stringify({ vehicleId }),
+    }, token),
 };

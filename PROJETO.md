@@ -167,7 +167,7 @@ Diretriz do projeto:
 
 email utilizado para o projeto no github+supa+vercel
 
-oficinascalibur@gmail.com
+wtecmotors@gmail.com
 Metron.87
 
 

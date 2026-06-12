@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { Lock, Loader2, User } from "lucide-react";
 import { Navigate, useNavigate } from "react-router";
-import { Settings2 } from "lucide-react";
 import { useAutoPwaInstallPrompt } from "../hooks/useAutoPwaInstallPrompt";
-import { branding } from "../lib/branding";
+import BrandLogo from "../components/BrandLogo";
+import MotoBackground from "../components/portal/MotoBackground";
+import ThemeToggle from "../components/portal/ThemeToggle";
 import { ApiError } from "../lib/api";
-import { dashboardLoginUrl, routes } from "../lib/routes";
+import { routes } from "../lib/routes";
 import { usePortalStore } from "../stores/portalStore";
 
 function maskCpfDigits(value: string) {
@@ -22,7 +24,7 @@ function maskCpfDigits(value: string) {
 }
 
 function normalizePlateInput(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 8);
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
 }
 
 export default function PortalLoginPage() {
@@ -53,94 +55,82 @@ export default function PortalLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      <div
-        className="hidden lg:flex lg:w-1/2 relative items-end p-12"
-        style={{
-          background:
-            "linear-gradient(135deg, #0F172A 0%, #0E7490 50%, #134E4A 100%)",
-        }}
-      >
-        <div className="relative z-10 text-white max-w-md">
-          <h2 className="text-3xl font-bold mb-3">Portal do Cliente</h2>
-          <p className="text-white/70 text-sm leading-relaxed">
-            Acompanhe seu veículo e aprove ou recuse orçamentos usando CPF e placa.
-          </p>
+    <MotoBackground>
+      <div className="min-h-screen flex flex-col safe-area-top safe-area-bottom px-5 py-6">
+        <div className="flex justify-start">
+          <ThemeToggle />
         </div>
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542362567-b07e54358753?w=1200&q=80')] bg-cover bg-center opacity-20" />
-      </div>
 
-      <div className="flex-1 flex items-center justify-center bg-white px-6 py-12">
-        <div className="w-full max-w-md">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-[#0E7490] flex items-center justify-center">
-              <Settings2 size={22} className="text-white" strokeWidth={1.5} />
-            </div>
-            <div>
-              <span className="text-[#1E293B] text-lg font-bold block">{branding.appName}</span>
-              <span className="text-[#64748B] text-[10px] uppercase tracking-widest">
-                Portal do Cliente
-              </span>
-            </div>
-          </div>
+        <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full">
+          <BrandLogo context="auth" className="mb-4" />
 
-          <h1 className="text-2xl font-semibold text-[#1E293B] mb-1">Acessar</h1>
-          <p className="text-[#64748B] text-sm mb-4">
-            Entre com seu CPF e a placa do veículo
+          <h1 className="portal-text text-2xl font-black text-center mb-2">
+            Acesse seu acompanhamento
+          </h1>
+          <p className="portal-text-muted text-sm text-center mb-8 max-w-sm">
+            Digite seu CPF e a placa da sua moto para acompanhar sua ordem de serviço.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                CPF
-              </label>
-              <input
-                value={cpf}
-                onChange={(e) => setCpf(maskCpfDigits(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#0E7490] focus:ring-1 focus:ring-[#0E7490]"
-                inputMode="numeric"
-                placeholder="000.000.000-00"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                Placa (senha)
-              </label>
-              <input
-                value={plate}
-                onChange={(e) => setPlate(normalizePlateInput(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#0E7490] focus:ring-1 focus:ring-[#0E7490]"
-                placeholder="ABC-1234"
-                required
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-[#DC2626] bg-[#FEF2F2] px-3 py-2 rounded-lg">
+          <form onSubmit={handleSubmit} className="w-full space-y-4">
+            <label className="block">
+              <span className="sr-only">CPF</span>
+              <div className="portal-card flex items-center gap-3 px-4 h-12">
+                <User size={20} style={{ color: "var(--portal-accent)" }} />
+                <input
+                  value={cpf}
+                  onChange={(e) => setCpf(maskCpfDigits(e.target.value))}
+                  className="flex-1 bg-transparent outline-none portal-text text-sm placeholder:portal-text-muted"
+                  inputMode="numeric"
+                  placeholder="CPF"
+                  required
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="sr-only">Placa</span>
+              <div className="portal-card flex items-center gap-3 px-4 h-12">
+                <Lock size={20} style={{ color: "var(--portal-accent)" }} />
+                <input
+                  value={plate}
+                  onChange={(e) => setPlate(normalizePlateInput(e.target.value))}
+                  className="flex-1 bg-transparent outline-none portal-text text-sm placeholder:portal-text-muted uppercase"
+                  placeholder="Placa"
+                  required
+                />
+              </div>
+            </label>
+
+            {error ? (
+              <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
                 {error}
               </p>
-            )}
+            ) : null}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-11 rounded-lg bg-[#0F3D4C] hover:bg-[#0E7490] text-white text-sm font-medium transition-colors disabled:opacity-60"
+              className="w-full h-12 rounded-xl text-white font-semibold text-sm transition-opacity disabled:opacity-60 portal-primary-bg"
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 size={18} className="animate-spin" />
+                  Entrando...
+                </span>
+              ) : (
+                "Acessar portal"
+              )}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-[#64748B]">
-            É da oficina?{" "}
-            <a
-              href={dashboardLoginUrl()}
-              className="text-[#0E7490] font-medium hover:underline"
-            >
-              Abrir o sistema Scalibur (ERP)
-            </a>
+          <p className="portal-text-muted text-sm mt-6 text-center max-w-sm mx-auto">
+            Não encontrou sua OS? Entre em contato com a oficina pelo telefone ou WhatsApp que
+            você recebeu.
           </p>
         </div>
+
+        <p className="portal-text-muted text-xs text-center mt-4">Precisa de ajuda? Fale com a oficina.</p>
       </div>
-    </div>
+    </MotoBackground>
   );
 }
-

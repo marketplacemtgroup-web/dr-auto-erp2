@@ -1,4 +1,4 @@
-# Manuais de fluxo — Scalibur ERP
+# Manuais de fluxo — WTEC Motors ERP
 
 Documentação operacional para equipe da oficina. Cada arquivo pode ser exportado para PDF separadamente ou em conjunto.
 

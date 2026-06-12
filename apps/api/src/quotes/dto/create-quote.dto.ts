@@ -1,11 +1,22 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
 
 export class CreateQuoteDto {
+  @ValidateIf((o: CreateQuoteDto) => !o.vehicleId)
   @IsString()
-  serviceOrderId!: string;
+  serviceOrderId?: string;
 
+  @ValidateIf((o: CreateQuoteDto) => !o.serviceOrderId)
+  @IsString()
+  vehicleId?: string;
+
+  @IsOptional()
   @IsNumber()
-  amount!: number;
+  @Min(0)
+  amount?: number;
+
+  @IsOptional()
+  @IsString()
+  complaint?: string;
 
   @IsOptional()
   @IsString()

@@ -5,5 +5,6 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES
   ('vehicle-photos', 'vehicle-photos', false),
   ('os-media', 'os-media', false),
-  ('documents', 'documents', false)
+  ('documents', 'documents', false),
+  ('branding', 'branding', true)
 ON CONFLICT (id) DO NOTHING;

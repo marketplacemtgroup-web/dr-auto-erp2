@@ -30,6 +30,11 @@ export class EventsService {
       pushTitle?: string;
       pushBody?: string;
       pushUrl?: string;
+      portalNotificationType?: string;
+      serviceOrderId?: string;
+      quoteId?: string;
+      /** Quando false, grava só no ERP (sem push/inbox do cliente). Padrão: true se houver pushTitle. */
+      customerPush?: boolean;
     },
   ) {
     await this.prisma.officeNotification.create({
@@ -42,12 +47,52 @@ export class EventsService {
       },
     });
 
-    if (event.vehicleId && event.pushTitle) {
-      await this.push.sendToVehicle(event.vehicleId, {
-        title: event.pushTitle,
-        body: event.pushBody ?? event.message,
-        url: event.pushUrl ?? '/',
-      });
+    const vehicleId = event.vehicleId;
+    const sendCustomer =
+      event.customerPush !== false && Boolean(vehicleId && event.pushTitle);
+    if (sendCustomer && vehicleId && event.pushTitle) {
+      await this.push.sendToVehicle(
+        vehicleId,
+        {
+          title: event.pushTitle,
+          body: event.pushBody ?? event.message,
+          url: event.pushUrl ?? '/',
+        },
+        event.portalNotificationType
+          ? {
+              type: event.portalNotificationType,
+              serviceOrderId: event.serviceOrderId,
+              quoteId: event.quoteId,
+            }
+          : undefined,
+      );
     }
+  }
+
+  /** Push + inbox do portal (sem notificação no ERP). */
+  async emitCustomer(
+    vehicleId: string,
+    event: {
+      pushTitle: string;
+      pushBody: string;
+      pushUrl?: string;
+      portalNotificationType: string;
+      serviceOrderId?: string;
+      quoteId?: string;
+    },
+  ) {
+    await this.push.sendToVehicle(
+      vehicleId,
+      {
+        title: event.pushTitle,
+        body: event.pushBody,
+        url: event.pushUrl ?? '/',
+      },
+      {
+        type: event.portalNotificationType,
+        serviceOrderId: event.serviceOrderId,
+        quoteId: event.quoteId,
+      },
+    );
   }
 }

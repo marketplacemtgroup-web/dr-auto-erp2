@@ -26,4 +26,25 @@ export class CreateServiceOrderItemDto {
   @IsOptional()
   @IsString()
   catalogItemId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount?: number;
+
+  @IsOptional()
+  @IsString()
+  executorId?: string;
+
+  @IsOptional()
+  @IsString()
+  soldById?: string;
+
+  @IsOptional()
+  @IsString()
+  appliedById?: string;
+
+  @IsOptional()
+  @IsString()
+  separatedById?: string;
 }

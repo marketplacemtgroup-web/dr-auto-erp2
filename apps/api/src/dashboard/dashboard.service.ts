@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ServiceOrderStatus } from '@autocore/database';
+import { notDeleted } from '../common/soft-delete';
+import { endOfDay, roundMoney, startOfDay } from '../reports/reports-date.util';
+import { ReportsService } from '../reports/reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const OPEN_STATUSES: ServiceOrderStatus[] = [
@@ -25,101 +28,53 @@ const IN_SHOP_STATUSES: ServiceOrderStatus[] = [
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reportsService: ReportsService,
+  ) {}
 
-  async getKpis(organizationId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  /** Rápido — contagens diretas (como antes do Relatórios BI). */
+  async getOperationalKpis(organizationId: string) {
+    const active = { organizationId, ...notDeleted };
 
     const [
       openServiceOrders,
       vehiclesInShop,
       pendingQuotes,
-      dailyRevenueToday,
-      dailyRevenueYesterday,
       delayedServices,
-      monthlyRevenueAgg,
-      invoicesCount,
-      serviceOrdersForTicket,
+      waitingClients,
+      lowStockParts,
     ] = await Promise.all([
       this.prisma.serviceOrder.count({
-        where: { organizationId, status: { in: OPEN_STATUSES } },
+        where: { ...active, status: { in: OPEN_STATUSES } },
       }),
       this.prisma.serviceOrder.count({
-        where: { organizationId, status: { in: IN_SHOP_STATUSES } },
+        where: { ...active, status: { in: IN_SHOP_STATUSES } },
       }),
       this.prisma.quote.count({
-        where: { organizationId, status: 'PENDING' },
-      }),
-      this.prisma.dailyRevenue.findUnique({
-        where: {
-          organizationId_date: { organizationId, date: today },
-        },
-      }),
-      this.prisma.dailyRevenue.findUnique({
-        where: {
-          organizationId_date: { organizationId, date: yesterday },
-        },
+        where: { ...active, status: 'PENDING' },
       }),
       this.prisma.serviceOrder.count({
         where: {
-          organizationId,
+          ...active,
           status: { in: ['IN_PROGRESS', 'AWAITING_PART'] },
           estimatedAt: { lt: new Date() },
         },
       }),
-      this.prisma.dailyRevenue.aggregate({
+      this.prisma.serviceOrder.groupBy({
+        by: ['vehicleId'],
         where: {
-          organizationId,
-          date: { gte: monthStart, lte: today },
-        },
-        _sum: { amount: true },
-      }),
-      this.prisma.dailyRevenue.count({
-        where: {
-          organizationId,
-          date: { gte: monthStart },
+          ...active,
+          status: { in: ['AWAITING_APPROVAL', 'RECEIVED'] },
         },
       }),
-      this.prisma.serviceOrder.findMany({
-        where: {
-          organizationId,
-          status: 'DELIVERED',
-          updatedAt: { gte: monthStart },
-        },
-        select: { totalAmount: true },
-      }),
+      this.prisma.$queryRaw<{ count: number }[]>`
+        SELECT COUNT(*)::int as count FROM products
+        WHERE organization_id = ${organizationId}
+          AND deleted_at IS NULL
+          AND stock <= min_stock
+      `.then((r) => Number(r[0]?.count ?? 0)),
     ]);
-
-    const lowStockReal = await this.prisma.$queryRaw<{ count: number }[]>`
-      SELECT COUNT(*)::int as count FROM products
-      WHERE organization_id = ${organizationId} AND stock <= min_stock
-    `.then((r) => Number(r[0]?.count ?? 0));
-
-    const dailyAmount = Number(dailyRevenueToday?.amount ?? 0);
-    const yesterdayAmount = Number(dailyRevenueYesterday?.amount ?? 0);
-    const monthlyRevenue = Number(monthlyRevenueAgg._sum.amount ?? 0);
-
-    const ticketSum = serviceOrdersForTicket.reduce(
-      (s, o) => s + Number(o.totalAmount),
-      0,
-    );
-    const averageTicket =
-      serviceOrdersForTicket.length > 0
-        ? ticketSum / serviceOrdersForTicket.length
-        : 0;
-
-    const waitingClients = await this.prisma.serviceOrder.groupBy({
-      by: ['vehicleId'],
-      where: {
-        organizationId,
-        status: { in: ['AWAITING_APPROVAL', 'RECEIVED'] },
-      },
-    });
 
     return {
       openServiceOrders,
@@ -128,23 +83,130 @@ export class DashboardService {
       vehiclesInShopTrend: 0,
       pendingQuotes,
       pendingQuotesTrend: 0,
-      dailyRevenue: dailyAmount,
-      dailyRevenueTrend: this.percentTrend(dailyAmount, yesterdayAmount),
-      lowStockParts: lowStockReal,
+      lowStockParts,
       lowStockPartsTrend: 0,
       delayedServices,
       waitingClients: waitingClients.length,
-      invoicesThisMonth: invoicesCount,
-      averageTicket: Math.round(averageTicket * 100) / 100,
-      monthlyRevenue,
-      averageServiceTimeMinutes: 0,
     };
   }
 
-  async getRevenueSeries(organizationId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  /** Financeiro — mesma base dos Relatórios BI (pode demorar mais). */
+  async getFinancialKpis(organizationId: string) {
+    const today = startOfDay(new Date());
+    const todayEnd = endOfDay(today);
+    const yesterday = startOfDay(new Date(today));
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayEnd = endOfDay(yesterday);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const active = { organizationId, ...notDeleted };
+
+    const fromStr = this.toLocalIsoDate(monthStart);
+    const toStr = this.toLocalIsoDate(today);
+
+    const paidReceivable = {
+      organizationId,
+      status: 'PAID' as const,
+      type: 'RECEIVABLE' as const,
+    };
+
+    const [report, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
+      await Promise.all([
+        this.reportsService.dashboardFinancial(organizationId, fromStr, toStr),
+        this.prisma.financialEntry.aggregate({
+          where: {
+            ...paidReceivable,
+            paidAt: { gte: today, lte: todayEnd },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.financialEntry.aggregate({
+          where: {
+            ...paidReceivable,
+            paidAt: { gte: yesterday, lte: yesterdayEnd },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.serviceOrder.findMany({
+          where: {
+            ...active,
+            status: 'DELIVERED',
+            updatedAt: { gte: monthStart, lte: todayEnd },
+          },
+          select: { totalAmount: true, createdAt: true, updatedAt: true },
+        }),
+      ]);
+
+    const dailyAmount = this.pickRevenue(
+      Number(paidTodayAgg._sum.amount ?? 0),
+      report.financial.revenueToday,
+    );
+    const yesterdayAmount = Number(paidYesterdayAgg._sum.amount ?? 0);
+
+    const ticketSum = deliveredOrdersMonth.reduce(
+      (s, o) => s + Number(o.totalAmount),
+      0,
+    );
+    const averageTicket =
+      deliveredOrdersMonth.length > 0
+        ? roundMoney(ticketSum / deliveredOrdersMonth.length)
+        : 0;
+
+    let totalServiceMs = 0;
+    for (const order of deliveredOrdersMonth) {
+      totalServiceMs += order.updatedAt.getTime() - order.createdAt.getTime();
+    }
+    const averageServiceTimeMinutes =
+      deliveredOrdersMonth.length > 0
+        ? Math.round(totalServiceMs / deliveredOrdersMonth.length / (1000 * 60))
+        : 0;
+
+    return {
+      dailyRevenue: dailyAmount,
+      dailyRevenueTrend: this.percentTrend(dailyAmount, yesterdayAmount),
+      invoicesThisMonth: deliveredOrdersMonth.length,
+      averageTicket,
+      monthlyRevenue: report.financial.revenue,
+      averageServiceTimeMinutes,
+      partsProfit: report.financial.partsProfit,
+      servicesProfit: report.financial.servicesProfit,
+    };
+  }
+
+  /** Legado — operacional + financeiro em uma chamada. */
+  async getKpis(organizationId: string) {
+    const [operational, financial] = await Promise.all([
+      this.getOperationalKpis(organizationId),
+      this.getFinancialKpis(organizationId),
+    ]);
+    return { ...operational, ...financial };
+  }
+
+  async getRevenueSeries(organizationId: string) {
+    const today = startOfDay(new Date());
+    const todayEnd = endOfDay(today);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    const paidRows = await this.prisma.financialEntry.findMany({
+      where: {
+        organizationId,
+        status: 'PAID',
+        type: 'RECEIVABLE',
+        paidAt: { gte: monthStart, lte: todayEnd },
+      },
+      select: { paidAt: true, amount: true },
+      orderBy: { paidAt: 'asc' },
+    });
+
+    const byDay = new Map<string, number>();
+    for (const row of paidRows) {
+      if (!row.paidAt) continue;
+      const key = String(row.paidAt.getDate()).padStart(2, '0');
+      byDay.set(key, (byDay.get(key) ?? 0) + Number(row.amount));
+    }
+
+    if (byDay.size > 0) {
+      return Array.from(byDay.entries()).map(([day, value]) => ({ day, value }));
+    }
 
     const rows = await this.prisma.dailyRevenue.findMany({
       where: {
@@ -164,6 +226,7 @@ export class DashboardService {
     return this.prisma.serviceOrder.findMany({
       where: {
         organizationId,
+        ...notDeleted,
         status: {
           in: ['IN_PROGRESS', 'AWAITING_PART', 'DIAGNOSIS', 'AWAITING_APPROVAL'],
         },
@@ -178,7 +241,7 @@ export class DashboardService {
 
   async getPendingQuotes(organizationId: string) {
     return this.prisma.quote.findMany({
-      where: { organizationId, status: 'PENDING' },
+      where: { organizationId, ...notDeleted, status: 'PENDING' },
       include: {
         serviceOrder: {
           include: {
@@ -189,6 +252,18 @@ export class DashboardService {
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
+  }
+
+  private toLocalIsoDate(date: Date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  private pickRevenue(fromPaidEntries: number, fromDailyRevenue: number) {
+    if (fromPaidEntries > 0) return roundMoney(fromPaidEntries);
+    return roundMoney(fromDailyRevenue);
   }
 
   private percentTrend(current: number, previous: number): number {

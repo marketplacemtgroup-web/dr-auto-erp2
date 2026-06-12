@@ -146,6 +146,7 @@ export default function CustomersPage() {
 
       <FormDrawer
         open={drawerOpen}
+        size="xl"
         title={editingId ? "Editar cadastro do cliente" : "Novo cliente"}
         subtitle="Preencha a ficha completa. Após salvar você verá veículos, OS e histórico."
         onClose={() => setDrawerOpen(false)}

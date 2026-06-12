@@ -31,6 +31,12 @@ export class FinancialController {
     return this.financialService.cashFlow(user.organizationId);
   }
 
+  @Get('receive-queue')
+  @RequirePermissions('financial.manage')
+  receiveQueue(@CurrentUser() user: { organizationId: string }) {
+    return this.financialService.receiveQueue(user.organizationId);
+  }
+
   @Post()
   @RequirePermissions('financial.manage')
   create(@CurrentUser() user: { organizationId: string }, @Body() dto: CreateFinancialEntryDto) {

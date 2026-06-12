@@ -3,6 +3,7 @@ import { AttachmentEntityType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { posix } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsService } from '../events/events.service';
 import { SupabaseStorageService } from '../storage/supabase-storage.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class AttachmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: SupabaseStorageService,
+    private readonly events: EventsService,
   ) {}
 
   attachmentFilePath(id: string): string {
@@ -133,6 +135,10 @@ export class AttachmentsService {
       include: { uploadedBy: { select: { id: true, name: true } } },
     });
 
+    if (row.visibleToCustomer) {
+      await this.notifyCustomerAttachment(organizationId, serviceOrderId);
+    }
+
     return this.enrichForClient(row);
   }
 
@@ -174,7 +180,27 @@ export class AttachmentsService {
       include: { uploadedBy: { select: { id: true, name: true } } },
     });
 
+    if (row.visibleToCustomer) {
+      await this.notifyCustomerAttachment(organizationId, serviceOrderId);
+    }
+
     return this.enrichForClient(row);
+  }
+
+  private async notifyCustomerAttachment(organizationId: string, serviceOrderId: string) {
+    const so = await this.prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, organizationId, deletedAt: null },
+      select: { id: true, number: true, vehicleId: true },
+    });
+    if (!so?.vehicleId) return;
+
+    await this.events.emitCustomer(so.vehicleId, {
+      pushTitle: 'Nova foto na sua OS',
+      pushBody: `OS #${so.number} — veja o que a oficina enviou`,
+      pushUrl: `/os/${so.id}`,
+      portalNotificationType: 'anexo',
+      serviceOrderId: so.id,
+    });
   }
 
   async uploadForVehicle(

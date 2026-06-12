@@ -47,4 +47,6 @@ export interface DashboardKpis {
   averageTicket: number;
   monthlyRevenue: number;
   averageServiceTimeMinutes: number;
+  partsProfit: number;
+  servicesProfit: number;
 }

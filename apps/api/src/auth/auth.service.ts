@@ -6,7 +6,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildLoginEmail,
+  normalizeLoginEmailDomain,
+  suggestLoginEmailDomain,
+} from './login-email.util';
 import { LoginDto } from './dto/login.dto';
 import { RegisterOrganizationDto } from './dto/register-organization.dto';
 
@@ -16,6 +22,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   async getSetupStatus() {
@@ -62,7 +69,7 @@ export class AuthService {
     return this.buildSession(user, member);
   }
 
-  async registerOrganization(dto: RegisterOrganizationDto) {
+  async registerOrganization(dto: RegisterOrganizationDto, logo?: Express.Multer.File) {
     const singleTenant = this.config.get('SINGLE_TENANT', 'true') === 'true';
     if (singleTenant) {
       const orgCount = await this.prisma.organization.count();
@@ -73,26 +80,32 @@ export class AuthService {
       }
     }
 
-    const email = dto.email.toLowerCase();
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException('E-mail já cadastrado');
-
     const defaultOrgName =
-      this.config.get<string>('DEFAULT_ORGANIZATION_NAME') ?? 'Scalibur Oficinas';
+      this.config.get<string>('DEFAULT_ORGANIZATION_NAME') ?? 'WTEC Motors';
     const organizationName = dto.organizationName?.trim() || defaultOrgName;
+
+    const loginEmailDomain =
+      normalizeLoginEmailDomain(dto.loginEmailDomain) ||
+      suggestLoginEmailDomain(organizationName);
+    const email = buildLoginEmail(dto.loginUsername, loginEmailDomain);
+
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) throw new ConflictException('Usuário de login já cadastrado');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const permissions = await this.prisma.permission.findMany();
     const permIds = permissions.map((p) => p.id);
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(
+      async (tx) => {
       const org = await tx.organization.create({
         data: {
           name: organizationName,
-          tradeName: dto.tradeName ?? 'Scalibur',
+          tradeName: dto.tradeName ?? 'WTEC Motors',
           document: dto.document,
           email,
+          loginEmailDomain,
         },
       });
 
@@ -136,17 +149,27 @@ export class AuthService {
           roleId: adminRole.id,
           branchId: branch.id,
         },
-        include: {
-          user: true,
-          organization: true,
-          role: { include: { permissions: { include: { permission: true } } } },
-        },
       });
 
-      return { user: member.user, member };
+      return { memberId: member.id, organizationId: org.id };
+      },
+      { maxWait: 10_000, timeout: 30_000 },
+    );
+
+    if (logo) {
+      await this.organizationsService.uploadLogo(result.organizationId, logo);
+    }
+
+    const member = await this.prisma.organizationMember.findFirstOrThrow({
+      where: { id: result.memberId },
+      include: {
+        user: true,
+        organization: true,
+        role: { include: { permissions: { include: { permission: true } } } },
+      },
     });
 
-    return this.buildSession(result.user, result.member);
+    return this.buildSession(member.user, member);
   }
 
   async me(userId: string, organizationId: string, memberId: string) {

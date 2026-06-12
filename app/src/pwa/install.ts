@@ -3,7 +3,7 @@ export type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const INSTALL_EVENT = "scalibur-pwa-install";
+const INSTALL_EVENT = "wtec-motors-pwa-install";
 
 let deferred: BeforeInstallPromptEvent | null = null;
 

@@ -1,10 +1,8 @@
 import { routes } from "../lib/routes";
 import NavButton from "./NavButton";
 import { useDashboardPendingQuotes } from "../hooks/useDashboardLists";
-
-function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
+import { usePermissions } from "../hooks/usePermissions";
+import { formatMoney } from "../lib/format";
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -17,6 +15,8 @@ function timeAgo(iso: string) {
 
 export default function PendingQuotes() {
   const { data: quotes = [], isLoading } = useDashboardPendingQuotes();
+  const { canViewMoney } = usePermissions();
+  const showMoney = canViewMoney();
 
   return (
     <div className="bg-white rounded-xl card-shadow p-5">
@@ -42,21 +42,29 @@ export default function PendingQuotes() {
               <th className="text-left text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider pb-2 pr-2">
                 Cliente
               </th>
-              <th className="text-right text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider pb-2">
-                Valor
-              </th>
+              {showMoney && (
+                <th className="text-right text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider pb-2">
+                  Valor
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {isLoading && quotes.length === 0 ? (
               <tr>
-                <td colSpan={3} className="py-6 text-center text-[13px] text-[#64748B]">
+                <td
+                  colSpan={showMoney ? 3 : 2}
+                  className="py-6 text-center text-[13px] text-[#64748B]"
+                >
                   Carregando...
                 </td>
               </tr>
             ) : quotes.length === 0 ? (
               <tr>
-                <td colSpan={3} className="py-6 text-center text-[13px] text-[#64748B]">
+                <td
+                  colSpan={showMoney ? 3 : 2}
+                  className="py-6 text-center text-[13px] text-[#64748B]"
+                >
                   Nenhum orcamento pendente.
                 </td>
               </tr>
@@ -80,11 +88,13 @@ export default function PendingQuotes() {
                       {q.serviceOrder.vehicle.plate}
                     </p>
                   </td>
-                  <td className="py-3 text-right">
-                    <span className="text-[12px] font-semibold text-[#1E293B]">
-                      {formatCurrency(Number(q.amount))}
-                    </span>
-                  </td>
+                  {showMoney && (
+                    <td className="py-3 text-right">
+                      <span className="text-[12px] font-semibold text-[#1E293B]">
+                        {formatMoney(Number(q.amount))}
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

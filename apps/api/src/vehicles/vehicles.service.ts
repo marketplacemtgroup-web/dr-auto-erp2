@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -20,7 +21,18 @@ export class VehiclesService {
   ) {}
 
   async create(organizationId: string, dto: CreateVehicleDto) {
-    const plate = dto.plate.replace(/\s/g, '').toUpperCase();
+    const plate = dto.plate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (plate.length !== 7) {
+      throw new BadRequestException('Placa deve ter 7 caracteres (ex.: ABC1D23)');
+    }
+
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: dto.customerId, organizationId, ...notDeleted },
+    });
+    if (!customer) {
+      throw new BadRequestException('Cliente não encontrado. Selecione um cliente válido.');
+    }
+
     const existing = await this.prisma.vehicle.findFirst({
       where: { organizationId, plate, ...notDeleted },
     });
@@ -151,7 +163,10 @@ export class VehiclesService {
     await this.findOne(organizationId, id);
     let plate: string | undefined;
     if (dto.plate) {
-      plate = dto.plate.replace(/\s/g, '').toUpperCase();
+      plate = dto.plate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      if (plate.length !== 7) {
+        throw new BadRequestException('Placa deve ter 7 caracteres (ex.: ABC1D23)');
+      }
       const existing = await this.prisma.vehicle.findFirst({
         where: { organizationId, plate, ...notDeleted, NOT: { id } },
       });

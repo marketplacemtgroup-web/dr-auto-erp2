@@ -1,33 +1,33 @@
 import { branding } from "../lib/branding";
+import { useBrandingStore } from "../stores/brandingStore";
 
-const sizeClass = {
-  sm: "w-[108px] h-[108px]",
-  md: "w-[120px] h-[120px]",
-} as const;
-
-const sizePx = {
-  sm: 108,
-  md: 120,
-} as const;
+/** auth = login/cadastro (mobile + desktop); dashboard = sidebar ERP; compact = header interno */
+export type BrandLogoContext = "auth" | "dashboard" | "compact";
 
 type BrandLogoProps = {
-  size?: keyof typeof sizeClass;
+  context?: BrandLogoContext;
   className?: string;
 };
 
-/** Logo PNG transparente (public/sem fundo.png) */
-export default function BrandLogo({ size = "sm", className = "" }: BrandLogoProps) {
+/**
+ * Logo responsivo — escala automaticamente por contexto.
+ * auth: até 360px (3× do tamanho anterior de login), adapta em telas pequenas.
+ * dashboard: ocupa a largura útil da sidebar (até ~208px).
+ */
+export default function BrandLogo({ context = "auth", className = "" }: BrandLogoProps) {
+  const logoUrl = useBrandingStore((s) => s.logoUrl);
+  const appName = useBrandingStore((s) => s.appName);
+
   return (
     <div
-      className={`${sizeClass[size]} shrink-0 rounded-lg flex items-center justify-center overflow-hidden ${className}`}
+      className={`brand-logo brand-logo--${context} shrink-0 flex items-end justify-center max-w-full leading-none ${className}`}
     >
       <img
-        src={branding.logoUrl}
-        alt={branding.appName}
-        width={sizePx[size]}
-        height={sizePx[size]}
-        className="w-full h-full object-contain"
+        src={logoUrl || branding.logoUrl}
+        alt={appName || branding.appName}
+        className="brand-logo__img w-full h-auto object-contain object-bottom block"
         decoding="async"
+        loading="eager"
       />
     </div>
   );

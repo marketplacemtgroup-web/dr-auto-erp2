@@ -1,12 +1,18 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
-import { api, type VehicleRow } from "../../lib/api";
+import { api, getErrorMessage, type VehicleRow } from "../../lib/api";
 import { routes } from "../../lib/routes";
+import {
+  normalizePlate,
+  parseOptionalKm,
+  parseOptionalYear,
+  validateVehicleForm,
+} from "../../lib/vehicle-form";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 
 const emptyForm = {
@@ -26,37 +32,56 @@ const emptyForm = {
 
 export default function VehiclesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = useAuthToken();
   const queryClient = useQueryClient();
+  const openedFromCustomer = useRef(false);
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VehicleRow | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const { data: customers } = useApiQuery(["customers-all"], (t) => api.customers(t));
+  const {
+    data: customers,
+    isLoading: customersLoading,
+    error: customersError,
+  } = useApiQuery(["customers-all"], (t) => api.customers(t));
   const { data, isLoading, error } = useApiQuery(["vehicles", search], (t) =>
     api.vehicles(t, search || undefined),
   );
 
+  useEffect(() => {
+    const customerId = searchParams.get("customerId");
+    if (!customerId || openedFromCustomer.current) return;
+    openedFromCustomer.current = true;
+    setEditing(null);
+    setForm({ ...emptyForm, customerId });
+    setSaveError(null);
+    setDrawerOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const vehiclePayload = () => ({
     customerId: form.customerId,
-    plate: form.plate,
+    plate: normalizePlate(form.plate),
     brand: form.brand || undefined,
     model: form.model || undefined,
-    year: form.year ? Number(form.year) : undefined,
+    year: parseOptionalYear(form.year),
     color: form.color || undefined,
     vehicleKind: form.vehicleKind,
     chassis: form.chassis || undefined,
     renavam: form.renavam || undefined,
     fuelType: form.fuelType || undefined,
-    currentKm: form.currentKm ? Number(form.currentKm) : undefined,
+    currentKm: parseOptionalKm(form.currentKm),
     notes: form.notes || undefined,
   });
 
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setSaveError(null);
     setDrawerOpen(true);
   };
 
@@ -78,6 +103,7 @@ export default function VehiclesPage() {
       currentKm: full.currentKm ? String(full.currentKm) : "",
       notes: full.notes ?? "",
     });
+    setSaveError(null);
     setDrawerOpen(true);
   };
 
@@ -88,11 +114,29 @@ export default function VehiclesPage() {
         : api.createVehicle(token!, vehiclePayload()),
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
       setDrawerOpen(false);
       setEditing(null);
+      setSaveError(null);
       navigate(routes.veiculoDetalhe(saved.id));
     },
+    onError: (err) => setSaveError(getErrorMessage(err)),
   });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validationError = validateVehicleForm(form);
+    if (validationError) {
+      setSaveError(validationError);
+      return;
+    }
+    if (customersError) {
+      setSaveError("Não foi possível carregar a lista de clientes. Atualize a página.");
+      return;
+    }
+    setSaveError(null);
+    save.mutate();
+  };
 
   const remove = useMutation({
     mutationFn: () => api.deleteVehicle(token!, deleteTarget!.id),
@@ -139,13 +183,12 @@ export default function VehiclesPage() {
 
       <FormDrawer
         open={drawerOpen}
+        size="lg"
         title={editing ? "Editar veiculo" : "Novo veiculo"}
         subtitle="Dados do veiculo e vinculo ao cliente"
+        error={saveError}
         onClose={() => setDrawerOpen(false)}
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
+        onSubmit={handleSubmit}
         loading={save.isPending}
         submitLabel={editing ? "Salvar e abrir ficha" : "Cadastrar e abrir ficha"}
       >
@@ -155,21 +198,37 @@ export default function VehiclesPage() {
             value={form.customerId}
             onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
             required
+            disabled={customersLoading || !!customersError}
           >
-            <option value="">Selecione...</option>
+            <option value="">
+              {customersLoading
+                ? "Carregando clientes..."
+                : customersError
+                  ? "Erro ao carregar clientes"
+                  : "Selecione..."}
+            </option>
             {customers?.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
+          {customersError && (
+            <p className="text-xs text-red-600 mt-1">
+              Sem permissão ou falha ao listar clientes. Peça acesso ou recarregue a página.
+            </p>
+          )}
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Placa *">
             <input
               className={inputClass}
               value={form.plate}
-              onChange={(e) => setForm((f) => ({ ...f, plate: e.target.value.toUpperCase() }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, plate: normalizePlate(e.target.value) }))
+              }
+              placeholder="ABC1D23 ou ABC1234"
+              maxLength={8}
               required
             />
           </FormField>
@@ -191,27 +250,31 @@ export default function VehiclesPage() {
             </select>
           </FormField>
         </div>
-        <FormField label="Marca">
-          <input
-            className={inputClass}
-            value={form.brand}
-            onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value }))}
-          />
-        </FormField>
-        <FormField label="Modelo">
-          <input
-            className={inputClass}
-            value={form.model}
-            onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-          />
-        </FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Marca">
+            <input
+              className={inputClass}
+              value={form.brand}
+              onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="Modelo">
+            <input
+              className={inputClass}
+              value={form.model}
+              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+            />
+          </FormField>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Ano">
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               className={inputClass}
               value={form.year}
               onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
+              placeholder="2020"
             />
           </FormField>
           <FormField label="Cor">
@@ -225,38 +288,45 @@ export default function VehiclesPage() {
         <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-1">
           Dados tecnicos
         </p>
-        <FormField label="Combustivel">
-          <input
-            className={inputClass}
-            value={form.fuelType}
-            onChange={(e) => setForm((f) => ({ ...f, fuelType: e.target.value }))}
-          />
-        </FormField>
-        <FormField label="KM atual">
-          <input
-            type="number"
-            className={inputClass}
-            value={form.currentKm}
-            onChange={(e) => setForm((f) => ({ ...f, currentKm: e.target.value }))}
-          />
-        </FormField>
-        <FormField label="Chassi">
-          <input
-            className={inputClass}
-            value={form.chassis}
-            onChange={(e) => setForm((f) => ({ ...f, chassis: e.target.value }))}
-          />
-        </FormField>
-        <FormField label="RENAVAM">
-          <input
-            className={inputClass}
-            value={form.renavam}
-            onChange={(e) => setForm((f) => ({ ...f, renavam: e.target.value }))}
-          />
-        </FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Combustivel">
+            <input
+              className={inputClass}
+              value={form.fuelType}
+              onChange={(e) => setForm((f) => ({ ...f, fuelType: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="KM atual">
+            <input
+              type="text"
+              inputMode="numeric"
+              className={inputClass}
+              value={form.currentKm}
+              onChange={(e) => setForm((f) => ({ ...f, currentKm: e.target.value }))}
+              placeholder="Ex.: 50000"
+            />
+          </FormField>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Chassi">
+            <input
+              className={inputClass}
+              value={form.chassis}
+              onChange={(e) => setForm((f) => ({ ...f, chassis: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="RENAVAM">
+            <input
+              className={inputClass}
+              value={form.renavam}
+              onChange={(e) => setForm((f) => ({ ...f, renavam: e.target.value }))}
+            />
+          </FormField>
+        </div>
         <FormField label="Observacoes">
           <textarea
-            className={`${inputClass} min-h-[60px] py-2`}
+            className={`${inputClass} min-h-[52px] py-1.5`}
+            rows={2}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
           />

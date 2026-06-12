@@ -8,6 +8,8 @@ import { dirname, join, posix } from 'path';
 const LOCAL_UPLOAD_ROOT = join(process.cwd(), 'uploads');
 const SIGNED_URL_TTL_SEC = 3600;
 
+export const BRANDING_BUCKET = 'branding';
+
 @Injectable()
 export class SupabaseStorageService {
   private readonly logger = new Logger(SupabaseStorageService.name);
@@ -51,12 +53,13 @@ export class SupabaseStorageService {
     storagePath: string,
     buffer: Buffer,
     contentType: string,
+    upsert = false,
   ): Promise<void> {
     const path = this.normalizeStoragePath(storagePath);
     if (this.isCloudStorage()) {
       const { error } = await this.getClient()
         .storage.from(bucket)
-        .upload(path, buffer, { contentType, upsert: false });
+        .upload(path, buffer, { contentType, upsert });
       if (error) {
         this.logger.error(`Upload falhou: ${error.message}`);
         throw new Error('Falha ao enviar arquivo para o storage');
@@ -110,6 +113,16 @@ export class SupabaseStorageService {
       throw new Error('Não foi possível gerar URL do arquivo');
     }
     return data.signedUrl;
+  }
+
+  /** URL pública para buckets públicos (ex.: branding) ou proxy local em dev. */
+  publicObjectUrl(bucket: string, storagePath: string): string {
+    const path = this.normalizeStoragePath(storagePath);
+    if (this.isCloudStorage()) {
+      const base = this.config.get<string>('SUPABASE_URL')!.replace(/\/$/, '');
+      return `${base}/storage/v1/object/public/${bucket}/${path}`;
+    }
+    return `/api/uploads/${path}`;
   }
 
   async readLocalOrThrow(storagePath: string): Promise<{ buffer: Buffer; mimeType?: string }> {

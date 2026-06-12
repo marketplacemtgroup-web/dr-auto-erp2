@@ -1,6 +1,6 @@
 # Fluxo de cadastro — Cliente e Veículo
 
-Manual para cadastrar **clientes** (pessoas ou empresas) e **veículos** vinculados no Scalibur ERP. Sem esses cadastros não é possível abrir Ordem de Serviço nem usar o portal do cliente.
+Manual para cadastrar **clientes** (pessoas ou empresas) e **veículos** vinculados no WTEC Motors ERP. Sem esses cadastros não é possível abrir Ordem de Serviço nem usar o portal do cliente.
 
 ---
 

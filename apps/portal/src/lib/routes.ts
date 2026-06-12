@@ -1,7 +1,16 @@
 /** Rotas do app portal (domínio/porta separados do dashboard ERP). */
 export const routes = {
+  splash: "/splash",
   home: "/",
   login: "/login",
+  orders: "/os",
+  notifications: "/notificacoes",
+  profile: "/perfil",
+  profileSupport: "/perfil/suporte",
+  profileData: "/perfil/dados",
+  profileVehicles: "/perfil/veiculos",
+  profileHistory: "/perfil/historico",
+  profilePrivacy: "/perfil/privacidade",
   access: (token: string) => `/acesso/${token}`,
   serviceOrder: (id: string) => `/os/${id}`,
   orcamentoPublico: (token: string) => `/orcamento/${token}`,

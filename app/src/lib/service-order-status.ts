@@ -40,7 +40,7 @@ export function osStatusLabel(status: string): string {
 export function quoteStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     DRAFT: "Rascunho",
-    PENDING: "Pendente",
+    PENDING: "Aguardando aprovação",
     APPROVED: "Aprovado",
     REJECTED: "Recusado",
   };
@@ -52,4 +52,24 @@ export function quoteStatusVariant(status: string): StatusVariant {
   if (status === "REJECTED") return "atrasado";
   if (status === "PENDING") return "aguardando-aprovacao";
   return "pendente";
+}
+
+export function lineApprovalLabel(
+  approved: boolean | null | undefined,
+  quoteStatus?: string,
+): string {
+  if (approved === true) return "Aprovado";
+  if (approved === false) return "Recusado";
+  if (quoteStatus === "APPROVED") return "Aprovado";
+  if (quoteStatus === "REJECTED") return "Recusado";
+  return "Aguardando aprovação";
+}
+
+export function lineApprovalVariant(
+  approved: boolean | null | undefined,
+  quoteStatus?: string,
+): StatusVariant {
+  if (approved === true || quoteStatus === "APPROVED") return "confirmado";
+  if (approved === false || quoteStatus === "REJECTED") return "atrasado";
+  return "aguardando-aprovacao";
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuthStore } from "../stores/authStore";
 
@@ -20,8 +20,17 @@ function useAuthPersistHydrated() {
 
 export default function ProtectedRoute() {
   const session = useAuthStore((s) => s.session);
+  const refreshMe = useAuthStore((s) => s.refreshMe);
   const hydrated = useAuthPersistHydrated();
   const location = useLocation();
+
+  const refreshedSession = useRef(false);
+
+  useEffect(() => {
+    if (!hydrated || !session?.accessToken || refreshedSession.current) return;
+    refreshedSession.current = true;
+    void refreshMe();
+  }, [hydrated, session?.accessToken, refreshMe]);
 
   if (!hydrated) {
     return (

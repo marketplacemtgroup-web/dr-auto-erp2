@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApproveLinesDto } from '../quotes/dto/approve-lines.dto';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { PortalLoginDto } from './dto/portal-login.dto';
@@ -94,5 +94,59 @@ export class PortalController {
   @Patch('public/quote/:token/reject')
   rejectPublic(@Param('token') token: string, @Body() body?: { comment?: string }) {
     return this.portalService.rejectPublicQuote(token, body?.comment);
+  }
+
+  @Get('notifications')
+  @UseGuards(PortalJwtGuard)
+  notifications(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Query('unreadOnly') unreadOnly?: string,
+  ) {
+    return this.portalService.listNotifications(user, unreadOnly === 'true');
+  }
+
+  @Patch('notifications/:id/read')
+  @UseGuards(PortalJwtGuard)
+  markNotificationRead(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Param('id') id: string,
+  ) {
+    return this.portalService.markNotificationRead(user, id);
+  }
+
+  @Patch('notifications/read-all')
+  @UseGuards(PortalJwtGuard)
+  markAllNotificationsRead(@CurrentUser() user: { organizationId: string; vehicleId: string }) {
+    return this.portalService.markAllNotificationsRead(user);
+  }
+
+  @Get('vehicles')
+  @UseGuards(PortalJwtGuard)
+  vehicles(@CurrentUser() user: { organizationId: string; customerId: string }) {
+    return this.portalService.listVehicles(user);
+  }
+
+  @Post('switch-vehicle')
+  @UseGuards(PortalJwtGuard)
+  switchVehicle(
+    @CurrentUser() user: { organizationId: string; customerId: string; vehicleId: string },
+    @Body() body: { vehicleId: string },
+  ) {
+    return this.portalService.switchVehicle(user, body.vehicleId);
+  }
+
+  @Post('push/fcm-register')
+  @UseGuards(PortalJwtGuard)
+  fcmRegister(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Body() body: { token: string; platform?: string },
+  ) {
+    return this.portalService.registerFcmToken(user, body);
+  }
+
+  @Get('push/status')
+  @UseGuards(PortalJwtGuard)
+  pushStatus(@CurrentUser() user: { vehicleId: string }) {
+    return this.portalService.getPushStatus(user);
   }
 }

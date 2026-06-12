@@ -1,7 +1,7 @@
 {
   "id": "/dashboard/",
-  "name": "Scalibur — ERP Oficina",
-  "short_name": "Scalibur",
+  "name": "WTEC Motors — Studio especializado em linhas premium",
+  "short_name": "WTEC Motors",
   "description": "Gestão da oficina em tempo real",
   "theme_color": "#0F3D4C",
   "background_color": "#F1F5F9",
@@ -13,21 +13,21 @@
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/pwa-192x192.svg",
+      "src": "/logo-wtecmotors.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.svg",
+      "src": "/logo-wtecmotors.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.svg",
+      "src": "/logo-wtecmotors.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]

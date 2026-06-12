@@ -54,13 +54,16 @@ async function checkStorageBuckets(): Promise<string[]> {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyEdgeCors(req, res)) return;
 
-  const issues = [
+  const dbIssues = [
     ...checkDatabaseUrl('DATABASE_URL'),
     ...checkDatabaseUrl('DIRECT_URL'),
   ];
+  const issues = [...dbIssues];
   if (!process.env.JWT_SECRET?.trim()) issues.push('JWT_SECRET não definida');
 
-  if (issues.length === 0) {
+  issues.push(...checkPushEnv());
+
+  if (dbIssues.length === 0) {
     issues.push(...(await checkStorageBuckets()));
   }
 
@@ -72,5 +75,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       buckets: [...REQUIRED_BUCKETS],
       directUpload: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
     },
+    push: {
+      firebaseFcm: isFirebaseConfigured(),
+      webPush: !!(process.env.VAPID_PUBLIC_KEY?.trim() && process.env.VAPID_PRIVATE_KEY?.trim()),
+    },
   });
+}
+
+function isFirebaseConfigured(): boolean {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
+  if (raw) {
+    try {
+      JSON.parse(raw.replace(/^"+|"+$/g, ''));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim();
+  if (!b64) return false;
+  try {
+    JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkPushEnv(): string[] {
+  if (isFirebaseConfigured()) return [];
+  return [
+    'FIREBASE_SERVICE_ACCOUNT não configurado — push Android (FCM) desativado. Rode: node scripts/setup-firebase-fcm.mjs',
+  ];
 }

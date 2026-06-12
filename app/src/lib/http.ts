@@ -11,9 +11,10 @@ export class RequestTimeoutError extends Error {
 export async function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const extSignal = init?.signal;
   if (extSignal) {
     if (extSignal.aborted) ctrl.abort();

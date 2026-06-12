@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, Navigate, useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { ArrowLeft, Check, Loader2, MessageCircle, X } from "lucide-react";
-import PortalShell from "../components/portal/PortalShell";
 import StatusBadge from "../components/StatusBadge";
 import { ApiError, api, type PortalServiceOrderDetail } from "../lib/api";
 import { formatDateTime, formatMoney } from "../lib/format";
@@ -32,8 +31,6 @@ export default function PortalServiceOrderPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  if (!session?.accessToken) return <Navigate to={routes.login} replace />;
 
   const phone = data?.customer.whatsapp || data?.customer.phone || data?.organization.phone;
 
@@ -69,54 +66,50 @@ export default function PortalServiceOrderPage() {
   }
 
   return (
-    <PortalShell
-      title={data ? `OS #${data.number}` : "Ordem de serviço"}
-      subtitle={data?.statusLabel}
-    >
-      <Link
-        to={routes.home}
-        className="inline-flex items-center gap-1 text-sm text-[#0E7490] -mt-2"
-      >
-        <ArrowLeft size={16} />
-        Voltar ao início
-      </Link>
+    <div className="space-y-4 -mt-2">
+      <div className="flex items-center gap-2">
+        <Link to={routes.orders} className="inline-flex items-center gap-1 text-sm portal-accent">
+          <ArrowLeft size={16} />
+          Voltar
+        </Link>
+        <h1 className="portal-text text-xl font-black flex-1">
+          {data ? `OS #${data.number}` : "Ordem de serviço"}
+        </h1>
+      </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>
-      )}
+      {error ? (
+        <div className="portal-card p-4 text-sm text-red-600">{error}</div>
+      ) : null}
 
-      {!data && !error && (
-        <div className="flex justify-center py-10 text-[#64748B]">
+      {!data && !error ? (
+        <div className="flex justify-center py-10 portal-text-muted">
           <Loader2 className="animate-spin" size={24} />
         </div>
-      )}
+      ) : null}
 
-      {data && (
+      {data ? (
         <>
-          <section className="bg-white rounded-xl p-4 border border-[#E2E8F0]">
+          <section className="portal-card p-4">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <StatusBadge variant={osStatusToVariant(data.status)} />
-              <span className="text-sm font-medium">{osStatusLabel(data.status)}</span>
-              <span className="text-sm font-bold text-[#0F3D4C] ml-auto">
+              <span className="text-sm font-medium portal-text">{osStatusLabel(data.status)}</span>
+              <span className="text-sm font-bold ml-auto" style={{ color: "var(--portal-primary)" }}>
                 {formatMoney(data.totalAmount)}
               </span>
             </div>
             {data.complaint ? (
-              <p className="text-sm text-[#64748B]">
-                <strong className="text-[#1E293B]">Reclamação:</strong> {data.complaint}
+              <p className="text-sm portal-text-muted">
+                <strong className="portal-text">Reclamação:</strong> {data.complaint}
               </p>
             ) : null}
             {data.customerVisibleNotes ? (
-              <p className="text-sm text-[#64748B] mt-2">
-                <strong className="text-[#1E293B]">Observações:</strong> {data.customerVisibleNotes}
+              <p className="text-sm portal-text-muted mt-2">
+                <strong className="portal-text">Observações:</strong> {data.customerVisibleNotes}
               </p>
             ) : null}
             {phone ? (
               <a
-                href={whatsappUrl(
-                  phone,
-                  `Olá! Gostaria de informações sobre a OS #${data.number}.`,
-                )}
+                href={whatsappUrl(phone, `Olá! Gostaria de informações sobre a OS #${data.number}.`)}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-4 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#25D366] text-white text-sm font-medium"
@@ -127,24 +120,26 @@ export default function PortalServiceOrderPage() {
             ) : null}
           </section>
 
-          {data.timeline.length > 0 && (
-            <section className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
-              <h2 className="px-4 py-3 text-sm font-semibold border-b border-[#F1F5F9]">Linha do tempo</h2>
+          {data.timeline.length > 0 ? (
+            <section className="portal-card overflow-hidden">
+              <h2 className="px-4 py-3 text-sm font-semibold portal-text border-b" style={{ borderColor: "var(--portal-border)" }}>
+                Linha do tempo
+              </h2>
               <ul className="px-4 py-3 space-y-4">
                 {data.timeline.map((ev) => (
-                  <li key={ev.id} className="relative pl-4 border-l-2 border-[#0E7490]/40">
-                    <p className="text-sm font-medium text-[#1E293B]">{ev.toLabel}</p>
-                    <p className="text-xs text-[#94A3B8]">{formatDateTime(ev.createdAt)}</p>
-                    {ev.notes ? <p className="text-xs text-[#64748B] mt-1">{ev.notes}</p> : null}
+                  <li key={ev.id} className="relative pl-4 border-l-2" style={{ borderColor: "var(--portal-accent)" }}>
+                    <p className="text-sm font-medium portal-text">{ev.toLabel}</p>
+                    <p className="text-xs portal-text-muted">{formatDateTime(ev.createdAt)}</p>
+                    {ev.notes ? <p className="text-xs portal-text-muted mt-1">{ev.notes}</p> : null}
                   </li>
                 ))}
               </ul>
             </section>
-          )}
+          ) : null}
 
-          {data.attachments.length > 0 && (
-            <section className="bg-white rounded-xl border border-[#E2E8F0] p-4">
-              <h2 className="text-sm font-semibold mb-3">Fotos, vídeos e documentos</h2>
+          {data.attachments.length > 0 ? (
+            <section className="portal-card p-4">
+              <h2 className="text-sm font-semibold portal-text mb-3">Fotos, vídeos e documentos</h2>
               <div className="grid grid-cols-2 gap-2">
                 {data.attachments.map((a) => {
                   const src = resolveMediaUrl(a.url);
@@ -156,7 +151,8 @@ export default function PortalServiceOrderPage() {
                       href={src}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-lg overflow-hidden border border-[#E2E8F0]"
+                      className="block rounded-lg overflow-hidden border"
+                      style={{ borderColor: "var(--portal-border)" }}
                     >
                       {isImage ? (
                         <img src={src} alt={a.fileName} className="w-full h-28 object-cover" />
@@ -168,7 +164,7 @@ export default function PortalServiceOrderPage() {
                           preload="metadata"
                         />
                       ) : (
-                        <div className="h-28 flex items-center justify-center text-xs text-[#64748B] p-2 text-center">
+                        <div className="h-28 flex items-center justify-center text-xs portal-text-muted p-2 text-center">
                           {a.fileName}
                         </div>
                       )}
@@ -177,26 +173,30 @@ export default function PortalServiceOrderPage() {
                 })}
               </div>
             </section>
-          )}
+          ) : null}
 
-          {data.quotes.length > 0 && (
-            <section className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
-              <h2 className="px-4 py-3 text-sm font-semibold border-b border-[#F1F5F9]">Orçamentos</h2>
-              <ul className="divide-y divide-[#F1F5F9]">
+          {data.quotes.length > 0 ? (
+            <section className="portal-card overflow-hidden">
+              <h2 className="px-4 py-3 text-sm font-semibold portal-text border-b" style={{ borderColor: "var(--portal-border)" }}>
+                Orçamentos
+              </h2>
+              <ul className="divide-y" style={{ borderColor: "var(--portal-border)" }}>
                 {data.quotes.map((q) => (
                   <li key={q.id} className="px-4 py-3">
                     <div className="flex justify-between items-start">
                       <StatusBadge variant={quoteStatusVariant(q.status)} />
-                      <p className="font-bold text-[#0F3D4C]">{formatMoney(q.amount)}</p>
+                      <p className="font-bold" style={{ color: "var(--portal-primary)" }}>
+                        {formatMoney(q.amount)}
+                      </p>
                     </div>
-                    <p className="text-xs text-[#64748B] mt-1">{quoteStatusLabel(q.status)}</p>
-                    {(q.status === "PENDING" || q.canRespond) && (
+                    <p className="text-xs portal-text-muted mt-1">{quoteStatusLabel(q.status)}</p>
+                    {(q.status === "PENDING" || q.canRespond) ? (
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           disabled={actingId === q.id}
                           onClick={() => approve(q.id)}
-                          className="h-10 rounded-lg bg-[#16A34A] text-white text-sm flex items-center justify-center gap-1"
+                          className="h-10 rounded-lg bg-green-600 text-white text-sm flex items-center justify-center gap-1"
                         >
                           <Check size={16} />
                           Aprovar
@@ -205,24 +205,20 @@ export default function PortalServiceOrderPage() {
                           type="button"
                           disabled={actingId === q.id}
                           onClick={() => reject(q.id)}
-                          className="h-10 rounded-lg border border-[#DC2626] text-[#DC2626] text-sm flex items-center justify-center gap-1"
+                          className="h-10 rounded-lg border border-red-600 text-red-600 text-sm flex items-center justify-center gap-1"
                         >
                           <X size={16} />
                           Recusar
                         </button>
                       </div>
-                    )}
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </section>
-          )}
-
-          <section className="bg-[#F8FAFC] rounded-xl border border-dashed border-[#CBD5E1] p-4 text-center text-sm text-[#64748B]">
-            Notas fiscais e documentos fiscais serão exibidos aqui quando o módulo fiscal estiver ativo.
-          </section>
+          ) : null}
         </>
-      )}
-    </PortalShell>
+      ) : null}
+    </div>
   );
 }

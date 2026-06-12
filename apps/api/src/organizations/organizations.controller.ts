@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
@@ -27,6 +37,16 @@ export class OrganizationsController {
     @Body() dto: UpdateOrganizationSettingsDto,
   ) {
     return this.organizationsService.updateSettings(user.organizationId, user.userId, dto);
+  }
+
+  @Post('current/logo')
+  @RequirePermissions('settings.manage')
+  @UseInterceptors(FileInterceptor('logo', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  uploadLogo(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.organizationsService.uploadLogo(user.organizationId, file, user.userId);
   }
 
   @Get('admin/stats')

@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import { CreateServiceOrderItemDto } from './dto/create-service-order-item.dto';
+import { UpdateServiceOrderItemDto } from './dto/update-service-order-item.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
 import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
 import { PortalService } from '../portal/portal.service';
@@ -109,6 +110,23 @@ export class ServiceOrdersController {
     return this.serviceOrdersService.addItem(
       user.organizationId,
       id,
+      dto,
+      user.userId,
+    );
+  }
+
+  @Patch(':id/items/:itemId')
+  @RequirePermissions('service_orders.manage')
+  updateItem(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateServiceOrderItemDto,
+  ) {
+    return this.serviceOrdersService.updateItem(
+      user.organizationId,
+      id,
+      itemId,
       dto,
       user.userId,
     );

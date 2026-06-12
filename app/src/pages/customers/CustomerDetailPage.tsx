@@ -217,6 +217,19 @@ export default function CustomerDetailPage() {
 
       {tab === "veiculos" && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-[#F1F5F9]">
+            <h3 className="text-sm font-semibold text-[#1E293B]">Veículos do cliente</h3>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`${routes.veiculos}?customerId=${encodeURIComponent(id!)}`)
+              }
+              className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm"
+            >
+              <Plus size={16} />
+              Cadastrar veículo
+            </button>
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-[#F8FAFC] text-xs text-[#64748B] uppercase">

@@ -1,4 +1,12 @@
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { QuoteStatus } from '@prisma/client';
 
 export class UpdateQuoteDto {
@@ -18,4 +26,9 @@ export class UpdateQuoteDto {
   @IsOptional()
   @IsString()
   terms?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  paymentAgreement?: string;
 }

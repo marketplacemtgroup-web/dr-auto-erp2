@@ -1,5 +1,6 @@
 import { Outlet } from "react-router";
 import OfficeNotificationPopup from "../components/OfficeNotificationPopup";
+import RoutePermissionGuard from "../components/RoutePermissionGuard";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import { useOrganizationBranding } from "../hooks/useOrganizationBranding";
@@ -15,7 +16,9 @@ export default function AppShell() {
         <div className="app-shell-topbar">
           <Topbar />
         </div>
-        <Outlet />
+        <RoutePermissionGuard>
+          <Outlet />
+        </RoutePermissionGuard>
         <OfficeNotificationPopup />
       </div>
     </div>

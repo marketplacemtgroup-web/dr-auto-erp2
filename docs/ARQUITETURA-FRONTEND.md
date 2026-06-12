@@ -3,7 +3,7 @@
 | App | Pasta | Porta dev | Público | PWA |
 |-----|-------|-----------|---------|-----|
 | **Portal do cliente** | `apps/portal` | **3001** | Cliente final | Minha Oficina |
-| **Dashboard ERP** | `app` | **3000** | Dono / equipe da oficina | Scalibur ERP |
+| **Dashboard ERP** | `app` | **3000** | Dono / equipe da oficina | WTEC Motors ERP |
 
 API única: `apps/api` na porta **4000**.
 
@@ -35,7 +35,7 @@ VITE_API_URL=
 npm run dev
 ```
 
-- Portal: http://localhost:3001/login  
+- Portal: https://localhost:3001/login  
 - ERP: http://localhost:3000/login  
 
 ## Links gerados pela oficina

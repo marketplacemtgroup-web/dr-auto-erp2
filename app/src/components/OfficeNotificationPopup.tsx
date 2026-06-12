@@ -37,17 +37,31 @@ export default function OfficeNotificationPopup() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-[200] w-full max-w-sm animate-in slide-in-from-bottom-4">
-      <div className="bg-white rounded-xl shadow-2xl border-2 border-[#16A34A] p-4">
-        <div className="flex justify-between items-start gap-2 mb-2">
-          <p className="text-sm font-bold text-[#16A34A]">{current.title}</p>
-          <button type="button" onClick={dismiss} className="text-[#94A3B8]">
-            <X size={18} />
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/45">
+      <div
+        className={`w-full max-w-md rounded-2xl shadow-2xl border-2 bg-white p-5 animate-in fade-in zoom-in-95 ${
+          current.type === "quote.rejected" ? "border-[#DC2626]" : "border-[#16A34A]"
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="office-notif-title"
+      >
+        <div className="flex justify-between items-start gap-3 mb-3">
+          <p
+            id="office-notif-title"
+            className={`text-base font-bold ${
+              current.type === "quote.rejected" ? "text-[#DC2626]" : "text-[#16A34A]"
+            }`}
+          >
+            {current.title}
+          </p>
+          <button type="button" onClick={dismiss} className="text-[#94A3B8] hover:text-[#64748B]">
+            <X size={20} />
           </button>
         </div>
-        <p className="text-[13px] text-[#64748B] mb-3">{current.message}</p>
+        <p className="text-sm text-[#64748B] mb-4 leading-relaxed">{current.message}</p>
         {meta.customerName ? (
-          <ul className="text-[12px] space-y-1 mb-3 text-[#1E293B]">
+          <ul className="text-[13px] space-y-1.5 mb-5 text-[#1E293B] bg-[#F8FAFC] rounded-lg p-3">
             <li>
               <strong>Cliente:</strong> {String(meta.customerName)}
             </li>
@@ -72,7 +86,7 @@ export default function OfficeNotificationPopup() {
           {osId ? (
             <button
               type="button"
-              className="flex-1 h-10 rounded-lg bg-[#0E7490] text-white text-sm font-medium"
+              className="flex-1 h-11 rounded-lg bg-[#0E7490] text-white text-sm font-semibold hover:bg-[#0c6280]"
               onClick={() => {
                 dismiss();
                 navigate(routes.ordemDeServicoDetalhe(osId));
@@ -83,7 +97,7 @@ export default function OfficeNotificationPopup() {
           ) : null}
           <button
             type="button"
-            className="h-10 px-4 rounded-lg border border-[#E2E8F0] text-sm"
+            className="h-11 px-5 rounded-lg border border-[#E2E8F0] text-sm font-medium hover:bg-[#F8FAFC]"
             onClick={dismiss}
           >
             Fechar

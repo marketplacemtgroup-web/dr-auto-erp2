@@ -12,11 +12,11 @@ export function useApiQuery<T>(
 ) {
   const token = useAuthToken();
   return useQuery({
-    queryKey: key,
+    queryKey: [...key, token],
     queryFn: () => fetcher(token!),
     enabled: enabled && !!token,
     staleTime: 30_000,
-    retry: 0,
+    retry: 2,
     placeholderData: (prev) => prev,
   });
 }

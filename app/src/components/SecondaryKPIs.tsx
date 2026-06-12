@@ -1,9 +1,9 @@
 import {
-  Clock,
-  Users,
-  FileText,
+  Package,
+  Wrench,
   DollarSign,
   Timer,
+  TrendingUp,
 } from "lucide-react";
 
 import type { DashboardKpis } from "../lib/api";
@@ -26,12 +26,14 @@ interface SecondaryKPIsProps {
 }
 
 export default function SecondaryKPIs({ kpis, isLoading }: SecondaryKPIsProps) {
+  const totalProfit = (kpis?.partsProfit ?? 0) + (kpis?.servicesProfit ?? 0);
+
   const items = [
-    { label: "Servicos Atrasados", value: isLoading ? "—" : String(kpis?.delayedServices ?? 5), icon: Clock, iconBg: "#FEE2E2", iconColor: "#EF4444", to: routes.ordemDeServico },
-    { label: "Clientes Aguardando", value: isLoading ? "—" : String(kpis?.waitingClients ?? 6), icon: Users, iconBg: "#FFEDD5", iconColor: "#F97316", to: routes.clientes },
-    { label: "Orcamentos Pendentes", value: isLoading ? "—" : String(kpis?.pendingQuotes ?? 0), icon: FileText, iconBg: "#DBEAFE", iconColor: "#3B82F6", to: routes.orcamentos },
-    { label: "Faturamento (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.monthlyRevenue ?? 128450), icon: DollarSign, iconBg: "#D1FAE5", iconColor: "#10B981", to: routes.dashboardHome },
-    { label: "Tempo Medio de Servico", value: isLoading ? "—" : formatMinutes(kpis?.averageServiceTimeMinutes ?? 155), icon: Timer, iconBg: "#EDE9FE", iconColor: "#8B5CF6", to: routes.ordemDeServico },
+    { label: "Lucro Geral (Mes)", value: isLoading ? "—" : formatCurrency(totalProfit), icon: TrendingUp, iconBg: "#FEE2E2", iconColor: "#EF4444", to: routes.relatorios },
+    { label: "Lucro Pecas (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.partsProfit ?? 0), icon: Package, iconBg: "#FFEDD5", iconColor: "#F97316", to: routes.estoque },
+    { label: "Lucro Servicos (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.servicesProfit ?? 0), icon: Wrench, iconBg: "#DBEAFE", iconColor: "#3B82F6", to: routes.servicos },
+    { label: "Faturamento (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.monthlyRevenue ?? 0), icon: DollarSign, iconBg: "#D1FAE5", iconColor: "#10B981", to: routes.relatorios },
+    { label: "Tempo Medio de Servico", value: isLoading ? "—" : formatMinutes(kpis?.averageServiceTimeMinutes ?? 0), icon: Timer, iconBg: "#EDE9FE", iconColor: "#8B5CF6", to: routes.ordemDeServico },
   ];
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

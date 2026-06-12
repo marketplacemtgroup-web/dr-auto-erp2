@@ -6,12 +6,15 @@ import { StockMovementService } from '../products/stock-movement.service';
 import { CAR_CHECKLIST_TEMPLATE } from './checklist-template';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import { CreateServiceOrderItemDto } from './dto/create-service-order-item.dto';
+import { UpdateServiceOrderItemDto } from './dto/update-service-order-item.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
 import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { AuditService } from '../audit/audit.service';
 import { notDeleted } from '../common/soft-delete';
 import { EventsService } from '../events/events.service';
+import { FinancialService } from '../financial/financial.service';
+import { CommissionEngineService } from '../team/commission-engine.service';
 
 const STATUS_PT: Record<string, string> = {
   RECEIVED: 'Recebido',
@@ -28,12 +31,30 @@ const STATUS_PT: Record<string, string> = {
   CANCELLED: 'Cancelado',
 };
 
+const employeeSelect = { select: { id: true, name: true, photoUrl: true } };
+
 export const soInclude = {
   vehicle: { include: { customer: true } },
   branch: true,
   consultant: { include: { user: true } },
   mechanic: { include: { user: true } },
-  items: { include: { product: true }, orderBy: { createdAt: 'asc' as const } },
+  generalResponsible: employeeSelect,
+  checklistBy: employeeSelect,
+  diagnosisBy: employeeSelect,
+  quoteBy: employeeSelect,
+  executionBy: employeeSelect,
+  finalizedBy: employeeSelect,
+  items: {
+    include: {
+      product: true,
+      catalogItem: true,
+      executor: employeeSelect,
+      soldBy: employeeSelect,
+      appliedBy: employeeSelect,
+      separatedBy: employeeSelect,
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
   quotes: {
     orderBy: { createdAt: 'desc' as const },
     include: { lines: { orderBy: { sortOrder: 'asc' as const } } },
@@ -55,7 +76,38 @@ export class ServiceOrdersService {
     private readonly audit: AuditService,
     private readonly events: EventsService,
     private readonly attachments: AttachmentsService,
+    private readonly financial: FinancialService,
+    private readonly commissionEngine: CommissionEngineService,
   ) {}
+
+  private async previewItemCommission(
+    organizationId: string,
+    params: {
+      itemType: 'SERVICE' | 'PART';
+      quantity: number;
+      unitPrice: number;
+      discount?: number;
+      catalogItemId?: string | null;
+      productId?: string | null;
+      executorId?: string | null;
+      soldById?: string | null;
+      executionById?: string | null;
+    },
+  ) {
+    const employeeId =
+      params.itemType === 'SERVICE'
+        ? params.executorId ?? params.executionById
+        : params.soldById;
+    if (!employeeId) return null;
+    return this.commissionEngine.previewForItem(organizationId, employeeId, {
+      itemType: params.itemType,
+      quantity: params.quantity,
+      unitPrice: params.unitPrice,
+      discount: params.discount ?? 0,
+      catalogItemId: params.catalogItemId,
+      productId: params.productId,
+    });
+  }
 
   async create(organizationId: string, dto: CreateServiceOrderDto) {
     const vehicle = await this.prisma.vehicle.findFirst({
@@ -211,10 +263,31 @@ export class ServiceOrdersService {
           ? `OS #${current.number} — pode retirar na oficina`
           : `OS #${current.number}: ${label}`,
         pushUrl: `/os/${id}`,
+        portalNotificationType: ready ? 'finalizacao' : 'status',
+        serviceOrderId: id,
       });
     }
 
-    return this.prisma.serviceOrder.update({
+    const diagnosisChanged =
+      dto.diagnosis !== undefined && dto.diagnosis !== current.diagnosis;
+    const notesChanged =
+      dto.customerVisibleNotes !== undefined &&
+      dto.customerVisibleNotes !== current.customerVisibleNotes;
+
+    if ((diagnosisChanged || notesChanged) && !(dto.status !== undefined && dto.status !== current.status)) {
+      const pushBody = diagnosisChanged
+        ? `OS #${current.number} — diagnóstico atualizado`
+        : `OS #${current.number} — nova observação da oficina`;
+      await this.events.emitCustomer(current.vehicleId, {
+        pushTitle: 'Atualização da OS',
+        pushBody,
+        pushUrl: `/os/${id}`,
+        portalNotificationType: 'status',
+        serviceOrderId: id,
+      });
+    }
+
+    const updated = await this.prisma.serviceOrder.update({
       where: { id },
       data: {
         ...(dto.status !== undefined ? { status: dto.status } : {}),
@@ -232,6 +305,22 @@ export class ServiceOrdersService {
         ...(dto.mechanicMemberId !== undefined
           ? { mechanicMemberId: dto.mechanicMemberId || null }
           : {}),
+        ...(dto.generalResponsibleId !== undefined
+          ? { generalResponsibleId: dto.generalResponsibleId || null }
+          : {}),
+        ...(dto.checklistById !== undefined
+          ? { checklistById: dto.checklistById || null }
+          : {}),
+        ...(dto.diagnosisById !== undefined
+          ? { diagnosisById: dto.diagnosisById || null }
+          : {}),
+        ...(dto.quoteById !== undefined ? { quoteById: dto.quoteById || null } : {}),
+        ...(dto.executionById !== undefined
+          ? { executionById: dto.executionById || null }
+          : {}),
+        ...(dto.finalizedById !== undefined
+          ? { finalizedById: dto.finalizedById || null }
+          : {}),
         ...(dto.complaint !== undefined ? { complaint: dto.complaint || null } : {}),
         ...(dto.diagnosis !== undefined ? { diagnosis: dto.diagnosis || null } : {}),
         ...(dto.internalNotes !== undefined
@@ -239,6 +328,9 @@ export class ServiceOrdersService {
           : {}),
         ...(dto.customerVisibleNotes !== undefined
           ? { customerVisibleNotes: dto.customerVisibleNotes || null }
+          : {}),
+        ...(dto.paymentAgreement !== undefined
+          ? { paymentAgreement: dto.paymentAgreement || null }
           : {}),
         ...(dto.estimatedAt !== undefined
           ? {
@@ -249,6 +341,36 @@ export class ServiceOrdersService {
       },
       include: soInclude,
     });
+
+    if (dto.status === 'DELIVERED' && current.status !== 'DELIVERED') {
+      try {
+        await this.financial.createFromServiceOrder(organizationId, id);
+      } catch {
+        // OS sem valor ou outro bloqueio — status da entrega segue normalmente
+      }
+      await this.commissionEngine.generateForServiceOrder(
+        organizationId,
+        id,
+        'OS_ENTREGUE',
+      );
+    }
+
+    if (
+      (dto.status === 'FINISHED' || dto.status === 'DELIVERED') &&
+      dto.status !== current.status
+    ) {
+      await this.commissionEngine.generateForServiceOrder(
+        organizationId,
+        id,
+        'OS_FINALIZADA',
+      );
+    }
+
+    if (dto.status === 'CANCELLED' && current.status !== 'CANCELLED') {
+      await this.commissionEngine.cancelForServiceOrder(organizationId, id);
+    }
+
+    return updated;
   }
 
   async updateChecklist(organizationId: string, serviceOrderId: string, dto: UpdateChecklistDto) {
@@ -338,6 +460,20 @@ export class ServiceOrdersService {
       }
     }
 
+    const executorId =
+      dto.executorId ?? (itemType === 'SERVICE' ? so.executionById : null);
+    const expectedCommission = await this.previewItemCommission(organizationId, {
+      itemType,
+      quantity: qty,
+      unitPrice: Number(unitPrice),
+      discount: dto.discount ?? 0,
+      catalogItemId,
+      productId: dto.productId ?? null,
+      executorId,
+      soldById: dto.soldById ?? null,
+      executionById: so.executionById,
+    });
+
     await this.prisma.serviceOrderItem.create({
       data: {
         organizationId,
@@ -348,6 +484,12 @@ export class ServiceOrdersService {
         itemType,
         quantity: qty,
         unitPrice,
+        discount: dto.discount ?? 0,
+        executorId,
+        soldById: dto.soldById ?? null,
+        appliedById: dto.appliedById ?? null,
+        separatedById: dto.separatedById ?? null,
+        expectedCommission,
       },
     });
 
@@ -364,6 +506,120 @@ export class ServiceOrdersService {
           from: totalBefore,
           to: totalAfter,
           item: description,
+        },
+      });
+    }
+    return refreshed;
+  }
+
+  async updateItem(
+    organizationId: string,
+    serviceOrderId: string,
+    itemId: string,
+    dto: UpdateServiceOrderItemDto,
+    userId?: string,
+  ) {
+    const item = await this.prisma.serviceOrderItem.findFirst({
+      where: { id: itemId, serviceOrderId, organizationId },
+    });
+    if (!item) throw new NotFoundException('Item não encontrado');
+
+    const so = (await this.findOne(organizationId, serviceOrderId))!;
+    const totalBefore = Number(so.totalAmount);
+
+    if (
+      item.productId &&
+      item.itemType === 'PART' &&
+      dto.quantity !== undefined &&
+      dto.quantity !== item.quantity
+    ) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+      if (product) {
+        const delta = dto.quantity - item.quantity;
+        if (delta > 0) {
+          const available = this.stockMovement.availableStock(
+            product.stock,
+            product.reservedStock,
+          );
+          if (available < delta) {
+            throw new BadRequestException(
+              `Estoque insuficiente. Disponível: ${available}, solicitado: ${delta}`,
+            );
+          }
+        }
+        const nextStock = product.stock - delta;
+        await this.prisma.product.update({
+          where: { id: item.productId },
+          data: { stock: nextStock },
+        });
+        await this.stockMovement.record(
+          organizationId,
+          item.productId,
+          delta > 0 ? 'OUT_OS' : 'RETURN',
+          Math.abs(delta),
+          nextStock,
+          {
+            serviceOrderId,
+            reason:
+              delta > 0
+                ? `Ajuste OS #${so.number} — aumento de quantidade`
+                : `Ajuste OS #${so.number} — redução de quantidade`,
+          },
+        );
+      }
+    }
+
+    const nextQty = dto.quantity ?? item.quantity;
+    const nextPrice = dto.unitPrice !== undefined ? dto.unitPrice : Number(item.unitPrice);
+    const nextDiscount = dto.discount !== undefined ? dto.discount : Number(item.discount ?? 0);
+    const nextExecutorId =
+      dto.executorId !== undefined ? dto.executorId : item.executorId;
+    const nextSoldById = dto.soldById !== undefined ? dto.soldById : item.soldById;
+    const itemType = dto.itemType ?? item.itemType;
+
+    const expectedCommission = await this.previewItemCommission(organizationId, {
+      itemType,
+      quantity: nextQty,
+      unitPrice: nextPrice,
+      discount: nextDiscount,
+      catalogItemId: item.catalogItemId,
+      productId: item.productId,
+      executorId: nextExecutorId,
+      soldById: nextSoldById,
+      executionById: so.executionById,
+    });
+
+    await this.prisma.serviceOrderItem.update({
+      where: { id: itemId },
+      data: {
+        ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
+        ...(dto.itemType !== undefined ? { itemType: dto.itemType } : {}),
+        ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+        ...(dto.unitPrice !== undefined ? { unitPrice: dto.unitPrice } : {}),
+        ...(dto.discount !== undefined ? { discount: dto.discount } : {}),
+        ...(dto.executorId !== undefined ? { executorId: dto.executorId } : {}),
+        ...(dto.soldById !== undefined ? { soldById: dto.soldById } : {}),
+        ...(dto.appliedById !== undefined ? { appliedById: dto.appliedById } : {}),
+        ...(dto.separatedById !== undefined ? { separatedById: dto.separatedById } : {}),
+        expectedCommission,
+      },
+    });
+
+    await this.recalculateTotal(serviceOrderId);
+    await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+    const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
+    const totalAfter = Number(refreshed.totalAmount);
+    if (totalBefore !== totalAfter) {
+      await this.audit.log(organizationId, 'service_order.amount_change', 'service_order', {
+        userId,
+        metadata: {
+          serviceOrderId,
+          number: so.number,
+          from: totalBefore,
+          to: totalAfter,
+          item: dto.description ?? item.description,
         },
       });
     }

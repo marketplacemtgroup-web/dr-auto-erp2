@@ -1,13 +1,20 @@
-/** Instância dedicada (ex.: Scalibur Oficinas) — uma empresa por deploy. */
+const TAGLINE = "Studio especializado em linhas premium";
+
+/** Instância dedicada (ex.: WTEC Motors) — uma empresa por deploy. */
 export const branding = {
-  appName: import.meta.env.VITE_APP_NAME ?? "Scalibur",
-  appTagline: import.meta.env.VITE_APP_TAGLINE ?? "Oficina",
+  appName: import.meta.env.VITE_APP_NAME ?? "WTEC Motors",
+  appTagline: import.meta.env.VITE_APP_TAGLINE ?? TAGLINE,
   defaultOrganizationName:
-    import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "Scalibur Oficinas",
+    import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "WTEC Motors",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
-  /** Logo em public/sem fundo.png */
-  logoUrl: "/sem%20fundo.png",
-  watermarkUrl: "/sem%20fundo.png",
+  /** Logo em public/logo-wtecmotors.png */
+  logoUrl: "/logo-wtecmotors.png",
+  watermarkUrl: "/logo-wtecmotors.png",
+  printContact: {
+    address: "Rua Azarias de Melo, 490 - Taquaral - Campinas/SP - CEP 13076-008",
+    email: "wtecmotors@gmail.com",
+    instagram: "@wtecmotors",
+  },
 } as const;
 
 export const pageTitle = `${branding.appName} - ${branding.appTagline}`;

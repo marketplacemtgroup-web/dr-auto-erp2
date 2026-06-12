@@ -1,4 +1,4 @@
-# Deploy Scalibur — Vercel + Supabase
+# Deploy WTEC Motors — Vercel + Supabase
 
 Hospedagem **100% na Vercel** (3 projetos) + **Supabase** (Postgres + fotos).
 
@@ -6,9 +6,9 @@ Hospedagem **100% na Vercel** (3 projetos) + **Supabase** (Postgres + fotos).
 
 | Vercel (projeto) | Pasta | URL exemplo |
 |------------------|-------|-------------|
-| **scalibur-api** | `apps/api` | `https://scalibur-api.vercel.app` |
-| **scalibur-erp** | `app` | `https://scalibur-erp.vercel.app` |
-| **scalibur-portal** | `apps/portal` | `https://scalibur-portal.vercel.app` |
+| **wtec-motors-api** | `apps/api` | `https://wtec-motors-api.vercel.app` |
+| **wtec-motors-erp** | `app` | `https://wtec-motors-erp.vercel.app` |
+| **wtec-motors-portal** | `apps/portal` | `https://wtec-motors-portal.vercel.app` |
 
 | Supabase | Uso |
 |----------|-----|
@@ -84,8 +84,8 @@ npm run supabase:init
 ```
 VITE_API_URL=https://SEU-API.vercel.app
 VITE_PORTAL_URL=https://SEU-PORTAL.vercel.app
-VITE_APP_NAME=Scalibur
-VITE_APP_TAGLINE=Oficina
+VITE_APP_NAME=WTEC Motors
+VITE_APP_TAGLINE=Studio especializado em linhas premium
 VITE_SINGLE_TENANT=true
 ```
 

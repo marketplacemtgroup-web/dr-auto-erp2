@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import { api, ApiError } from "../../lib/api";
-import BrandLogo from "../../components/BrandLogo";
+import BrandHeader from "../../components/BrandHeader";
 import { branding } from "../../lib/branding";
-import { portalBaseUrl } from "../../lib/routes";
+import { portalLoginUrl } from "../../lib/routes";
 import { useAuthStore } from "../../stores/authStore";
 
 export default function LoginPage() {
@@ -52,24 +52,21 @@ export default function LoginPage() {
         }}
       >
         <div className="relative z-10 text-white max-w-md">
-          <h2 className="text-3xl font-bold mb-3">Oficina moderna, gestão premium</h2>
+          <h2 className="mb-3 font-sans text-2xl font-bold leading-tight tracking-tight text-white sm:text-3xl">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300/90">
+              WTEC Motors
+            </span>
+            {branding.appTagline}
+          </h2>
           <p className="text-white/70 text-sm leading-relaxed">
             Controle ordens de serviço, orçamentos, estoque e comunicação com o cliente em um só lugar.
           </p>
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC] px-6 py-12 brand-watermark-bg brand-watermark-bg--login">
-        <div className="w-full max-w-md">
-          <div className="flex items-center gap-3 mb-8">
-            <BrandLogo size="md" />
-            <div>
-              <span className="text-[#1E293B] text-lg font-bold block">{branding.appName}</span>
-              <span className="text-[#64748B] text-[10px] uppercase tracking-widest">
-                {branding.appTagline}
-              </span>
-            </div>
-          </div>
+      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC] px-4 sm:px-6 py-8 sm:py-12 min-h-[100dvh] brand-watermark-bg brand-watermark-bg--login">
+        <div className="w-full max-w-md mx-auto">
+          <BrandHeader context="auth" className="mb-6 sm:mb-8" />
 
           <h1 className="text-2xl font-semibold text-[#1E293B] mb-1">Entrar</h1>
           <p className="text-[#64748B] text-sm mb-6">
@@ -127,7 +124,7 @@ export default function LoginPage() {
           <p className="mt-3 text-center text-sm text-[#94A3B8]">
             Você é cliente?{" "}
             <a
-              href={portalBaseUrl() ? `${portalBaseUrl()}/login` : "http://localhost:3001/login"}
+              href={portalLoginUrl()}
               className="text-[#0E7490] font-medium hover:underline"
             >
               Abrir portal do cliente

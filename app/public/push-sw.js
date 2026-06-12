@@ -1,5 +1,5 @@
 self.addEventListener('push', (event) => {
-  let data = { title: 'Scalibur', body: 'Nova atualização', url: '/' };
+  let data = { title: 'WTEC Motors', body: 'Nova atualização', url: '/' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {
@@ -8,8 +8,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/pwa-192x192.svg',
-      badge: '/pwa-192x192.svg',
+      icon: '/logo-wtecmotors.png',
+      badge: '/logo-wtecmotors.png',
       data: { url: data.url || '/' },
     }),
   );

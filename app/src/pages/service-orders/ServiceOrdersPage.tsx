@@ -5,6 +5,7 @@ import StatusBadge from "../../components/StatusBadge";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ModuleFilters, { FilterSelect } from "../../components/modules/ModuleFilters";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
+import VehicleSearchSelect from "../../components/vehicles/VehicleSearchSelect";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import { api } from "../../lib/api";
@@ -189,24 +190,18 @@ export default function ServiceOrdersPage() {
         loading={create.isPending}
         submitLabel="Abrir OS"
       >
-        <FormField label="Veiculo *">
-          <select
-            className={selectClass}
+        <FormField label="Cliente / placa *">
+          <VehicleSearchSelect
+            vehicles={vehicles}
             value={form.vehicleId}
-            onChange={(e) => setForm((f) => ({ ...f, vehicleId: e.target.value }))}
+            onChange={(vehicleId) => setForm((f) => ({ ...f, vehicleId }))}
             required
-          >
-            <option value="">Selecione placa...</option>
-            {vehicles?.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.plate} — {v.customer.name}
-              </option>
-            ))}
-          </select>
+            placeholder="Digite o nome do cliente ou a placa..."
+          />
         </FormField>
         <FormField label="Relato do cliente">
           <textarea
-            className={`${inputClass} min-h-[72px] py-2`}
+            className={`${inputClass} min-h-[56px] py-1.5`}
             value={form.complaint}
             onChange={(e) => setForm((f) => ({ ...f, complaint: e.target.value }))}
           />
