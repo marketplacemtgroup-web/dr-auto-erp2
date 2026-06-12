@@ -13,6 +13,7 @@ import {
   normalizeLoginEmailDomain,
   suggestLoginEmailDomain,
 } from './login-email.util';
+import { ensureSystemPermissions } from '@autocore/database';
 import { LoginDto } from './dto/login.dto';
 import { RegisterOrganizationDto } from './dto/register-organization.dto';
 
@@ -94,6 +95,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
+    await ensureSystemPermissions(this.prisma);
     const permissions = await this.prisma.permission.findMany();
     const permIds = permissions.map((p) => p.id);
 
