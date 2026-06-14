@@ -1,5 +1,3 @@
-import { resolveAssetUrl } from "./assetUrl";
-
 const TAGLINE = "Studio especializado em linhas premium";
 
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
@@ -25,7 +23,9 @@ export const branding = {
 export function resolveBrandingLogoUrl(path: string | null | undefined): string {
   const trimmed = path?.trim();
   if (!trimmed || LEGACY_LOGO_URLS.has(trimmed)) return branding.logoUrl;
-  return resolveAssetUrl(trimmed) ?? branding.logoUrl;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  if (trimmed.startsWith("/api/")) return trimmed;
+  return branding.logoUrl;
 }
 
 export const pageTitle = `${branding.appName} - ${branding.appTagline}`;

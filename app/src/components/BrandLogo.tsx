@@ -1,4 +1,4 @@
-import { branding, resolveBrandingLogoUrl } from "../lib/branding";
+import { branding } from "../lib/branding";
 import { useBrandingStore } from "../stores/brandingStore";
 
 /** auth = login/cadastro (mobile + desktop); dashboard = sidebar ERP; compact = header interno */
@@ -15,7 +15,6 @@ type BrandLogoProps = {
  * dashboard: ocupa a largura útil da sidebar (até ~208px).
  */
 export default function BrandLogo({ context = "auth", className = "" }: BrandLogoProps) {
-  const logoUrl = useBrandingStore((s) => s.logoUrl);
   const appName = useBrandingStore((s) => s.appName);
 
   return (
@@ -23,7 +22,7 @@ export default function BrandLogo({ context = "auth", className = "" }: BrandLog
       className={`brand-logo brand-logo--${context} shrink-0 flex items-end justify-center max-w-full leading-none ${className}`}
     >
       <img
-        src={resolveBrandingLogoUrl(logoUrl || branding.logoUrl)}
+        src={branding.logoUrl}
         alt={appName || branding.appName}
         className="brand-logo__img w-full h-auto object-contain object-bottom block"
         decoding="async"
