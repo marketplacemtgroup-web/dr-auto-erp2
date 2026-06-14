@@ -43,7 +43,7 @@ export default defineConfig({
         globIgnores: ["**/manifest.webmanifest"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
-      includeAssets: ["logo-oficinascalibur.png", "favicon.png", "favicon.ico"],
+      includeAssets: ["logo-oficinascalibur.png", "favicon.png", "favicon.ico", "oficina scalibur.png", "oficina-scalibur.png"],
       manifest: {
         id: "/",
         name: "Minha Oficina — Portal do Cliente",

@@ -5,7 +5,7 @@ export default function MotoBackground({ children }: { children?: React.ReactNod
     <div className="portal-bg min-h-screen relative">
       <div
         className="portal-bg__image"
-        style={{ backgroundImage: `url(${branding.backgroundUrl})` }}
+        style={{ backgroundImage: `url("${encodeURI(branding.backgroundUrl)}")` }}
         aria-hidden
       />
       <div className="portal-bg__overlay" aria-hidden />
