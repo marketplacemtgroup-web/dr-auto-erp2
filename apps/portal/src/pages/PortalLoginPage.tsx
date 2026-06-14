@@ -68,7 +68,7 @@ export default function PortalLoginPage() {
             Acesse seu acompanhamento
           </h1>
           <p className="portal-text-muted text-sm text-center mb-8 max-w-sm">
-            Digite seu CPF e a placa da sua moto para acompanhar sua ordem de serviço.
+            Digite seu CPF e a placa do seu veículo para acompanhar sua ordem de serviço.
           </p>
 
           <form onSubmit={handleSubmit} className="w-full space-y-4">

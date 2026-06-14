@@ -136,23 +136,12 @@
     inset: 0;
     background-size: cover;
     background-position: center top;
-    opacity: 0.22;
-    filter: saturate(0.2) brightness(1.15);
     pointer-events: none;
     z-index: 0;
-  }
-
-  :root[data-portal-theme="dark"] .portal-bg__image {
-    opacity: 0.12;
-    filter: saturate(0.15) brightness(0.7);
   }
 
   .portal-bg__overlay {
-    position: fixed;
-    inset: 0;
-    background: linear-gradient(180deg, var(--portal-bg) 0%, transparent 35%, var(--portal-bg) 100%);
-    pointer-events: none;
-    z-index: 0;
+    display: none;
   }
 
   .portal-card {
