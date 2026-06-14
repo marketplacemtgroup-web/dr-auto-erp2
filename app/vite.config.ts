@@ -47,12 +47,7 @@ export default defineConfig({
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
-      includeAssets: [
-        "favicon.png",
-        "logo-oficinascalibur.png",
-        "pwa-192x192.png",
-        "pwa-512x512.png",
-      ],
+      includeAssets: ["logo-oficinascalibur.png", "favicon.png", "favicon.ico"],
       manifest: {
         id: "/dashboard/",
         name: "WTEC Motors — Studio especializado em linhas premium",
