@@ -6,15 +6,6 @@ export const DEFAULT_BACKGROUND_URL = "/oficina scalibur.png";
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
 const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
 
-/** Fundos antigos (moto BMW / branding webp). */
-const LEGACY_BACKGROUND_URLS = new Set(["/moto-bmw-bg.webp", "/branding/background.webp"]);
-
-function resolveDeployBackgroundUrl(): string {
-  const fromEnv = (import.meta.env.VITE_BRAND_BACKGROUND_URL as string | undefined)?.trim();
-  if (fromEnv && !LEGACY_BACKGROUND_URLS.has(fromEnv)) return fromEnv;
-  return DEFAULT_BACKGROUND_URL;
-}
-
 /** Instância dedicada (ex.: WTEC Motors) — uma empresa por deploy. */
 export const branding = {
   appName: import.meta.env.VITE_APP_NAME ?? "WTEC Motors",
@@ -25,7 +16,7 @@ export const branding = {
   /** Logo em public/logo-oficinascalibur.png */
   logoUrl: DEFAULT_LOGO_URL,
   /** Fundo em public/oficina scalibur.png */
-  backgroundUrl: resolveDeployBackgroundUrl(),
+  backgroundUrl: DEFAULT_BACKGROUND_URL,
   /** Compatibilidade com referências antigas */
   legacyLogoUrl: DEFAULT_LOGO_URL,
 } as const;
