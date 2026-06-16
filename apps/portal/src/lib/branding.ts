@@ -19,6 +19,9 @@ export const branding = {
   backgroundUrl: DEFAULT_BACKGROUND_URL,
   /** Compatibilidade com referências antigas */
   legacyLogoUrl: DEFAULT_LOGO_URL,
+  /** WhatsApp da oficina para o botão "Falar no WhatsApp" do portal */
+  contactWhatsApp:
+    (import.meta.env.VITE_CONTACT_WHATSAPP as string | undefined)?.trim() || "5519994390941",
 } as const;
 
 export function resolveBrandingLogoUrl(path: string | null | undefined): string {

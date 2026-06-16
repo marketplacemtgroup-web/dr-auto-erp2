@@ -11,7 +11,7 @@ import { api, type ServiceOrderItemRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { quoteStatusLabel, quoteStatusVariant } from "../../lib/service-order-status";
 import { portalPublicQuoteUrl, routes } from "../../lib/routes";
-import { applyUrlTemplate, defaultQuoteWhatsAppMessage } from "../../lib/shareLink";
+import { applyUrlTemplate, defaultQuoteWhatsAppMessage, resolveOrganizationWhatsApp } from "../../lib/shareLink";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
 import { printDocument } from "../../lib/print";
@@ -166,7 +166,7 @@ export default function QuoteDetailPage() {
         url,
         expiresAt: link.expiresAt,
         whatsappMessage,
-        whatsappPhone: customer.whatsapp ?? customer.phone,
+        whatsappPhone: resolveOrganizationWhatsApp(),
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao gerar link");

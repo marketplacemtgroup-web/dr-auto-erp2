@@ -8,7 +8,7 @@ import { resolveMediaUrl } from "../lib/mediaUrl";
 import { isImageMime, isVideoMime } from "../lib/mediaTypes";
 import { routes } from "../lib/routes";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel, quoteStatusVariant } from "../lib/service-order-status";
-import { whatsappUrl } from "../lib/whatsapp";
+import { whatsappUrl, resolveOrganizationWhatsApp, formatBrazilPhoneDisplay } from "../lib/whatsapp";
 import { usePortalStore } from "../stores/portalStore";
 
 export default function PortalServiceOrderPage() {
@@ -32,7 +32,7 @@ export default function PortalServiceOrderPage() {
     void load();
   }, [load]);
 
-  const phone = data?.customer.whatsapp || data?.customer.phone || data?.organization.phone;
+  const whatsapp = resolveOrganizationWhatsApp(data?.organization.phone);
 
   async function approve(quoteId: string) {
     if (!session?.accessToken) return;
@@ -107,9 +107,9 @@ export default function PortalServiceOrderPage() {
                 <strong className="portal-text">Observações:</strong> {data.customerVisibleNotes}
               </p>
             ) : null}
-            {phone ? (
+            {whatsapp ? (
               <a
-                href={whatsappUrl(phone, `Olá! Gostaria de informações sobre a OS #${data.number}.`)}
+                href={whatsappUrl(whatsapp, `Olá! Gostaria de informações sobre a OS #${data.number}.`)}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-4 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#25D366] text-white text-sm font-medium"

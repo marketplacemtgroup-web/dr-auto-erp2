@@ -1,7 +1,7 @@
 import { MessageCircle, MapPin, Phone, Clock } from "lucide-react";
 import { PortalSubpageHeader } from "../../components/portal/PortalAppLayout";
 import { routes } from "../../lib/routes";
-import { whatsappUrl } from "../../lib/whatsapp";
+import { whatsappUrl, resolveOrganizationWhatsApp, formatBrazilPhoneDisplay } from "../../lib/whatsapp";
 import { usePortalStore } from "../../stores/portalStore";
 
 export default function PortalProfileSupportPage() {
@@ -9,8 +9,9 @@ export default function PortalProfileSupportPage() {
   const session = usePortalStore((s) => s.session);
 
   const orgName = dashboard?.organization.name ?? session?.organizationName ?? "Oficina";
-  const phone = dashboard?.organization.phone ?? dashboard?.customer.phone ?? "";
-  const whatsapp = dashboard?.customer.whatsapp ?? phone;
+  const whatsapp = resolveOrganizationWhatsApp(dashboard?.organization.phone);
+  const whatsappLabel = whatsapp ? formatBrazilPhoneDisplay(whatsapp) : "";
+  const phone = dashboard?.organization.phone?.trim() || whatsappLabel;
   const address = dashboard?.organization.address ?? "Endereço não informado";
 
   return (
@@ -44,7 +45,7 @@ export default function PortalProfileSupportPage() {
             <MessageCircle size={20} style={{ color: "var(--portal-accent)" }} />
             <div>
               <p className="portal-text-muted text-xs">WhatsApp Corporativo</p>
-              <p className="portal-text font-semibold text-sm">{whatsapp}</p>
+              <p className="portal-text font-semibold text-sm">{whatsappLabel}</p>
             </div>
           </a>
         ) : null}

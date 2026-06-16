@@ -17,7 +17,7 @@ import {
   quoteStatusVariant,
 } from "../../lib/service-order-status";
 import { portalAccessUrl, portalPublicQuoteUrl, routes } from "../../lib/routes";
-import { applyUrlTemplate, defaultPortalWhatsAppMessage, defaultQuoteWhatsAppMessage } from "../../lib/shareLink";
+import { applyUrlTemplate, defaultPortalWhatsAppMessage, defaultQuoteWhatsAppMessage, resolveOrganizationWhatsApp } from "../../lib/shareLink";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
 import PrintPortal from "../../components/print/PrintPortal";
@@ -288,7 +288,7 @@ export default function ServiceOrderDetailPage() {
         url,
         expiresAt: link.expiresAt,
         whatsappMessage,
-        whatsappPhone: customer.whatsapp ?? customer.phone,
+        whatsappPhone: resolveOrganizationWhatsApp(),
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao gerar link");
@@ -318,7 +318,7 @@ export default function ServiceOrderDetailPage() {
         url,
         expiresAt: link.expiresAt,
         whatsappMessage,
-        whatsappPhone: customer.whatsapp ?? customer.phone,
+        whatsappPhone: resolveOrganizationWhatsApp(),
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao gerar link do portal");

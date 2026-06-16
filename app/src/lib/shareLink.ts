@@ -1,3 +1,5 @@
+import { branding } from "./branding";
+
 /** Normaliza telefone BR para wa.me (somente dígitos, com DDI 55). */
 export function normalizeWhatsAppPhone(phone: string | null | undefined): string | null {
   if (!phone?.trim()) return null;
@@ -6,6 +8,13 @@ export function normalizeWhatsAppPhone(phone: string | null | undefined): string
   if (digits.length < 10) return null;
   if (!digits.startsWith("55")) digits = `55${digits}`;
   return digits;
+}
+
+/** Telefone da oficina para wa.me em compartilhamentos e portal. */
+export function resolveOrganizationWhatsApp(organizationPhone?: string | null): string {
+  const configured = normalizeWhatsAppPhone(branding.contactWhatsApp);
+  if (configured) return configured;
+  return normalizeWhatsAppPhone(organizationPhone) ?? "";
 }
 
 export function whatsAppShareUrl(message: string, phone?: string | null) {

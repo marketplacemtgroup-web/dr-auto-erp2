@@ -32,11 +32,16 @@ export const routes = {
 } as const;
 
 /** Portal público do cliente — links enviados por WhatsApp sempre apontam aqui. */
-export const PORTAL_PUBLIC_BASE_URL = "https://wtecmotors-portal.vercel.app";
+export const PORTAL_PUBLIC_BASE_URL = "https://dr-auto-erp2-portal.vercel.app";
+
+const LEGACY_PORTAL_URLS = new Set([
+  "https://wtecmotors-portal.vercel.app",
+  "https://wtec-motors-portal.vercel.app",
+]);
 
 export function portalBaseUrl() {
   const configured = (import.meta.env.VITE_PORTAL_URL as string | undefined)?.trim().replace(/\/$/, "");
-  if (configured) return configured;
+  if (configured && !LEGACY_PORTAL_URLS.has(configured)) return configured;
   return PORTAL_PUBLIC_BASE_URL;
 }
 

@@ -18,6 +18,9 @@ export const branding = {
     email: "wtecmotors@gmail.com",
     instagram: "@wtecmotors",
   },
+  /** WhatsApp da oficina — links de compartilhamento e portal */
+  contactWhatsApp:
+    (import.meta.env.VITE_CONTACT_WHATSAPP as string | undefined)?.trim() || "5519994390941",
 } as const;
 
 export function resolveBrandingLogoUrl(path: string | null | undefined): string {
