@@ -336,62 +336,69 @@ export default function PurchasesPage() {
             ) : null}
             <div className="space-y-3">
               {items.map((item, idx) => (
-                <div key={item.id} className="border border-[#E2E8F0] rounded-lg p-3 space-y-2">
+                <div key={item.id} className="border border-[#E2E8F0] rounded-lg p-3 space-y-3">
                   <p className="text-[11px] font-semibold text-[#94A3B8]">Item {idx + 1}</p>
-                  <input
-                    className={inputClass}
-                    placeholder="Descrição"
-                    value={item.description}
-                    onChange={(e) =>
-                      setItems((prev) =>
-                        prev.map((r) =>
-                          r.id === item.id ? { ...r, description: e.target.value } : r,
-                        ),
-                      )
-                    }
-                  />
-                  <div className="grid grid-cols-3 gap-2">
+                  <FormField label="Descrição">
                     <input
-                      type="number"
                       className={inputClass}
-                      placeholder="Qtd"
-                      value={item.quantity}
+                      value={item.description}
                       onChange={(e) =>
                         setItems((prev) =>
                           prev.map((r) =>
-                            r.id === item.id ? { ...r, quantity: e.target.value } : r,
+                            r.id === item.id ? { ...r, description: e.target.value } : r,
                           ),
                         )
                       }
                     />
-                    <input
-                      type="number"
-                      step="0.01"
-                      className={inputClass}
-                      placeholder="Custo unit."
-                      value={item.unitCost}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((r) =>
-                            r.id === item.id ? { ...r, unitCost: e.target.value } : r,
-                          ),
-                        )
-                      }
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      className={inputClass}
-                      placeholder="Desconto"
-                      value={item.discount}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((r) =>
-                            r.id === item.id ? { ...r, discount: e.target.value } : r,
-                          ),
-                        )
-                      }
-                    />
+                  </FormField>
+                  <div className="grid grid-cols-3 gap-3">
+                    <FormField label="Quantidade">
+                      <input
+                        type="number"
+                        min={1}
+                        className={inputClass}
+                        value={item.quantity}
+                        onChange={(e) =>
+                          setItems((prev) =>
+                            prev.map((r) =>
+                              r.id === item.id ? { ...r, quantity: e.target.value } : r,
+                            ),
+                          )
+                        }
+                      />
+                    </FormField>
+                    <FormField label="Custo unitário (R$)">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className={inputClass}
+                        value={item.unitCost}
+                        onChange={(e) =>
+                          setItems((prev) =>
+                            prev.map((r) =>
+                              r.id === item.id ? { ...r, unitCost: e.target.value } : r,
+                            ),
+                          )
+                        }
+                      />
+                    </FormField>
+                    <FormField label="Desconto (R$)">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className={inputClass}
+                        value={item.discount}
+                        onChange={(e) =>
+                          setItems((prev) =>
+                            prev.map((r) =>
+                              r.id === item.id ? { ...r, discount: e.target.value } : r,
+                            ),
+                          )
+                        }
+                      />
+                    </FormField>
                   </div>
                 </div>
               ))}
