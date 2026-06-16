@@ -14,6 +14,8 @@ export const SYSTEM_PERMISSIONS = [
   { slug: 'service_orders.manage', name: 'Gerenciar OS', module: 'service_orders' },
   { slug: 'quotes.manage', name: 'Gerenciar orçamentos', module: 'quotes' },
   { slug: 'inventory.manage', name: 'Gerenciar estoque', module: 'inventory' },
+  { slug: 'suppliers.manage', name: 'Gerenciar fornecedores', module: 'suppliers' },
+  { slug: 'purchases.manage', name: 'Gerenciar compras', module: 'purchases' },
   { slug: 'financial.manage', name: 'Gerenciar financeiro', module: 'financial' },
   { slug: 'users.manage', name: 'Gerenciar usuários', module: 'users' },
   { slug: 'settings.manage', name: 'Configurações', module: 'settings' },

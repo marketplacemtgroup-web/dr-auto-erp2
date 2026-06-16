@@ -1,5 +1,6 @@
 import { MessageCircle, MapPin, Phone, Clock } from "lucide-react";
 import { PortalSubpageHeader } from "../../components/portal/PortalAppLayout";
+import { branding } from "../../lib/branding";
 import { routes } from "../../lib/routes";
 import { whatsappUrl, resolveOrganizationWhatsApp, formatBrazilPhoneDisplay } from "../../lib/whatsapp";
 import { usePortalStore } from "../../stores/portalStore";
@@ -77,7 +78,7 @@ export default function PortalProfileSupportPage() {
           <div>
             <p className="portal-text font-semibold text-sm">Horário de atendimento</p>
             <p className="portal-text-muted text-xs mt-1 whitespace-pre-line">
-              {`Segunda a Sexta: 8:00 às 17:30\nAlmoço: 12:30 às 13:30\nFinais de semana: não abre.`}
+              {branding.businessHours}
             </p>
           </div>
         </div>

@@ -24,6 +24,8 @@ const InventoryPage = lazyWithRetry(() => import("./pages/inventory/InventoryPag
 const AgendaPage = lazyWithRetry(() => import("./pages/agenda/AgendaPage"));
 const SettingsPage = lazyWithRetry(() => import("./pages/settings/SettingsPage"));
 const PurchasesPage = lazyWithRetry(() => import("./pages/purchases/PurchasesPage"));
+const SuppliersPage = lazyWithRetry(() => import("./pages/suppliers/SuppliersPage"));
+const SupplierDetailPage = lazyWithRetry(() => import("./pages/suppliers/SupplierDetailPage"));
 const FinancialPage = lazyWithRetry(() => import("./pages/financial/FinancialPage"));
 const ReportsPage = lazyWithRetry(() => import("./pages/reports/ReportsPage"));
 const TeamLayout = lazyWithRetry(() => import("./layouts/TeamLayout"));
@@ -160,6 +162,22 @@ export default function App() {
             element={
               <Lazy>
                 <PurchasesPage />
+              </Lazy>
+            }
+          />
+          <Route
+            path="fornecedores"
+            element={
+              <Lazy>
+                <SuppliersPage />
+              </Lazy>
+            }
+          />
+          <Route
+            path="fornecedores/:id"
+            element={
+              <Lazy>
+                <SupplierDetailPage />
               </Lazy>
             }
           />

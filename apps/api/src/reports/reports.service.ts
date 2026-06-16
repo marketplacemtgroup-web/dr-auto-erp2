@@ -150,6 +150,7 @@ export class ReportsService {
       cashMovements,
       revenueByDay,
       discountsAgg,
+      interestFeesAgg,
     ] = await Promise.all([
       this.prisma.dailyRevenue.findUnique({
         where: { organizationId_date: { organizationId, date: today } },
@@ -230,6 +231,18 @@ export class ReportsService {
           paidAt: { gte: period.from, lte: period.to },
         },
         _sum: { discountAmount: true },
+      }),
+      this.prisma.financialEntry.aggregate({
+        where: {
+          organizationId,
+          status: 'PAID',
+          paidAt: { gte: period.from, lte: period.to },
+        },
+        _sum: {
+          interestAmount: true,
+          penaltyAmount: true,
+          feeAmount: true,
+        },
       }),
     ]);
 
@@ -319,6 +332,11 @@ export class ReportsService {
       partsRevenue: profit.partsRevenue,
       servicesRevenue: profit.servicesRevenue,
       discountsGiven: roundMoney(Number(discountsAgg._sum.discountAmount ?? 0)),
+      interestPaid: roundMoney(
+        Number(interestFeesAgg._sum.interestAmount ?? 0) +
+          Number(interestFeesAgg._sum.penaltyAmount ?? 0),
+      ),
+      cardFees: roundMoney(Number(interestFeesAgg._sum.feeAmount ?? 0)),
       openReceivables: {
         count: openReceivablesAgg._count._all,
         amount: Number(openReceivablesAgg._sum.amount ?? 0),
@@ -792,8 +810,16 @@ export class ReportsService {
         where: {
           organizationId,
           createdAt: { gte: period.from, lte: period.to },
+          status: { not: 'CANCELLED' },
         },
-        select: { supplierName: true, totalAmount: true, status: true, number: true, createdAt: true },
+        select: {
+          supplierName: true,
+          totalAmount: true,
+          status: true,
+          number: true,
+          createdAt: true,
+          supplier: { select: { legalName: true, tradeName: true } },
+        },
       }),
       this.prisma.serviceOrderItem.findMany({
         where: {
@@ -851,14 +877,16 @@ export class ReportsService {
 
     const supplierMap = new Map<string, { supplier: string; count: number; total: number }>();
     for (const po of purchases) {
-      const cur = supplierMap.get(po.supplierName) ?? {
-        supplier: po.supplierName,
+      const name =
+        po.supplier?.tradeName || po.supplier?.legalName || po.supplierName;
+      const cur = supplierMap.get(name) ?? {
+        supplier: name,
         count: 0,
         total: 0,
       };
       cur.count += 1;
       cur.total += Number(po.totalAmount);
-      supplierMap.set(po.supplierName, cur);
+      supplierMap.set(name, cur);
     }
 
     return {
@@ -907,7 +935,7 @@ export class ReportsService {
           deletedAt: null,
         },
       },
-      include: { product: { select: { costPrice: true } } },
+      include: { product: { select: { costPrice: true, averageCost: true } } },
     });
 
     let partsProfit = 0;
@@ -915,10 +943,14 @@ export class ReportsService {
     let partsRevenue = 0;
     let servicesRevenue = 0;
     for (const item of items) {
-      const revenue = Number(item.unitPrice) * item.quantity;
+      const revenue = Number(item.unitPrice) * item.quantity - Number(item.discount);
       if (item.itemType === 'PART') {
         partsRevenue += revenue;
-        const cost = Number(item.product?.costPrice ?? 0) * item.quantity;
+        const unitCost =
+          item.unitCost != null
+            ? Number(item.unitCost)
+            : Number(item.product?.averageCost) || Number(item.product?.costPrice ?? 0);
+        const cost = unitCost * item.quantity;
         partsProfit += revenue - cost;
       } else {
         servicesRevenue += revenue;

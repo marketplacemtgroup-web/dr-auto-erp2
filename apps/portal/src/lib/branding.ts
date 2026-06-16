@@ -19,9 +19,14 @@ export const branding = {
   backgroundUrl: DEFAULT_BACKGROUND_URL,
   /** Compatibilidade com referências antigas */
   legacyLogoUrl: DEFAULT_LOGO_URL,
-  /** WhatsApp da oficina para o botão "Falar no WhatsApp" do portal */
-  contactWhatsApp:
-    (import.meta.env.VITE_CONTACT_WHATSAPP as string | undefined)?.trim() || "5519994390941",
+  /** WhatsApp fixo da oficina (portal — não usar telefone do cliente). */
+  contactWhatsApp: "5519994390941",
+  /** Horário exibido na página Suporte do portal. */
+  businessHours: [
+    "Segunda a Sexta: 08:00 às 17:30",
+    "Almoço: 12:30 às 13:30",
+    "Finais de semana: não abre.",
+  ].join("\n"),
 } as const;
 
 export function resolveBrandingLogoUrl(path: string | null | undefined): string {

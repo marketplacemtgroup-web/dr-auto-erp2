@@ -22,8 +22,17 @@ export class FinancialController {
     @Query('search') search?: string,
     @Query('type') type?: string,
     @Query('status') status?: string,
+    @Query('origin') origin?: string,
+    @Query('supplierId') supplierId?: string,
   ) {
-    return this.financialService.list(user.organizationId, search, type, status);
+    return this.financialService.list(
+      user.organizationId,
+      search,
+      type,
+      status,
+      origin,
+      supplierId,
+    );
   }
 
   @Get('cash-flow')

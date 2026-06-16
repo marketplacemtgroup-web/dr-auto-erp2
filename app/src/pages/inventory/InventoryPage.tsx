@@ -223,6 +223,7 @@ export default function InventoryPage() {
                 <th className="px-4 py-2 text-left">Data</th>
                 <th className="px-4 py-2 text-left">Produto</th>
                 <th className="px-4 py-2 text-left">Tipo</th>
+                <th className="px-4 py-2 text-left">Origem</th>
                 <th className="px-4 py-2 text-right">Qtd</th>
                 <th className="px-4 py-2 text-right">Saldo</th>
               </tr>
@@ -233,13 +234,20 @@ export default function InventoryPage() {
                   <td className="px-4 py-2 text-[#64748B]">{formatDateTime(m.createdAt)}</td>
                   <td className="px-4 py-2">{m.product.name}</td>
                   <td className="px-4 py-2">{MOVEMENT_LABEL[m.movementType] ?? m.movementType}</td>
+                  <td className="px-4 py-2 text-[12px] text-[#64748B]">
+                    {m.purchaseOrder
+                      ? `Compra ${m.purchaseOrder.number}`
+                      : m.serviceOrder
+                        ? `OS #${m.serviceOrder.number}`
+                        : "—"}
+                  </td>
                   <td className="px-4 py-2 text-right">{m.quantity}</td>
                   <td className="px-4 py-2 text-right font-medium">{m.balanceAfter}</td>
                 </tr>
               ))}
               {(movements ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-[#94A3B8]">
+                  <td colSpan={6} className="px-4 py-6 text-center text-[#94A3B8]">
                     Nenhuma movimentacao registrada ainda.
                   </td>
                 </tr>

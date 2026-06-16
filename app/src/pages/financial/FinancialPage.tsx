@@ -171,6 +171,9 @@ export default function FinancialPage() {
           discount > 0 && payForm.discountPercent
             ? Number(payForm.discountPercent.replace(",", "."))
             : undefined,
+        interestAmount: Number(payForm.interestAmount.replace(",", ".")) || undefined,
+        penaltyAmount: Number(payForm.penaltyAmount.replace(",", ".")) || undefined,
+        feeAmount: Number(payForm.feeAmount.replace(",", ".")) || undefined,
         splits,
       });
     },
@@ -332,6 +335,13 @@ export default function FinancialPage() {
                           <td className="px-4 py-3 text-[12px] text-[#64748B]">
                             {r.customer?.name && <div>{r.customer.name}</div>}
                             {r.serviceOrder && <div>OS #{r.serviceOrder.number}</div>}
+                            {r.purchaseOrder && <div>Compra {r.purchaseOrder.number}</div>}
+                            {r.supplier && (
+                              <div>{r.supplier.tradeName || r.supplier.legalName}</div>
+                            )}
+                            {r.origin && r.origin !== "MANUAL" && (
+                              <div className="text-[10px] uppercase text-[#94A3B8]">{r.origin}</div>
+                            )}
                           </td>
                           <td className="px-4 py-3">{formatDate(r.dueDate)}</td>
                           <td className="px-4 py-3 text-right font-medium">{formatCurrency(Number(r.amount))}</td>

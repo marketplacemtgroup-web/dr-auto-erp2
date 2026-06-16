@@ -36,6 +36,8 @@ export class StockMovementService {
       include: {
         product: { select: { id: true, name: true, sku: true } },
         serviceOrder: { select: { id: true, number: true } },
+        purchaseOrder: { select: { id: true, number: true } },
+        supplier: { select: { id: true, legalName: true, tradeName: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: limit,

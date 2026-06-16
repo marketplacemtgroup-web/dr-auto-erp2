@@ -16,6 +16,8 @@ export const routes = {
   agenda: "/dashboard/agenda",
   estoque: "/dashboard/estoque",
   compras: "/dashboard/compras",
+  fornecedores: "/dashboard/fornecedores",
+  fornecedorDetalhe: (id: string) => `/dashboard/fornecedores/${id}`,
   financeiro: "/dashboard/financeiro",
   relatorios: "/dashboard/relatorios",
   configuracoes: "/dashboard/configuracoes",

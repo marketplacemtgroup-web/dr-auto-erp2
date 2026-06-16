@@ -11,6 +11,9 @@ export type PaySplitFormRow = {
 export type PayEntryFormState = {
   discountMoney: string;
   discountPercent: string;
+  interestAmount: string;
+  penaltyAmount: string;
+  feeAmount: string;
   splits: PaySplitFormRow[];
 };
 
@@ -36,6 +39,9 @@ export function createDefaultPayForm(gross: number, preferCash = false): PayEntr
   return {
     discountMoney: "",
     discountPercent: "",
+    interestAmount: "",
+    penaltyAmount: "",
+    feeAmount: "",
     splits: [
       {
         id: crypto.randomUUID(),
@@ -45,6 +51,20 @@ export function createDefaultPayForm(gross: number, preferCash = false): PayEntr
       },
     ],
   };
+}
+
+export function computePayNetDue(
+  gross: number,
+  form: PayEntryFormState,
+  type: "PAYABLE" | "RECEIVABLE",
+) {
+  const discount = computePayDiscount(gross, form.discountMoney, form.discountPercent);
+  const interest = Number(form.interestAmount.replace(",", ".")) || 0;
+  const penalty = Number(form.penaltyAmount.replace(",", ".")) || 0;
+  if (type === "PAYABLE") {
+    return roundMoney(gross - discount + interest + penalty);
+  }
+  return roundMoney(gross - discount);
 }
 
 export function splitSum(splits: PaySplitFormRow[]) {
