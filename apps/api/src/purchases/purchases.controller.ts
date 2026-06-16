@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
+import { ConfirmPurchaseDto } from './dto/confirm-purchase.dto';
 import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 import { PurchasesService } from './purchases.service';
@@ -64,8 +65,12 @@ export class PurchasesController {
   confirm(
     @CurrentUser() user: { organizationId: string; userId: string },
     @Param('id') id: string,
+    @Body() dto: ConfirmPurchaseDto,
   ) {
-    return this.purchasesService.confirm(user.organizationId, id, user.userId);
+    return this.purchasesService.confirm(user.organizationId, id, user.userId, {
+      postToStock: dto.postToStock,
+      autoCreateProducts: dto.autoCreateProducts,
+    });
   }
 
   @Patch(':id/receive')

@@ -5,8 +5,9 @@
 1. **Cadastrar fornecedor** em Fornecedores (`/dashboard/fornecedores`).
 2. **Nova compra** em Compras — wizard com itens, frete e parcelas.
 3. **Confirmar** gera contas a pagar no Financeiro (`origin: PURCHASE`) vinculadas ao fornecedor e à compra.
-4. **Receber mercadoria** lança entrada no estoque (`StockMovement` tipo `IN`) e atualiza custo médio do produto.
-5. **Pagar parcela** no Financeiro — suporta juros/multa e saída no caixa (`PAYMENT_OUT`).
+4. Com **"Lançar no estoque agora"** marcado (padrão), as peças entram no estoque na mesma hora — produto novo é criado automaticamente se não existir.
+5. Sem o checkbox, use **Receber** na lista quando a mercadoria chegar.
+6. **Pagar parcela** no Financeiro — suporta juros/multa e saída no caixa (`PAYMENT_OUT`).
 
 ## Status da compra
 

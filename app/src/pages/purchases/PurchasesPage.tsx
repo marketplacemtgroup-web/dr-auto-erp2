@@ -50,6 +50,7 @@ export default function PurchasesPage() {
     { id: crypto.randomUUID(), description: "", quantity: "1", unitCost: "0", discount: "0" },
   ]);
   const [productSearch, setProductSearch] = useState("");
+  const [postToStock, setPostToStock] = useState(true);
 
   const { data: rows = [], isLoading } = useApiQuery<PurchaseOrderRow[]>(
     ["purchases", search],
@@ -110,10 +111,15 @@ export default function PurchasesPage() {
             discount: Number(i.discount) || 0,
           })),
       });
-      return api.confirmPurchaseOrder(token!, po.id);
+      return api.confirmPurchaseOrder(token!, po.id, {
+        postToStock,
+        autoCreateProducts: true,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       resetWizard();
     },
   });
@@ -138,6 +144,7 @@ export default function PurchasesPage() {
     setDiscount("0");
     setInstallments("1");
     setItems([{ id: crypto.randomUUID(), description: "", quantity: "1", unitCost: "0", discount: "0" }]);
+    setPostToStock(true);
   }
 
   useEffect(() => {
@@ -226,7 +233,10 @@ export default function PurchasesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">{formatMoney(Number(r.totalAmount ?? 0))}</td>
                     <td className="px-4 py-3 text-right space-x-1">
-                      {r.status !== "RECEIVED" && r.status !== "CANCELLED" && r.status !== "DRAFT" ? (
+                      {(r.stockStatus === "NOT_POSTED" || r.stockStatus === "PARTIAL") &&
+                      r.status !== "CANCELLED" &&
+                      r.status !== "DRAFT" &&
+                      r.status !== "RECEIVED" ? (
                         <button
                           type="button"
                           disabled={!token || receive.isPending}
@@ -272,7 +282,13 @@ export default function PurchasesPage() {
           create.mutate();
         }}
         loading={create.isPending}
-        submitLabel={step < STEPS.length - 1 ? "Próximo" : "Confirmar compra"}
+        submitLabel={
+          step < STEPS.length - 1
+            ? "Próximo"
+            : postToStock
+              ? "Registrar compra e lançar no estoque"
+              : "Registrar compra"
+        }
       >
         <div className="flex gap-1 mb-4">
           {STEPS.map((label, i) => (
@@ -312,7 +328,7 @@ export default function PurchasesPage() {
 
         {step === 1 && (
           <>
-            <FormField label="Buscar produto no estoque">
+            <FormField label="Buscar produto no estoque (opcional)">
               <input
                 className={inputClass}
                 value={productSearch}
@@ -485,6 +501,18 @@ export default function PurchasesPage() {
             <p className="text-[12px] text-[#64748B]">
               Ao confirmar, serão geradas contas a pagar no financeiro vinculadas a esta compra.
             </p>
+            <label className="flex items-start gap-2 text-[13px] text-[#475569] cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={postToStock}
+                onChange={(e) => setPostToStock(e.target.checked)}
+              />
+              <span>
+                <strong>Lançar no estoque agora</strong> — as peças entram automaticamente (cria
+                produto novo se não existir).
+              </span>
+            </label>
           </>
         )}
 
@@ -503,6 +531,11 @@ export default function PurchasesPage() {
             <p>
               <span className="text-[#64748B]">Parcelas:</span> {installments}x — 1º venc.{" "}
               {firstDueDate}
+            </p>
+            <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[12px] text-[#64748B]">
+              {postToStock
+                ? "As peças serão adicionadas ao estoque ao finalizar. Se o produto não existir, será criado automaticamente."
+                : "Estoque não será alterado agora — use Receber na lista quando a mercadoria chegar."}
             </p>
           </div>
         )}

@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { FinancialService } from '../financial/financial.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
+import { ConfirmPurchaseDto } from './dto/confirm-purchase.dto';
 import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 
@@ -117,6 +118,46 @@ export class PurchasesService {
       },
       include: poInclude,
     });
+  }
+
+  private async ensureProductForItem(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    item: {
+      description: string;
+      productId: string | null;
+      location: string | null;
+      finalUnitCost: Prisma.Decimal;
+    },
+    supplierId: string | null,
+  ): Promise<string | null> {
+    if (item.productId) return item.productId;
+
+    const name = item.description.trim();
+    if (!name) return null;
+
+    const existing = await tx.product.findFirst({
+      where: {
+        organizationId,
+        deletedAt: null,
+        name: { equals: name, mode: 'insensitive' },
+      },
+    });
+    if (existing) return existing.id;
+
+    const cost = Number(item.finalUnitCost) || 0;
+    const created = await tx.product.create({
+      data: {
+        organizationId,
+        name,
+        location: item.location,
+        stock: 0,
+        costPrice: new Prisma.Decimal(cost),
+        averageCost: new Prisma.Decimal(cost),
+        lastSupplierId: supplierId,
+      },
+    });
+    return created.id;
   }
 
   list(organizationId: string, search?: string, status?: string) {
@@ -284,7 +325,12 @@ export class PurchasesService {
     return this.recalculateOrder(organizationId, id);
   }
 
-  async confirm(organizationId: string, id: string, userId?: string) {
+  async confirm(
+    organizationId: string,
+    id: string,
+    userId?: string,
+    opts?: { postToStock?: boolean; autoCreateProducts?: boolean },
+  ) {
     const po = await this.findOne(organizationId, id);
     if (po.status !== 'DRAFT') {
       throw new BadRequestException('Compra já confirmada ou cancelada');
@@ -295,21 +341,36 @@ export class PurchasesService {
 
     await this.financial.createFromPurchase(organizationId, po);
 
-    const updated = await this.prisma.purchaseOrder.update({
+    await this.prisma.purchaseOrder.update({
       where: { id },
       data: {
         status: 'AWAITING_RECEIPT',
         financialStatus: 'OPEN',
       },
-      include: poInclude,
     });
 
     await this.audit.log(organizationId, 'purchase.confirm', 'purchase_order', {
       userId,
-      metadata: { purchaseOrderId: id, number: po.number, total: Number(po.totalAmount) },
+      metadata: {
+        purchaseOrderId: id,
+        number: po.number,
+        total: Number(po.totalAmount),
+        postToStock: opts?.postToStock !== false,
+      },
     });
 
-    return updated;
+    const postToStock = opts?.postToStock !== false;
+    if (postToStock) {
+      return this.receive(
+        organizationId,
+        id,
+        {},
+        userId,
+        { autoCreateProducts: opts?.autoCreateProducts !== false },
+      );
+    }
+
+    return this.findOne(organizationId, id);
   }
 
   async receive(
@@ -317,6 +378,7 @@ export class PurchasesService {
     id: string,
     dto: ReceivePurchaseDto,
     userId?: string,
+    opts?: { autoCreateProducts?: boolean },
   ) {
     const po = await this.findOne(organizationId, id);
     if (po.status === 'CANCELLED') {
@@ -336,7 +398,28 @@ export class PurchasesService {
       throw new BadRequestException('Nenhum item para receber');
     }
 
+    const autoCreate = opts?.autoCreateProducts !== false;
+
     await this.prisma.$transaction(async (tx) => {
+      if (autoCreate) {
+        for (const item of po.items) {
+          if (!item.movesStock || item.productId) continue;
+          const productId = await this.ensureProductForItem(
+            tx,
+            organizationId,
+            item,
+            po.supplierId,
+          );
+          if (productId) {
+            await tx.purchaseOrderItem.update({
+              where: { id: item.id },
+              data: { productId },
+            });
+            item.productId = productId;
+          }
+        }
+      }
+
       for (const item of po.items) {
         const qty = receiveMap.get(item.id);
         if (!qty) continue;

@@ -1661,8 +1661,16 @@ export const api = {
       token,
     ),
 
-  confirmPurchaseOrder: (token: string, id: string) =>
-    request<PurchaseOrderDetail>(`/purchases/${id}/confirm`, { method: "PATCH" }, token),
+  confirmPurchaseOrder: (
+    token: string,
+    id: string,
+    data?: { postToStock?: boolean; autoCreateProducts?: boolean },
+  ) =>
+    request<PurchaseOrderDetail>(
+      `/purchases/${id}/confirm`,
+      { method: "PATCH", body: JSON.stringify(data ?? { postToStock: true }) },
+      token,
+    ),
 
   receivePurchaseOrder: (
     token: string,
