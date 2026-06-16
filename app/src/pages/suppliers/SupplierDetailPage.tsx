@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
-import { api } from "../../lib/api";
+import { api, type SupplierProfile } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
@@ -34,10 +34,10 @@ export default function SupplierDetailPage() {
     notes: "",
   });
 
-  const { data: profile, isLoading } = useApiQuery(
+  const { data: profile, isLoading } = useApiQuery<SupplierProfile>(
     ["supplier-profile", id ?? ""],
     (t) => api.supplierProfile(t, id!),
-    { enabled: Boolean(id) },
+    Boolean(id),
   );
 
   const save = useMutation({

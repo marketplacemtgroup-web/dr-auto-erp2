@@ -51,22 +51,22 @@ export default function PurchasesPage() {
   ]);
   const [productSearch, setProductSearch] = useState("");
 
-  const { data: rows = [], isLoading } = useApiQuery(
+  const { data: rows = [], isLoading } = useApiQuery<PurchaseOrderRow[]>(
     ["purchases", search],
     (t) => api.purchaseOrders(t, search || undefined),
-    { enabled: Boolean(token) },
+    Boolean(token),
   );
 
-  const { data: suppliers = [] } = useApiQuery(
+  const { data: suppliers = [] } = useApiQuery<SupplierRow[]>(
     ["suppliers-picker"],
     (t) => api.suppliers(t, undefined, "ACTIVE"),
-    { enabled: wizardOpen && Boolean(token) },
+    wizardOpen && Boolean(token),
   );
 
-  const { data: products = [] } = useApiQuery(
+  const { data: products = [] } = useApiQuery<ProductRow[]>(
     ["products-picker", productSearch],
     (t) => api.products(t, productSearch || undefined),
-    { enabled: wizardOpen && step === 1 && Boolean(token) },
+    wizardOpen && step === 1 && Boolean(token),
   );
 
   const subtotal = useMemo(
