@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
@@ -7,6 +7,7 @@ import {
   CreateInstallmentsDto,
   PayFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
+import { DeleteFinancialEntryDto } from './dto/delete-financial-entry.dto';
 import { FinancialService } from './financial.service';
 
 @Controller('financial')
@@ -21,14 +22,36 @@ export class FinancialController {
     @Query('search') search?: string,
     @Query('type') type?: string,
     @Query('status') status?: string,
+    @Query('origin') origin?: string,
+    @Query('supplierId') supplierId?: string,
   ) {
-    return this.financialService.list(user.organizationId, search, type, status);
+    return this.financialService.list(
+      user.organizationId,
+      search,
+      type,
+      status,
+      origin,
+      supplierId,
+    );
   }
 
   @Get('cash-flow')
   @RequirePermissions('financial.manage', 'dashboard.view')
   cashFlow(@CurrentUser() user: { organizationId: string }) {
     return this.financialService.cashFlow(user.organizationId);
+  }
+
+  @Get('profit-summary')
+  @RequirePermissions('financial.manage', 'financial.view', 'dashboard.view_financial')
+  profitSummary(
+    @CurrentUser() user: { organizationId: string },
+    @Query('period') period?: 'day' | 'week' | 'month' | 'year',
+  ) {
+    const preset =
+      period === 'day' || period === 'week' || period === 'month' || period === 'year'
+        ? period
+        : 'month';
+    return this.financialService.profitSummary(user.organizationId, preset);
   }
 
   @Get('receive-queue')
@@ -69,5 +92,15 @@ export class FinancialController {
     @Body() dto: PayFinancialEntryDto,
   ) {
     return this.financialService.markPaid(user.organizationId, id, dto, user.userId);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('financial.manage')
+  remove(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+    @Body() dto: DeleteFinancialEntryDto,
+  ) {
+    return this.financialService.remove(user.organizationId, id, dto.reason, user.userId);
   }
 }

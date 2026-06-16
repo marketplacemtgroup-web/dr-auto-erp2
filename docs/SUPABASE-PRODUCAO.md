@@ -1,8 +1,8 @@
 # Supabase — migração direta (produção)
 
-**Deploy atual:** instância dedicada **OFICINA DO BETO** (uma empresa por projeto Supabase).
+**Deploy atual:** instância dedicada **WTEC Motors** (uma empresa por projeto Supabase).
 
-Guia da OFICINA DO BETO: [INSTALACAO-OFICINA-DO-BETO.md](./INSTALACAO-OFICINA-DO-BETO.md)
+Guia da WTEC Motors: [INSTALACAO-WTEC-MOTORS.md](./INSTALACAO-WTEC-MOTORS.md)
 
 Use o **Postgres do Supabase** como banco principal. O Docker local fica só para desenvolvimento, se quiser.
 

@@ -36,3 +36,32 @@ export function previousReportRange(range: DateRange): DateRange {
 export function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
 }
+
+export type FinancialPeriodPreset = 'day' | 'week' | 'month' | 'year';
+
+export function resolveFinancialPeriod(preset: FinancialPeriodPreset): DateRange {
+  const today = startOfDay(new Date());
+  const to = endOfDay(today);
+
+  if (preset === 'day') {
+    return { from: today, to };
+  }
+  if (preset === 'week') {
+    const from = new Date(today);
+    from.setDate(from.getDate() - 6);
+    return { from: startOfDay(from), to };
+  }
+  if (preset === 'year') {
+    const from = new Date(today.getFullYear(), 0, 1);
+    return { from: startOfDay(from), to };
+  }
+  const from = new Date(today.getFullYear(), today.getMonth(), 1);
+  return { from: startOfDay(from), to };
+}
+
+export function toLocalIsoDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}

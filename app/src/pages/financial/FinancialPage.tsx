@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
+import { Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
+import DeleteEntryModal from "../../components/financial/DeleteEntryModal";
 import PayEntryModal from "../../components/financial/PayEntryModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
@@ -11,10 +13,16 @@ import {
   api,
   type CashSessionRow,
   type FinancialEntryRow,
+  type FinancialProfitSummary,
   type FinancialReceiveQueue,
   type FinancialReceiveQueueOrder,
 } from "../../lib/api";
-import { useDashboardKpis } from "../../hooks/useDashboardKpis";
+import {
+  FINANCIAL_PERIOD_PRESETS,
+  formatFinancialPeriodRange,
+  type FinancialPeriodPreset,
+} from "../../lib/financialPeriod";
+import { usePermissions } from "../../hooks/usePermissions";
 import { serviceOrderStatusLabel } from "../../lib/labels";
 import {
   computePayDiscount,
@@ -22,9 +30,10 @@ import {
   formatPaymentSplitsLabel,
   type PayEntryFormState,
 } from "../../lib/payEntry";
+import { formatMoney, formatNegativeMoney } from "../../lib/format";
 
 function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return formatMoney(value);
 }
 
 function formatDate(iso: string) {
@@ -51,7 +60,11 @@ export default function FinancialPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
-  const { data: kpis } = useDashboardKpis();
+  const { canViewMoney } = usePermissions();
+  const showMoney = canViewMoney();
+  const [profitPeriod, setProfitPeriod] = useState<FinancialPeriodPreset>("month");
+  const [profitSummary, setProfitSummary] = useState<FinancialProfitSummary | null>(null);
+  const [profitLoading, setProfitLoading] = useState(false);
   const [tab, setTab] = useState<"entries" | "cash">("entries");
   const [rows, setRows] = useState<FinancialEntryRow[]>([]);
   const [cashSession, setCashSession] = useState<CashSessionRow | null>(null);
@@ -72,6 +85,20 @@ export default function FinancialPage() {
   const [receiveQueue, setReceiveQueue] = useState<FinancialReceiveQueue | null>(null);
   const [queueLoading, setQueueLoading] = useState(false);
   const [chargingOrderId, setChargingOrderId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FinancialEntryRow | null>(null);
+
+  async function loadProfitSummary(period: FinancialPeriodPreset = profitPeriod) {
+    if (!token || !showMoney) return;
+    setProfitLoading(true);
+    try {
+      setProfitSummary(await api.financialProfitSummary(token, period));
+    } catch {
+      setProfitSummary(null);
+    } finally {
+      setProfitLoading(false);
+    }
+  }
 
   async function loadEntries(nextSearch?: string) {
     if (!token) return;
@@ -107,6 +134,10 @@ export default function FinancialPage() {
     void loadCash();
     void loadReceiveQueue();
   }, [token]);
+
+  useEffect(() => {
+    void loadProfitSummary(profitPeriod);
+  }, [profitPeriod, token, showMoney]);
 
   useEffect(() => {
     if (tab === "cash") void loadReceiveQueue();
@@ -167,6 +198,9 @@ export default function FinancialPage() {
           discount > 0 && payForm.discountPercent
             ? Number(payForm.discountPercent.replace(",", "."))
             : undefined,
+        interestAmount: Number(payForm.interestAmount.replace(",", ".")) || undefined,
+        penaltyAmount: Number(payForm.penaltyAmount.replace(",", ".")) || undefined,
+        feeAmount: Number(payForm.feeAmount.replace(",", ".")) || undefined,
         splits,
       });
     },
@@ -176,6 +210,7 @@ export default function FinancialPage() {
       void loadReceiveQueue();
       void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
+      void loadProfitSummary();
       setPayTarget(null);
     },
   });
@@ -223,6 +258,30 @@ export default function FinancialPage() {
     }
   }
 
+  async function deleteEntry(row: FinancialEntryRow) {
+    setDeleteTarget(row);
+  }
+
+  async function confirmDeleteEntry(reason: string) {
+    if (!token || !deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    try {
+      await api.deleteFinancialEntry(token, deleteTarget.id, reason);
+      void loadEntries(search);
+      void loadCash();
+      void loadReceiveQueue();
+      void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
+      void loadProfitSummary();
+      if (expandedId === deleteTarget.id) setExpandedId(null);
+      setDeleteTarget(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Nao foi possivel excluir o lancamento");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <>
       <ModulePageShell
@@ -230,9 +289,69 @@ export default function FinancialPage() {
         description="Contas, parcelas, caixa e formas de pagamento"
         onSearch={tab === "entries" ? (q) => { setSearch(q); void loadEntries(q); } : undefined}
       >
+        {showMoney ? (
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-medium text-[#64748B] mr-1">Periodo:</span>
+              {FINANCIAL_PERIOD_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={profitLoading}
+                  onClick={() => setProfitPeriod(preset.id)}
+                  className={`h-8 px-3 rounded-lg text-[12px] font-medium border transition-colors disabled:opacity-60 ${
+                    profitPeriod === preset.id
+                      ? "border-[#0E7490] bg-[#ECFEFF] text-[#0E7490]"
+                      : "border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              {profitSummary ? (
+                <span className="ml-auto text-[12px] text-[#94A3B8]">
+                  {formatFinancialPeriodRange(profitSummary.from, profitSummary.to)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <KpiStrip
           items={[
-            { label: "Faturamento (mes)", value: formatCurrency(kpis?.monthlyRevenue ?? 0), tone: "success" },
+            ...(showMoney
+              ? [
+                  {
+                    label: "Faturamento",
+                    value: profitLoading ? "—" : formatCurrency(profitSummary?.revenue ?? 0),
+                    tone: "success" as const,
+                    hint: FINANCIAL_PERIOD_PRESETS.find((p) => p.id === profitPeriod)?.label,
+                  },
+                  {
+                    label: "Despesas",
+                    value: profitLoading ? "—" : formatNegativeMoney(profitSummary?.expenses ?? 0),
+                    tone: "danger" as const,
+                    hint: "Pagas no periodo",
+                  },
+                  {
+                    label: "Lucro pecas",
+                    value: profitLoading ? "—" : formatCurrency(profitSummary?.partsProfit ?? 0),
+                  },
+                  {
+                    label: "Lucro servicos",
+                    value: profitLoading ? "—" : formatCurrency(profitSummary?.servicesProfit ?? 0),
+                  },
+                  {
+                    label: "Lucro geral",
+                    value: profitLoading ? "—" : formatCurrency(profitSummary?.totalProfit ?? 0),
+                    tone:
+                      (profitSummary?.totalProfit ?? 0) >= 0
+                        ? ("success" as const)
+                        : ("danger" as const),
+                    hint: "Pecas + servicos − despesas pagas",
+                  },
+                ]
+              : []),
             { label: "A receber (aberto)", value: formatCurrency(totals.openRecv) },
             { label: "A pagar (aberto)", value: formatCurrency(totals.openPay), tone: "danger" },
             {
@@ -305,6 +424,13 @@ export default function FinancialPage() {
                           <td className="px-4 py-3 text-[12px] text-[#64748B]">
                             {r.customer?.name && <div>{r.customer.name}</div>}
                             {r.serviceOrder && <div>OS #{r.serviceOrder.number}</div>}
+                            {r.purchaseOrder && <div>Compra {r.purchaseOrder.number}</div>}
+                            {r.supplier && (
+                              <div>{r.supplier.tradeName || r.supplier.legalName}</div>
+                            )}
+                            {r.origin && r.origin !== "MANUAL" && (
+                              <div className="text-[10px] uppercase text-[#94A3B8]">{r.origin}</div>
+                            )}
                           </td>
                           <td className="px-4 py-3">{formatDate(r.dueDate)}</td>
                           <td className="px-4 py-3 text-right font-medium">{formatCurrency(Number(r.amount))}</td>
@@ -325,6 +451,15 @@ export default function FinancialPage() {
                                 onClick={() => openPay(r)}
                               />
                             )}
+                            <button
+                              type="button"
+                              title="Excluir lancamento"
+                              disabled={!token || deletingId === r.id}
+                              onClick={() => void deleteEntry(r)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </td>
                         </tr>
                         {expandedId === r.id && r.installments?.map((p) => (
@@ -333,12 +468,21 @@ export default function FinancialPage() {
                             <td />
                             <td className="px-4 py-2 text-[12px]">{formatDate(p.dueDate)}</td>
                             <td className="px-4 py-2 text-right text-[12px]">{formatCurrency(Number(p.amount))}</td>
-                            <td className="px-4 py-2 text-right">
+                            <td className="px-4 py-2 text-right space-x-1">
                               {p.status === "OPEN" ? (
                                 <FinancialPayButton type={p.type} onClick={() => openPay(p)} />
                               ) : (
                                 <span className="text-[11px] text-[#94A3B8]">Pago</span>
                               )}
+                              <button
+                                type="button"
+                                title="Excluir parcela"
+                                disabled={!token || deletingId === p.id}
+                                onClick={() => void deleteEntry(p)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -381,7 +525,7 @@ export default function FinancialPage() {
                                 </p>
                                 <p className="text-[12px] text-[#64748B]">{r.description}</p>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <span className="text-sm font-bold text-[#16A34A]">
                                   {formatCurrency(Number(r.amount))}
                                 </span>
@@ -389,6 +533,15 @@ export default function FinancialPage() {
                                   type="RECEIVABLE"
                                   onClick={() => openPay(r)}
                                 />
+                                <button
+                                  type="button"
+                                  title="Excluir recebivel"
+                                  disabled={!token || deletingId === r.id}
+                                  onClick={() => void deleteEntry(r)}
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </li>
                           ))}
@@ -558,6 +711,13 @@ export default function FinancialPage() {
         onFormChange={setPayForm}
         onConfirm={() => pay.mutate()}
         onClose={() => setPayTarget(null)}
+      />
+
+      <DeleteEntryModal
+        entry={deleteTarget}
+        loading={!!deletingId}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={(reason) => void confirmDeleteEntry(reason)}
       />
     </>
   );

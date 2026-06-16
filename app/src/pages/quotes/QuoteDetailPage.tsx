@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, X } from "lucide-react";
+import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import PrintPortal from "../../components/print/PrintPortal";
 import QuotePrintSheet, { buildQuotePrintData } from "../../components/quotes/QuotePrintSheet";
 import StatusBadge from "../../components/StatusBadge";
@@ -11,7 +12,7 @@ import { api, type ServiceOrderItemRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { quoteStatusLabel, quoteStatusVariant } from "../../lib/service-order-status";
 import { portalPublicQuoteUrl, routes } from "../../lib/routes";
-import { applyUrlTemplate, defaultQuoteWhatsAppMessage } from "../../lib/shareLink";
+import { applyUrlTemplate, defaultQuoteWhatsAppMessage, resolveOrganizationWhatsApp } from "../../lib/shareLink";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
 import { printDocument } from "../../lib/print";
@@ -23,6 +24,8 @@ export default function QuoteDetailPage() {
   const queryClient = useQueryClient();
   const [itemDrawer, setItemDrawer] = useState(false);
   const [shareDialog, setShareDialog] = useState<ShareLinkDialogData | null>(null);
+  const [deleteQuoteOpen, setDeleteQuoteOpen] = useState(false);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<ServiceOrderItemRow | null>(null);
   const [editingItem, setEditingItem] = useState<ServiceOrderItemRow | null>(null);
   const [itemForm, setItemForm] = useState({
     description: "",
@@ -136,6 +139,14 @@ export default function QuoteDetailPage() {
     },
   });
 
+  const deleteQuote = useMutation({
+    mutationFn: () => api.deleteQuote(token!, id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      navigate(routes.orcamentos);
+    },
+  });
+
   const saveQuoteMeta = useMutation({
     mutationFn: (payload: Parameters<typeof api.updateQuote>[2]) =>
       api.updateQuote(token!, id!, payload),
@@ -166,7 +177,7 @@ export default function QuoteDetailPage() {
         url,
         expiresAt: link.expiresAt,
         whatsappMessage,
-        whatsappPhone: customer.whatsapp ?? customer.phone,
+        whatsappPhone: resolveOrganizationWhatsApp(),
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao gerar link");
@@ -284,6 +295,14 @@ export default function QuoteDetailPage() {
                 <X size={16} />
                 Recusado
               </button>
+              <button
+                type="button"
+                onClick={() => setDeleteQuoteOpen(true)}
+                className="inline-flex items-center gap-1 h-10 px-3 rounded-lg border border-red-300 text-sm text-red-600 hover:bg-red-50"
+              >
+                <Trash2 size={16} />
+                Excluir
+              </button>
             </>
           )}
         </div>
@@ -373,7 +392,7 @@ export default function QuoteDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => removeItem.mutate(item.id)}
+                        onClick={() => setDeleteItemTarget(item)}
                         className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                       >
                         <Trash2 size={16} />
@@ -529,6 +548,27 @@ export default function QuoteDetailPage() {
       />
     </PrintPortal>
     <ShareLinkDialog data={shareDialog} onClose={() => setShareDialog(null)} />
+    <ConfirmDialog
+      open={deleteQuoteOpen}
+      title="Excluir orçamento"
+      message={`Confirma exclusão do orçamento #${quote.number ?? "—"}? Esta ação não pode ser desfeita.`}
+      loading={deleteQuote.isPending}
+      onCancel={() => setDeleteQuoteOpen(false)}
+      onConfirm={() => deleteQuote.mutate()}
+    />
+    <ConfirmDialog
+      open={!!deleteItemTarget}
+      title="Excluir item"
+      message={`Remover "${deleteItemTarget?.description ?? "este item"}" do orçamento?`}
+      loading={removeItem.isPending}
+      onCancel={() => setDeleteItemTarget(null)}
+      onConfirm={() => {
+        if (!deleteItemTarget) return;
+        removeItem.mutate(deleteItemTarget.id, {
+          onSuccess: () => setDeleteItemTarget(null),
+        });
+      }}
+    />
     </>
   );
 }

@@ -1,24 +1,40 @@
 const TAGLINE = "Portal do Cliente";
 
-/** Logo oficial — único asset de marca em todo o sistema. */
-export const OFFICIAL_LOGO_URL = "/logo-oficinadobeto.png";
+export const DEFAULT_LOGO_URL = "/logo-oficinadobeto.png";
+export const DEFAULT_BACKGROUND_URL = "/oficina do beto.png";
 
-export const DEFAULT_LOGO_URL = OFFICIAL_LOGO_URL;
-export const DEFAULT_BACKGROUND_URL = OFFICIAL_LOGO_URL;
+/** URLs de logo antigas — ignoradas em favor do logo do deploy. */
+const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
 
-/** Instância dedicada (ex.: OFICINA DO BETO) — uma empresa por deploy. */
+/** Instância dedicada — uma empresa por deploy. */
 export const branding = {
   appName: import.meta.env.VITE_APP_NAME ?? "OFICINA DO BETO",
   appTagline: import.meta.env.VITE_APP_TAGLINE ?? TAGLINE,
   defaultOrganizationName:
     import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "OFICINA DO BETO",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
+  /** Logo em public/logo-oficinadobeto.png */
   logoUrl: DEFAULT_LOGO_URL,
+  /** Fundo em public/oficina do beto.png */
   backgroundUrl: DEFAULT_BACKGROUND_URL,
+  /** Compatibilidade com referências antigas */
   legacyLogoUrl: DEFAULT_LOGO_URL,
+  /** WhatsApp da oficina (VITE_CONTACT_WHATSAPP no deploy). */
+  contactWhatsApp:
+    (import.meta.env.VITE_CONTACT_WHATSAPP as string | undefined)?.trim() || "",
+  /** Horário exibido na página Suporte do portal. */
+  businessHours: [
+    "Segunda a Sexta: 08:00 às 18:00",
+    "Almoço: 12:00 às 13:00",
+    "Finais de semana: não abre.",
+  ].join("\n"),
 } as const;
 
-export function resolveBrandingLogoUrl(_path?: string | null): string {
+export function resolveBrandingLogoUrl(path: string | null | undefined): string {
+  const trimmed = path?.trim();
+  if (!trimmed || LEGACY_LOGO_URLS.has(trimmed)) return branding.logoUrl;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  if (trimmed.startsWith("/api/")) return trimmed;
   return branding.logoUrl;
 }
 

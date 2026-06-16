@@ -19,6 +19,15 @@ function resolveApiBaseUrl(): string {
 
 const API_URL = resolveApiBaseUrl();
 
+function buildQuery(params: Record<string, string | undefined>) {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) q.set(key, value);
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 export interface AuthSession {
   accessToken: string;
   user: {
@@ -56,6 +65,9 @@ export interface DashboardFinancialKpis {
   averageServiceTimeMinutes: number;
   partsProfit: number;
   servicesProfit: number;
+  grossProfit?: number;
+  expenses?: number;
+  totalProfit?: number;
 }
 
 export type DashboardKpis = DashboardOperationalKpis & DashboardFinancialKpis;
@@ -256,10 +268,95 @@ export interface AttachmentRow {
 export interface PurchaseOrderRow {
   id: string;
   number: string;
+  supplierId?: string | null;
   supplierName: string;
   status: string;
+  purchaseType?: string;
+  subtotal?: string | number;
+  freight?: string | number;
   totalAmount: string | number;
+  financialStatus?: string;
+  stockStatus?: string;
   createdAt: string;
+  supplier?: { id: string; legalName: string; tradeName: string | null } | null;
+  items?: Array<{ id: string }>;
+}
+
+export interface PurchaseOrderItemRow {
+  id: string;
+  productId?: string | null;
+  description: string;
+  quantity: number;
+  quantityReceived: number;
+  unitCost: string | number;
+  discount: string | number;
+  finalUnitCost: string | number;
+  total: string | number;
+  movesStock: boolean;
+  product?: { id: string; name: string; sku: string | null; stock?: number } | null;
+}
+
+export interface PurchaseOrderDetail extends PurchaseOrderRow {
+  insurance?: string | number;
+  otherExpenses?: string | number;
+  discount?: string | number;
+  surcharge?: string | number;
+  invoiceNumber?: string | null;
+  notes?: string | null;
+  paymentTerms?: {
+    installments?: number;
+    firstDueDate?: string;
+    intervalDays?: number;
+  } | null;
+  items: PurchaseOrderItemRow[];
+}
+
+export interface SupplierRow {
+  id: string;
+  personType: string;
+  legalName: string;
+  tradeName: string | null;
+  document: string | null;
+  supplierType: string;
+  status: string;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  createdAt: string;
+}
+
+export interface SupplierDetail extends SupplierRow {
+  contactName?: string | null;
+  whatsapp?: string | null;
+  website?: string | null;
+  zipCode?: string | null;
+  street?: string | null;
+  addressNumber?: string | null;
+  district?: string | null;
+  complement?: string | null;
+  defaultPaymentDays?: number | null;
+  pixKey?: string | null;
+  notes?: string | null;
+}
+
+export interface SupplierProfile {
+  supplier: SupplierDetail;
+  stats: {
+    purchaseCount: number;
+    totalPurchased: number;
+    openPayablesCount: number;
+    openPayablesAmount: number;
+  };
+  recentPurchases: Array<{
+    id: string;
+    number: string;
+    status: string;
+    totalAmount: string | number;
+    createdAt: string;
+    financialStatus: string;
+    stockStatus: string;
+  }>;
 }
 
 export type PaymentMethod =
@@ -284,6 +381,19 @@ export interface FinancialReceiveQueue {
   openReceivables: FinancialEntryRow[];
 }
 
+export interface FinancialProfitSummary {
+  from: string;
+  to: string;
+  revenue: number;
+  expenses: number;
+  partsProfit: number;
+  servicesProfit: number;
+  grossProfit: number;
+  totalProfit: number;
+  partsRevenue: number;
+  servicesRevenue: number;
+}
+
 export interface FinancialEntryRow {
   id: string;
   description: string;
@@ -304,7 +414,13 @@ export interface FinancialEntryRow {
   paidAt?: string | null;
   installmentNumber?: number;
   installmentTotal?: number;
+  origin?: string;
+  interestAmount?: string | number;
+  penaltyAmount?: string | number;
+  feeAmount?: string | number;
   customer?: { id: string; name: string } | null;
+  supplier?: { id: string; legalName: string; tradeName: string | null } | null;
+  purchaseOrder?: { id: string; number: string } | null;
   serviceOrder?: { id: string; number: number } | null;
   quote?: { id: string; number: number } | null;
   installments?: FinancialEntryRow[];
@@ -379,9 +495,11 @@ export interface ReportsFull {
     revenueToday: number;
     revenue: number;
     expense: number;
+    expenses: number;
     result: number;
     partsProfit: number;
     servicesProfit: number;
+    grossProfit: number;
     totalProfit: number;
     partsRevenue: number;
     servicesRevenue: number;
@@ -1515,25 +1633,98 @@ export const api = {
   notificationMarkRead: (token: string, id: string) =>
     request<{ count: number }>(`/notifications/${id}/read`, { method: "PATCH" }, token),
 
-  purchaseOrders: (token: string, search?: string) =>
+  purchaseOrders: (token: string, search?: string, status?: string) =>
     request<PurchaseOrderRow[]>(
-      `/purchases${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+      `/purchases${buildQuery({ search, status })}`,
       { method: "GET" },
       token,
     ),
 
+  purchaseOrder: (token: string, id: string) =>
+    request<PurchaseOrderDetail>(`/purchases/${id}`, { method: "GET" }, token),
+
   createPurchaseOrder: (
     token: string,
-    data: { supplierName: string; totalAmount: number; number?: string },
+    data: {
+      supplierId?: string;
+      supplierName: string;
+      purchaseType?: string;
+      freight?: number;
+      insurance?: number;
+      otherExpenses?: number;
+      discount?: number;
+      surcharge?: number;
+      notes?: string;
+      paymentTerms?: { installments?: number; firstDueDate?: string; intervalDays?: number };
+      items: Array<{
+        productId?: string;
+        description: string;
+        quantity: number;
+        unitCost: number;
+        discount?: number;
+        movesStock?: boolean;
+      }>;
+    },
   ) =>
-    request<PurchaseOrderRow>(
+    request<PurchaseOrderDetail>(
       "/purchases",
       { method: "POST", body: JSON.stringify(data) },
       token,
     ),
 
-  receivePurchaseOrder: (token: string, id: string) =>
-    request<PurchaseOrderRow>(`/purchases/${id}/receive`, { method: "PATCH" }, token),
+  updatePurchaseOrder: (token: string, id: string, data: Record<string, unknown>) =>
+    request<PurchaseOrderDetail>(
+      `/purchases/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+      token,
+    ),
+
+  confirmPurchaseOrder: (
+    token: string,
+    id: string,
+    data?: { postToStock?: boolean; autoCreateProducts?: boolean },
+  ) =>
+    request<PurchaseOrderDetail>(
+      `/purchases/${id}/confirm`,
+      { method: "PATCH", body: JSON.stringify(data ?? { postToStock: true }) },
+      token,
+    ),
+
+  receivePurchaseOrder: (
+    token: string,
+    id: string,
+    data?: { items?: Array<{ itemId: string; quantity: number }> },
+  ) =>
+    request<PurchaseOrderDetail>(
+      `/purchases/${id}/receive`,
+      { method: "PATCH", body: JSON.stringify(data ?? {}) },
+      token,
+    ),
+
+  cancelPurchaseOrder: (token: string, id: string) =>
+    request<PurchaseOrderDetail>(`/purchases/${id}/cancel`, { method: "PATCH" }, token),
+
+  suppliers: (token: string, search?: string, status?: string) =>
+    request<SupplierRow[]>(`/suppliers${buildQuery({ search, status })}`, { method: "GET" }, token),
+
+  supplier: (token: string, id: string) =>
+    request<SupplierDetail>(`/suppliers/${id}`, { method: "GET" }, token),
+
+  supplierProfile: (token: string, id: string) =>
+    request<SupplierProfile>(`/suppliers/${id}/profile`, { method: "GET" }, token),
+
+  createSupplier: (token: string, data: Partial<SupplierDetail> & { legalName: string; personType: string }) =>
+    request<SupplierDetail>("/suppliers", { method: "POST", body: JSON.stringify(data) }, token),
+
+  updateSupplier: (token: string, id: string, data: Partial<SupplierDetail>) =>
+    request<SupplierDetail>(
+      `/suppliers/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+      token,
+    ),
+
+  deleteSupplier: (token: string, id: string) =>
+    request<SupplierDetail>(`/suppliers/${id}`, { method: "DELETE" }, token),
 
   financialEntries: (token: string, search?: string) =>
     request<FinancialEntryRow[]>(
@@ -1561,6 +1752,9 @@ export const api = {
       registerInCash?: boolean;
       discountAmount?: number;
       discountPercent?: number;
+      interestAmount?: number;
+      penaltyAmount?: number;
+      feeAmount?: number;
       splits?: Array<{
         paymentMethod: PaymentMethod;
         amount: number;
@@ -1571,6 +1765,12 @@ export const api = {
     request<FinancialEntryRow>(`/financial/${id}/pay`, {
       method: "PATCH",
       body: JSON.stringify(data ?? {}),
+    }, token),
+
+  deleteFinancialEntry: (token: string, id: string, reason: string) =>
+    request<{ ok: boolean }>(`/financial/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason }),
     }, token),
 
   createFinancialInstallments: (
@@ -1597,6 +1797,13 @@ export const api = {
 
   financialReceiveQueue: (token: string) =>
     request<FinancialReceiveQueue>("/financial/receive-queue", { method: "GET" }, token),
+
+  financialProfitSummary: (token: string, period: "day" | "week" | "month" | "year" = "month") =>
+    request<FinancialProfitSummary>(
+      `/financial/profit-summary?period=${encodeURIComponent(period)}`,
+      { method: "GET" },
+      token,
+    ),
 
   financialCashFlow: (token: string) =>
     request<Array<{ type: string; amount: string | number; paidAt: string; paymentMethod: string | null }>>(
@@ -2065,6 +2272,9 @@ export interface StockMovementRow {
   createdAt: string;
   product: { id: string; name: string; sku: string | null };
   serviceOrder?: { id: string; number: number } | null;
+  purchaseOrder?: { id: string; number: string } | null;
+  supplier?: { id: string; legalName: string; tradeName: string | null } | null;
+  unitCost?: string | number | null;
 }
 
 export interface AppointmentRow {
@@ -2139,6 +2349,7 @@ export interface AuditLogRow {
   id: string;
   action: string;
   resource: string | null;
+  reason: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
   user?: { id: string; name: string; email: string } | null;
@@ -2150,11 +2361,11 @@ export interface BranchRow {
   code: string | null;
   isMain: boolean;
   address?: string | null;
-  zipCode?: string | null;
   street?: string | null;
   addressNumber?: string | null;
   complement?: string | null;
   district?: string | null;
   city?: string | null;
   state?: string | null;
+  zipCode?: string | null;
 }

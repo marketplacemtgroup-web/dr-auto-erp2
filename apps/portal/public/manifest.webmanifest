@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "OFICINA DO BETO — Portal do Cliente",
-  "short_name": "OFICINA DO BETO",
-  "description": "Acompanhe seu veículo e orçamentos na OFICINA DO BETO",
+  "name": "Minha Oficina — Portal do Cliente",
+  "short_name": "Minha Oficina",
+  "description": "Acompanhe seu veículo e orçamentos na oficina",
   "theme_color": "#0F3D4C",
   "background_color": "#F1F5F9",
   "display": "standalone",

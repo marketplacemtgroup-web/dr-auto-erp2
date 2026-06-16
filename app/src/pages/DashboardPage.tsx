@@ -20,6 +20,7 @@ import { useDashboardKpis } from "../hooks/useDashboardKpis";
 import { usePermissions } from "../hooks/usePermissions";
 import NavButton from "../components/NavButton";
 import { formatMoney } from "../lib/format";
+import { timeGreeting } from "../lib/timeGreeting";
 import { branding } from "../lib/branding";
 import { routes } from "../lib/routes";
 import { getErrorMessage } from "../lib/api";
@@ -119,13 +120,14 @@ export default function DashboardPage() {
     : operationalKpis;
 
   const greetingName = user?.name?.split(" ")[0] ?? "equipe";
+  const greeting = timeGreeting();
 
   return (
     <main className="px-6 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-[22px] font-semibold text-[#1E293B]">
-            Boa tarde, {greetingName}! 👋
+            {greeting}, {greetingName}! 👋
           </h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">
             {showFinancial

@@ -56,7 +56,7 @@ export default function LoginPage() {
         <div className="relative z-10 text-white max-w-md">
           <h2 className="mb-3 font-sans text-2xl font-bold leading-tight tracking-tight text-white sm:text-3xl">
             <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300/90">
-              {branding.appName}
+              Oficina do Beto
             </span>
             {branding.appTagline}
           </h2>

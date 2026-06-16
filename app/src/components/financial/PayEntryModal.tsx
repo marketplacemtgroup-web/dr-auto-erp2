@@ -4,6 +4,7 @@ import { Plus, Trash2, X } from "lucide-react";
 import type { FinancialEntryRow } from "../../lib/api";
 import {
   computePayDiscount,
+  computePayNetDue,
   roundMoney,
   splitSum,
   type PayEntryFormState,
@@ -54,7 +55,7 @@ export default function PayEntryModal({
   const isReceivable = entry.type === "RECEIVABLE";
   const gross = Number(entry.amount);
   const discount = computePayDiscount(gross, form.discountMoney, form.discountPercent);
-  const netDue = roundMoney(gross - discount);
+  const netDue = computePayNetDue(gross, form, entry.type);
   const paid = splitSum(form.splits);
   const remaining = roundMoney(netDue - paid);
   const balanced = Math.abs(remaining) < 0.01 && netDue > 0;
@@ -136,10 +137,18 @@ export default function PayEntryModal({
         </div>
 
         <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
-          {(entry.serviceOrder || entry.customer) && (
+          {(entry.serviceOrder || entry.customer || entry.purchaseOrder || entry.supplier) && (
             <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-[13px]">
               {entry.serviceOrder ? (
                 <p className="font-semibold text-[#1E293B]">OS #{entry.serviceOrder.number}</p>
+              ) : null}
+              {entry.purchaseOrder ? (
+                <p className="font-semibold text-[#1E293B]">Compra {entry.purchaseOrder.number}</p>
+              ) : null}
+              {entry.supplier ? (
+                <p className="text-[#64748B] mt-0.5">
+                  {entry.supplier.tradeName || entry.supplier.legalName}
+                </p>
               ) : null}
               {entry.customer?.name ? (
                 <p className="text-[#64748B] mt-0.5">{entry.customer.name}</p>
@@ -188,6 +197,47 @@ export default function PayEntryModal({
               />
             </div>
           </div>
+
+          {!isReceivable ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-[#64748B] mb-1.5 block">Juros (R$)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm"
+                  value={form.interestAmount}
+                  onChange={(e) => onFormChange({ ...form, interestAmount: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#64748B] mb-1.5 block">Multa (R$)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm"
+                  value={form.penaltyAmount}
+                  onChange={(e) => onFormChange({ ...form, penaltyAmount: e.target.value })}
+                />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-medium text-[#64748B] mb-1.5 block">
+                Taxa cartão (R$)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm"
+                value={form.feeAmount}
+                onChange={(e) => onFormChange({ ...form, feeAmount: e.target.value })}
+              />
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -262,7 +312,7 @@ export default function PayEntryModal({
                     />
                   </div>
 
-                  {isReceivable && row.paymentMethod === "CASH" ? (
+                  {(isReceivable || !isReceivable) && row.paymentMethod === "CASH" ? (
                     cashOpen ? (
                       <label className="flex items-center gap-2 text-[12px] text-[#64748B]">
                         <input
@@ -272,11 +322,11 @@ export default function PayEntryModal({
                             updateSplit(row.id, { registerInCash: e.target.checked })
                           }
                         />
-                        Registrar na gaveta do caixa
+                        {isReceivable ? "Registrar na gaveta do caixa" : "Registrar saída no caixa"}
                       </label>
                     ) : (
                       <p className="text-[11px] text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-2.5 py-1.5">
-                        Caixa fechado — nao entra na gaveta. Abra o caixa na aba Caixa.
+                        Caixa fechado — nao movimenta a gaveta. Abra o caixa na aba Caixa.
                       </p>
                     )
                   ) : null}

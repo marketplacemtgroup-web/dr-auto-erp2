@@ -1,4 +1,4 @@
-# OFICINA DO BETO — ERP OFICINA MECÂNICA
+# Dr. Auto - Oficinas — ERP Oficina Mecânica
 
 Monorepo com frontend Vite (design Kimi preservado), API NestJS, PostgreSQL via Docker e caminho de migração para Supabase.
 

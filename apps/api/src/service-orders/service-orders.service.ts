@@ -428,6 +428,20 @@ export class ServiceOrdersService {
       catalogItemId = catalog.id;
     }
 
+    const executorId =
+      dto.executorId ?? (itemType === 'SERVICE' ? so.executionById : null);
+    const expectedCommission = await this.previewItemCommission(organizationId, {
+      itemType,
+      quantity: qty,
+      unitPrice: Number(unitPrice),
+      discount: dto.discount ?? 0,
+      catalogItemId,
+      productId: dto.productId ?? null,
+      executorId,
+      soldById: dto.soldById ?? null,
+      executionById: so.executionById,
+    });
+
     if (dto.productId) {
       const product = await this.prisma.product.findFirst({
         where: { id: dto.productId, organizationId, ...notDeleted },
@@ -445,6 +459,7 @@ export class ServiceOrdersService {
           );
         }
         const nextStock = product.stock - qty;
+        const snapshotCost = Number(product.averageCost) || Number(product.costPrice) || 0;
         await this.prisma.product.update({
           where: { id: dto.productId },
           data: { stock: nextStock },
@@ -457,22 +472,44 @@ export class ServiceOrdersService {
           nextStock,
           { serviceOrderId: so.id, reason: `Saída OS #${so.number}` },
         );
+        await this.prisma.serviceOrderItem.create({
+          data: {
+            organizationId,
+            serviceOrderId: so.id,
+            productId: dto.productId ?? null,
+            catalogItemId,
+            description,
+            itemType,
+            quantity: qty,
+            unitPrice,
+            unitCost: snapshotCost > 0 ? new Prisma.Decimal(snapshotCost) : null,
+            discount: dto.discount ?? 0,
+            executorId,
+            soldById: dto.soldById ?? null,
+            appliedById: dto.appliedById ?? null,
+            separatedById: dto.separatedById ?? null,
+            expectedCommission,
+          },
+        });
+        await this.recalculateTotal(serviceOrderId);
+        await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+        const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
+        const totalAfter = Number(refreshed.totalAmount);
+        if (totalBefore !== totalAfter) {
+          await this.audit.log(organizationId, 'service_order.amount_change', 'service_order', {
+            userId,
+            metadata: {
+              serviceOrderId,
+              number: so.number,
+              from: totalBefore,
+              to: totalAfter,
+              item: description,
+            },
+          });
+        }
+        return refreshed;
       }
     }
-
-    const executorId =
-      dto.executorId ?? (itemType === 'SERVICE' ? so.executionById : null);
-    const expectedCommission = await this.previewItemCommission(organizationId, {
-      itemType,
-      quantity: qty,
-      unitPrice: Number(unitPrice),
-      discount: dto.discount ?? 0,
-      catalogItemId,
-      productId: dto.productId ?? null,
-      executorId,
-      soldById: dto.soldById ?? null,
-      executionById: so.executionById,
-    });
 
     await this.prisma.serviceOrderItem.create({
       data: {

@@ -72,8 +72,74 @@ enum QuoteStatus {
 enum PurchaseOrderStatus {
   DRAFT
   ORDERED
+  ORDER_SENT
+  AWAITING_RECEIPT
+  PARTIALLY_RECEIVED
   RECEIVED
   CANCELLED
+}
+
+enum PurchaseFinancialStatus {
+  NOT_GENERATED
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PurchaseStockStatus {
+  NOT_POSTED
+  PARTIAL
+  POSTED
+  NO_STOCK
+}
+
+enum PurchaseType {
+  STOCK_PRODUCTS
+  OS_PARTS
+  SUPPLIES
+  TOOLS
+  THIRD_PARTY_SERVICE
+  OPERATIONAL_EXPENSE
+  OTHER
+}
+
+enum SupplierPersonType {
+  PJ
+  PF
+}
+
+enum SupplierType {
+  AUTOPECAS
+  MOTOPECAS
+  FERRAMENTAS
+  LUBRIFICANTES
+  PNEUS
+  ELETRICA
+  FUNILARIA
+  TERCEIRIZADO
+  OUTROS
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FinancialEntryOrigin {
+  MANUAL
+  PURCHASE
+  SERVICE_ORDER
+  PAYROLL
+  COMMISSION
+  EXPENSE
+  ADJUSTMENT
+}
+
+enum FinancialCategoryType {
+  INCOME
+  EXPENSE
 }
 
 enum FinancialEntryType {
@@ -267,8 +333,13 @@ model Organization {
   customerContacts CustomerContact[]
   auditLogs     AuditLog[]
   dailyRevenues DailyRevenue[]
+  suppliers Supplier[]
   purchaseOrders PurchaseOrder[]
+  purchaseOrderItems PurchaseOrderItem[]
   financialEntries FinancialEntry[]
+  financialCategories FinancialCategory[]
+  paymentFeeConfigs PaymentFeeConfig[]
+  paymentFeeRecords PaymentFeeRecord[]
   financialPaymentSplits FinancialPaymentSplit[]
   serviceCatalog ServiceCatalog[]
   stockMovements StockMovement[]
@@ -298,13 +369,13 @@ model Branch {
   name           String
   code           String?
   address        String?
-  zipCode        String?  @map("zip_code")
   street         String?
   addressNumber  String?  @map("address_number")
   complement     String?
   district       String?
   city           String?
   state          String?
+  zipCode        String?  @map("zip_code")
   isMain         Boolean  @default(false) @map("is_main")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -334,6 +405,7 @@ model User {
   uploadedAttachments Attachment[]
   openedCashSessions CashRegisterSession[] @relation("CashOpenedBy")
   closedCashSessions CashRegisterSession[] @relation("CashClosedBy")
+  purchasesCreated PurchaseOrder[] @relation("PurchaseCreatedBy")
 
   @@map("users")
 }
@@ -423,6 +495,7 @@ model AuditLog {
   userId         String?  @map("user_id")
   action         String
   resource       String?
+  reason         String?
   metadata       Json?
   ipAddress      String?  @map("ip_address")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -573,6 +646,8 @@ model ServiceOrder {
   checklistItems ServiceOrderChecklistItem[]
   attachments  Attachment[]
   stockMovements StockMovement[]
+  purchaseOrders PurchaseOrder[]
+  purchaseOrderItems PurchaseOrderItem[]
   appointment  Appointment?
   financialEntries FinancialEntry[]
   portalAccessTokens PortalAccessToken[]
@@ -658,6 +733,7 @@ model ServiceOrderItem {
   itemType       ServiceOrderItemType @default(SERVICE) @map("item_type")
   quantity           Int                  @default(1)
   unitPrice          Decimal              @default(0) @map("unit_price") @db.Decimal(12, 2)
+  unitCost           Decimal?             @map("unit_cost") @db.Decimal(12, 2)
   discount           Decimal              @default(0) @db.Decimal(12, 2)
   executorId         String?              @map("executor_id")
   soldById           String?              @map("sold_by_id")
@@ -879,13 +955,19 @@ model Product {
   reservedStock  Int      @default(0) @map("reserved_stock")
   minStock       Int      @default(0) @map("min_stock")
   costPrice      Decimal  @default(0) @map("cost_price") @db.Decimal(12, 2)
+  averageCost    Decimal  @default(0) @map("average_cost") @db.Decimal(12, 2)
+  lastPurchaseCost Decimal? @map("last_purchase_cost") @db.Decimal(12, 2)
+  lastPurchaseAt DateTime? @map("last_purchase_at")
+  lastSupplierId String?  @map("last_supplier_id")
   salePrice      Decimal  @default(0) @map("sale_price") @db.Decimal(12, 2)
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lastSupplier Supplier? @relation("ProductLastSupplier", fields: [lastSupplierId], references: [id], onDelete: SetNull)
   orderItems   ServiceOrderItem[]
+  purchaseOrderItems PurchaseOrderItem[]
   movements    StockMovement[]
   commissionRules EmployeeCommissionRule[]
 
@@ -902,13 +984,22 @@ model StockMovement {
   balanceAfter   Int               @map("balance_after")
   reason         String?
   serviceOrderId String?           @map("service_order_id")
+  purchaseOrderId String?          @map("purchase_order_id")
+  purchaseOrderItemId String?       @map("purchase_order_item_id")
+  supplierId     String?            @map("supplier_id")
+  unitCost       Decimal?           @map("unit_cost") @db.Decimal(12, 2)
+  totalCost      Decimal?           @map("total_cost") @db.Decimal(12, 2)
   createdAt      DateTime          @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
+  supplier     Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, productId])
+  @@index([purchaseOrderId])
   @@index([createdAt])
   @@map("stock_movements")
 }
@@ -950,21 +1041,126 @@ model DailyRevenue {
   @@map("daily_revenues")
 }
 
+model Supplier {
+  id                    String             @id @default(cuid())
+  organizationId        String             @map("organization_id")
+  personType            SupplierPersonType @default(PJ) @map("person_type")
+  legalName             String             @map("legal_name")
+  tradeName             String?            @map("trade_name")
+  document              String?
+  stateRegistration     String?            @map("state_registration")
+  municipalRegistration String?            @map("municipal_registration")
+  supplierType          SupplierType       @default(OUTROS) @map("supplier_type")
+  status                SupplierStatus     @default(ACTIVE)
+  contactName           String?            @map("contact_name")
+  phone                 String?
+  whatsapp              String?
+  email                 String?
+  website               String?
+  serviceNotes          String?            @map("service_notes")
+  zipCode               String?            @map("zip_code")
+  street                String?
+  addressNumber         String?            @map("address_number")
+  district              String?
+  city                  String?
+  state                 String?
+  complement            String?
+  taxEmail              String?            @map("tax_email")
+  taxNotes              String?            @map("tax_notes")
+  defaultPaymentDays    Int?               @map("default_payment_days")
+  defaultPaymentMethod  PaymentMethod?     @map("default_payment_method")
+  pixKey                String?            @map("pix_key")
+  creditLimit           Decimal?           @map("credit_limit") @db.Decimal(12, 2)
+  commercialNotes       String?            @map("commercial_notes")
+  notes                 String?
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrders   PurchaseOrder[]
+  financialEntries FinancialEntry[]
+  stockMovements   StockMovement[]
+  productsLast     Product[]         @relation("ProductLastSupplier")
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("suppliers")
+}
+
 model PurchaseOrder {
-  id             String              @id @default(cuid())
-  organizationId String              @map("organization_id")
-  number         String
-  supplierName   String              @map("supplier_name")
-  status         PurchaseOrderStatus @default(ORDERED)
-  totalAmount    Decimal             @default(0) @map("total_amount") @db.Decimal(12, 2)
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
+  id               String                  @id @default(cuid())
+  organizationId   String                  @map("organization_id")
+  number           String
+  supplierId       String?                 @map("supplier_id")
+  supplierName     String                  @map("supplier_name")
+  status           PurchaseOrderStatus     @default(DRAFT)
+  purchaseType     PurchaseType            @default(STOCK_PRODUCTS) @map("purchase_type")
+  serviceOrderId   String?                 @map("service_order_id")
+  invoiceNumber    String?                 @map("invoice_number")
+  invoiceKey       String?                 @map("invoice_key")
+  orderDate        DateTime?               @map("order_date") @db.Date
+  expectedDate     DateTime?               @map("expected_date") @db.Date
+  receivedDate     DateTime?               @map("received_date") @db.Date
+  subtotal         Decimal                 @default(0) @db.Decimal(12, 2)
+  freight          Decimal                 @default(0) @db.Decimal(12, 2)
+  insurance        Decimal                 @default(0) @db.Decimal(12, 2)
+  otherExpenses    Decimal                 @default(0) @map("other_expenses") @db.Decimal(12, 2)
+  discount         Decimal                 @default(0) @db.Decimal(12, 2)
+  surcharge        Decimal                 @default(0) @db.Decimal(12, 2)
+  totalAmount      Decimal                 @default(0) @map("total_amount") @db.Decimal(12, 2)
+  financialStatus  PurchaseFinancialStatus @default(NOT_GENERATED) @map("financial_status")
+  stockStatus      PurchaseStockStatus     @default(NOT_POSTED) @map("stock_status")
+  paymentTerms     Json?                   @map("payment_terms")
+  notes            String?
+  createdByUserId  String?                 @map("created_by_user_id")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation("PurchaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  items        PurchaseOrderItem[]
+  stockMovements StockMovement[]
+  financialEntries FinancialEntry[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
+  @@index([supplierId])
   @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id                  String   @id @default(cuid())
+  organizationId      String   @map("organization_id")
+  purchaseOrderId     String   @map("purchase_order_id")
+  productId           String?  @map("product_id")
+  supplierProductCode String?  @map("supplier_product_code")
+  description         String
+  quantity            Int      @default(1)
+  unitCost            Decimal  @default(0) @map("unit_cost") @db.Decimal(12, 2)
+  discount            Decimal  @default(0) @db.Decimal(12, 2)
+  allocatedFreight    Decimal  @default(0) @map("allocated_freight") @db.Decimal(12, 2)
+  allocatedExpenses   Decimal  @default(0) @map("allocated_expenses") @db.Decimal(12, 2)
+  finalUnitCost       Decimal  @default(0) @map("final_unit_cost") @db.Decimal(12, 2)
+  total               Decimal  @default(0) @db.Decimal(12, 2)
+  movesStock          Boolean  @default(true) @map("moves_stock")
+  location            String?
+  serviceOrderId      String?  @map("service_order_id")
+  quantityReceived    Int      @default(0) @map("quantity_received")
+  sortOrder           Int      @default(0) @map("sort_order")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serviceOrder  ServiceOrder? @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  stockMovements StockMovement[]
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
 }
 
 model FinancialEntry {
@@ -986,6 +1182,13 @@ model FinancialEntry {
   amountReceived    Decimal?             @map("amount_received") @db.Decimal(12, 2)
   installmentNumber Int                  @default(1) @map("installment_number")
   installmentTotal  Int                  @default(1) @map("installment_total")
+  supplierId        String?              @map("supplier_id")
+  purchaseOrderId   String?              @map("purchase_order_id")
+  financialCategoryId String?            @map("financial_category_id")
+  origin            FinancialEntryOrigin @default(MANUAL)
+  interestAmount    Decimal              @default(0) @map("interest_amount") @db.Decimal(12, 2)
+  penaltyAmount     Decimal              @default(0) @map("penalty_amount") @db.Decimal(12, 2)
+  feeAmount         Decimal              @default(0) @map("fee_amount") @db.Decimal(12, 2)
   createdAt         DateTime             @default(now()) @map("created_at")
   updatedAt         DateTime             @updatedAt @map("updated_at")
 
@@ -993,16 +1196,72 @@ model FinancialEntry {
   customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
   quote        Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  financialCategory FinancialCategory? @relation(fields: [financialCategoryId], references: [id], onDelete: SetNull)
   parentEntry  FinancialEntry? @relation("Installments", fields: [parentEntryId], references: [id], onDelete: Cascade)
   installments FinancialEntry[] @relation("Installments")
   paymentSplits FinancialPaymentSplit[]
   cashMovements CashRegisterMovement[]
+  paymentFeeRecords PaymentFeeRecord[]
 
   @@index([organizationId, dueDate])
   @@index([organizationId, status])
   @@index([customerId])
   @@index([serviceOrderId])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
   @@map("financial_entries")
+}
+
+model FinancialCategory {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  name           String
+  type           FinancialCategoryType
+  groupName      String?               @map("group_name")
+  isSystem       Boolean               @default(false) @map("is_system")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entries      FinancialEntry[]
+
+  @@index([organizationId, type])
+  @@map("financial_categories")
+}
+
+model PaymentFeeConfig {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  paymentMethod  PaymentMethod @map("payment_method")
+  label          String
+  feePercent     Decimal       @map("fee_percent") @db.Decimal(5, 2)
+  installments   Int?
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, paymentMethod])
+  @@map("payment_fee_configs")
+}
+
+model PaymentFeeRecord {
+  id               String        @id @default(cuid())
+  organizationId   String        @map("organization_id")
+  financialEntryId String        @map("financial_entry_id")
+  paymentMethod    PaymentMethod @map("payment_method")
+  grossAmount      Decimal       @map("gross_amount") @db.Decimal(12, 2)
+  feePercent       Decimal       @map("fee_percent") @db.Decimal(5, 2)
+  feeAmount        Decimal       @map("fee_amount") @db.Decimal(12, 2)
+  netAmount        Decimal       @map("net_amount") @db.Decimal(12, 2)
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  financialEntry FinancialEntry @relation(fields: [financialEntryId], references: [id], onDelete: Cascade)
+
+  @@index([financialEntryId])
+  @@map("payment_fee_records")
 }
 
 model FinancialPaymentSplit {

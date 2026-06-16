@@ -136,10 +136,7 @@ export class DashboardService {
         }),
       ]);
 
-    const dailyAmount = this.pickRevenue(
-      Number(paidTodayAgg._sum.amount ?? 0),
-      report.financial.revenueToday,
-    );
+    const dailyAmount = roundMoney(Number(paidTodayAgg._sum.amount ?? 0));
     const yesterdayAmount = Number(paidYesterdayAgg._sum.amount ?? 0);
 
     const ticketSum = deliveredOrdersMonth.reduce(
@@ -169,6 +166,9 @@ export class DashboardService {
       averageServiceTimeMinutes,
       partsProfit: report.financial.partsProfit,
       servicesProfit: report.financial.servicesProfit,
+      grossProfit: report.financial.grossProfit,
+      expenses: report.financial.expenses,
+      totalProfit: report.financial.totalProfit,
     };
   }
 
@@ -204,22 +204,7 @@ export class DashboardService {
       byDay.set(key, (byDay.get(key) ?? 0) + Number(row.amount));
     }
 
-    if (byDay.size > 0) {
-      return Array.from(byDay.entries()).map(([day, value]) => ({ day, value }));
-    }
-
-    const rows = await this.prisma.dailyRevenue.findMany({
-      where: {
-        organizationId,
-        date: { gte: monthStart, lte: today },
-      },
-      orderBy: { date: 'asc' },
-    });
-
-    return rows.map((r) => ({
-      day: String(r.date.getDate()).padStart(2, '0'),
-      value: Number(r.amount),
-    }));
+    return Array.from(byDay.entries()).map(([day, value]) => ({ day, value }));
   }
 
   async getServiceOrdersInProgress(organizationId: string) {
@@ -259,11 +244,6 @@ export class DashboardService {
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
-  }
-
-  private pickRevenue(fromPaidEntries: number, fromDailyRevenue: number) {
-    if (fromPaidEntries > 0) return roundMoney(fromPaidEntries);
-    return roundMoney(fromDailyRevenue);
   }
 
   private percentTrend(current: number, previous: number): number {

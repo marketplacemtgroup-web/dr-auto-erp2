@@ -134,10 +134,8 @@
   .portal-bg__image {
     position: fixed;
     inset: 0;
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-size: min(720px, 85vmin);
-    opacity: 0.07;
+    background-size: cover;
+    background-position: center top;
     pointer-events: none;
     z-index: 0;
   }

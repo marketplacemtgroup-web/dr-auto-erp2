@@ -97,4 +97,19 @@ export class PayFinancialEntryDto {
   @ValidateNested({ each: true })
   @Type(() => PayFinancialSplitDto)
   splits?: PayFinancialSplitDto[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  interestAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  penaltyAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  feeAmount?: number;
 }

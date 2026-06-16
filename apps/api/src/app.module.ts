@@ -13,6 +13,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { PurchasesModule } from './purchases/purchases.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 import { FinancialModule } from './financial/financial.module';
 import { ReportsModule } from './reports/reports.module';
 import { AttachmentsModule } from './attachments/attachments.module';
@@ -45,6 +46,7 @@ import { TeamModule } from './team/team.module';
     ProductsModule,
     PortalModule,
     PurchasesModule,
+    SuppliersModule,
     FinancialModule,
     ReportsModule,
     AttachmentsModule,

@@ -8,6 +8,11 @@ export function normalizeReportsFull(report: ReportsFull): ReportsFull {
     ...report,
     financial: {
       ...report.financial,
+      grossProfit:
+        report.financial.grossProfit ??
+        Number(report.financial.partsProfit ?? 0) + Number(report.financial.servicesProfit ?? 0),
+      expenses: report.financial.expenses ?? report.financial.expense ?? 0,
+      totalProfit: report.financial.totalProfit ?? 0,
       paymentMethods: report.financial.paymentMethods ?? [],
       paymentReceipts: report.financial.paymentReceipts ?? [],
       revenueByDay: report.financial.revenueByDay ?? [],

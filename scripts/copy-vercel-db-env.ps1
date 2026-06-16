@@ -33,5 +33,5 @@ Read-Host | Out-Null
 $direct | Set-Clipboard
 Write-Host "   DIRECT_URL copiada."
 Write-Host ""
-Write-Host "Vercel -> oficinadobeto-api -> Settings -> Environment Variables"
+Write-Host "Vercel -> dr-auto-erp2-api -> Settings -> Environment Variables"
 Write-Host "Apague e recrie as duas vars, SINGLE_TENANT=true, depois Redeploy."

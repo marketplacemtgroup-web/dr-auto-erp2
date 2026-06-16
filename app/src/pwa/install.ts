@@ -3,7 +3,7 @@ export type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const INSTALL_EVENT = "oficina-do-beto-pwa-install";
+const INSTALL_EVENT = "wtec-motors-pwa-install";
 
 let deferred: BeforeInstallPromptEvent | null = null;
 

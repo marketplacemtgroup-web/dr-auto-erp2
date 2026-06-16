@@ -1,18 +1,19 @@
-# Branding — OFICINA DO BETO
+# Branding do Portal do Cliente
 
-O sistema usa **um único logo** em todo lugar: `/logo-oficinadobeto.png`.
+Substitua os arquivos desta pasta para personalizar o portal por cliente/projeto.
 
-Esse arquivo é usado como:
+| Arquivo | Uso |
+|---------|-----|
+| `logo.png` | Logo principal (login, splash, header) |
+| `background.webp` | Imagem de fundo (moto/veículo) |
 
-- favicon e ícone PWA
-- logo no login, sidebar e portal
-- marca d'água nas telas
-- ícone de notificações push
-- impressões de OS e orçamento
+Configure também as variáveis em `.env`:
 
-Para trocar o logo, substitua estes arquivos (mantendo o mesmo nome):
+```env
+VITE_APP_NAME=WTEC Motors
+VITE_APP_TAGLINE=Portal do Cliente
+VITE_BRAND_LOGO_URL=/branding/logo.png
+VITE_BRAND_BACKGROUND_URL=/branding/background.webp
+```
 
-- `public/logo-oficinadobeto.png`
-- `public/favicon.png`
-- `public/favicon.ico`
-- `public/branding/logo.png` (cópia de compatibilidade)
+Os arquivos em `/logo-oficinadobeto.png` e `/moto-bmw-bg.webp` na raiz de `public/` são cópias de compatibilidade.

@@ -1,6 +1,6 @@
 import type { ReportsFull } from "../../lib/api";
 import { formatPeriodLabel } from "../../lib/reportPeriod";
-import { formatMoney } from "../../lib/format";
+import { formatMoney, formatNegativeMoney } from "../../lib/format";
 import { PAYMENT_LABELS } from "../../lib/paymentMethods";
 import type { PaymentMethod } from "../../lib/api";
 
@@ -22,7 +22,7 @@ export default function ReportsPrintSheet({ report }: Props) {
 
   return (
     <div className="reports-print hidden bg-white text-[#1E293B] p-8 text-[13px]">
-      <h1 className="text-xl font-bold mb-1">Relatorio gerencial — OFICINA DO BETO</h1>
+      <h1 className="text-xl font-bold mb-1">Relatorio gerencial — WTEC Motors</h1>
       <p className="text-[#64748B] mb-6">
         Periodo: {formatPeriodLabel(report.period.from.slice(0, 10), report.period.to.slice(0, 10))}
       </p>
@@ -31,10 +31,11 @@ export default function ReportsPrintSheet({ report }: Props) {
       <table className="w-full mb-6">
         <tbody>
           <Row label="Faturamento (pagamentos)" value={formatMoney(f.revenue)} />
-          <Row label="Despesas pagas" value={formatMoney(f.expense)} />
-          <Row label="Resultado" value={formatMoney(f.result)} />
+          <Row label="Despesas pagas" value={formatNegativeMoney(f.expenses ?? f.expense)} />
+          <Row label="Resultado caixa" value={formatMoney(f.result)} />
           <Row label="Lucro pecas" value={formatMoney(f.partsProfit)} />
           <Row label="Lucro servicos" value={formatMoney(f.servicesProfit)} />
+          <Row label="Lucro bruto" value={formatMoney(f.grossProfit)} />
           <Row label="Lucro total" value={formatMoney(f.totalProfit)} />
           <Row label="Descontos concedidos" value={formatMoney(f.discountsGiven)} />
           <Row label="A receber" value={formatMoney(f.openReceivables.amount)} />

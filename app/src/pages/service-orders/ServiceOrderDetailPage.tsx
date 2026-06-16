@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, Upload, X } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
@@ -17,7 +17,7 @@ import {
   quoteStatusVariant,
 } from "../../lib/service-order-status";
 import { portalAccessUrl, portalPublicQuoteUrl, routes } from "../../lib/routes";
-import { applyUrlTemplate, defaultPortalWhatsAppMessage, defaultQuoteWhatsAppMessage } from "../../lib/shareLink";
+import { applyUrlTemplate, defaultPortalWhatsAppMessage, defaultQuoteWhatsAppMessage, resolveOrganizationWhatsApp } from "../../lib/shareLink";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
 import PrintPortal from "../../components/print/PrintPortal";
@@ -82,6 +82,7 @@ function getLineForItem(
 export default function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<
@@ -116,6 +117,22 @@ export default function ServiceOrderDetailPage() {
   const { data: activeEmployees } = useApiQuery(["employees-active"], (t) => api.employees(t, { status: "ACTIVE" }));
   const { data: technicians } = useApiQuery(["employee-technicians"], (t) => api.employeeTechnicians(t));
   const org = useOrganizationBranding();
+
+  useEffect(() => {
+    if (!os || searchParams.get("print") !== "1") return;
+    const timer = window.setTimeout(() => {
+      printDocument("os");
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("print");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [os, searchParams, setSearchParams]);
 
   const saveMeta = useMutation({
     mutationFn: (payload: Parameters<typeof api.updateServiceOrder>[2]) =>
@@ -288,7 +305,7 @@ export default function ServiceOrderDetailPage() {
         url,
         expiresAt: link.expiresAt,
         whatsappMessage,
-        whatsappPhone: customer.whatsapp ?? customer.phone,
+        whatsappPhone: resolveOrganizationWhatsApp(),
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao gerar link");
@@ -318,7 +335,7 @@ export default function ServiceOrderDetailPage() {
         url,
         expiresAt: link.expiresAt,
         whatsappMessage,
-        whatsappPhone: customer.whatsapp ?? customer.phone,
+        whatsappPhone: resolveOrganizationWhatsApp(),
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao gerar link do portal");

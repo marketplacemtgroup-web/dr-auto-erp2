@@ -17,7 +17,7 @@ const toneValue: Record<string, string> = {
 
 export default function ReportKpiGrid({ items }: { items: ReportKpiItem[] }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
       {items.map((item) => (
         <div
           key={item.label}

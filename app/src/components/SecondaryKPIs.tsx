@@ -8,6 +8,7 @@ import {
 
 import type { DashboardKpis } from "../lib/api";
 import { routes } from "../lib/routes";
+import { formatMoney, formatNegativeMoney } from "../lib/format";
 import NavButton from "./NavButton";
 
 function formatCurrency(value: number) {
@@ -26,10 +27,13 @@ interface SecondaryKPIsProps {
 }
 
 export default function SecondaryKPIs({ kpis, isLoading }: SecondaryKPIsProps) {
-  const totalProfit = (kpis?.partsProfit ?? 0) + (kpis?.servicesProfit ?? 0);
+  const totalProfit =
+    kpis?.totalProfit ??
+    (kpis?.partsProfit ?? 0) + (kpis?.servicesProfit ?? 0) - (kpis?.expenses ?? 0);
 
   const items = [
     { label: "Lucro Geral (Mes)", value: isLoading ? "—" : formatCurrency(totalProfit), icon: TrendingUp, iconBg: "#FEE2E2", iconColor: "#EF4444", to: routes.relatorios },
+    { label: "Despesas (Mes)", value: isLoading ? "—" : formatNegativeMoney(kpis?.expenses ?? 0), icon: DollarSign, iconBg: "#FEE2E2", iconColor: "#DC2626", to: routes.financeiro },
     { label: "Lucro Pecas (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.partsProfit ?? 0), icon: Package, iconBg: "#FFEDD5", iconColor: "#F97316", to: routes.estoque },
     { label: "Lucro Servicos (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.servicesProfit ?? 0), icon: Wrench, iconBg: "#DBEAFE", iconColor: "#3B82F6", to: routes.servicos },
     { label: "Faturamento (Mes)", value: isLoading ? "—" : formatCurrency(kpis?.monthlyRevenue ?? 0), icon: DollarSign, iconBg: "#D1FAE5", iconColor: "#10B981", to: routes.relatorios },

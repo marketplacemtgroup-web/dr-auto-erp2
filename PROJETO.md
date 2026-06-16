@@ -1,10 +1,10 @@
-# OFICINA DO BETO (ERP OFICINA MECÂNICA) — Visão Profissional do Projeto
+# Dr. Auto - Oficinas (ERP Oficina Mecânica) — Visão Profissional do Projeto
 
-Este documento descreve **o que já foi implementado**, **o que ainda é protótipo**, e **o que precisa ser feito** para evoluir o sistema para um ERP SaaS completo (multi-oficina), preservando o layout premium criado no Kimi.
+Este documento descreve **o que já foi implementado**, **o que ainda é protótipo**, e **o que precisa ser feito** para evoluir o AutoCore para um ERP SaaS completo (multi-oficina), preservando o layout premium criado no Kimi.
 
 ## Objetivo do produto
 
-Um ERP moderno para oficinas mecânicas (**OFICINA DO BETO**) com:
+Um ERP moderno para oficinas mecânicas (marca **Dr. Auto - Oficinas**) com:
 
 - **Gestão interna** (clientes, veículos, OS, orçamentos, estoque, financeiro, agenda, relatórios)
 - **Portal / WebApp do cliente** para aprovar orçamentos e acompanhar status
@@ -167,7 +167,7 @@ Diretriz do projeto:
 
 email utilizado para o projeto no github+supa+vercel
 
-oficinadobeto@gmail.com
+wtecmotors@gmail.com
 Metron.87
 
 

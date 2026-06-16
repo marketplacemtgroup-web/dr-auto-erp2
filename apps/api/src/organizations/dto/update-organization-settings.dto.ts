@@ -55,32 +55,26 @@ export class UpdateOrganizationSettingsDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(9)
   zipCode?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(200)
   street?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(20)
   addressNumber?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
   complement?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
   district?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
   city?: string;
 
   @IsOptional()

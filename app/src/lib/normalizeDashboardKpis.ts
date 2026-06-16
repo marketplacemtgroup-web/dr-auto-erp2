@@ -29,5 +29,8 @@ export function normalizeDashboardKpis(
     averageServiceTimeMinutes: num(raw.averageServiceTimeMinutes),
     partsProfit: num(raw.partsProfit),
     servicesProfit: num(raw.servicesProfit),
+    grossProfit: num(raw.grossProfit),
+    expenses: num(raw.expenses),
+    totalProfit: num(raw.totalProfit),
   };
 }

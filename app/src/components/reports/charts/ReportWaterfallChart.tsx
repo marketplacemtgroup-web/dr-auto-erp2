@@ -16,13 +16,23 @@ type Props = {
   revenue: number;
   expense: number;
   result: number;
+  labels?: {
+    revenue: string;
+    expense: string;
+    result: string;
+  };
 };
 
-export default function ReportWaterfallChart({ revenue, expense, result }: Props) {
+export default function ReportWaterfallChart({
+  revenue,
+  expense,
+  result,
+  labels = { revenue: "Receita", expense: "Despesas", result: "Resultado" },
+}: Props) {
   const data = [
-    { name: "Receita", value: revenue, color: "#16A34A" },
-    { name: "Despesas", value: -expense, color: "#DC2626" },
-    { name: "Resultado", value: result, color: result >= 0 ? "#0E7490" : "#F97316" },
+    { name: labels.revenue, value: revenue, color: "#16A34A" },
+    { name: labels.expense, value: -expense, color: "#DC2626" },
+    { name: labels.result, value: result, color: result >= 0 ? "#0E7490" : "#F97316" },
   ];
 
   if (revenue === 0 && expense === 0) {

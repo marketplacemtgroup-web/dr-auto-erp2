@@ -12,7 +12,11 @@ import {
   YAxis,
 } from "recharts";
 import type { PaymentMethod, ReportsFull } from "../../lib/api";
-import { formatMoney } from "../../lib/format";
+import { formatMoney, formatNegativeMoney } from "../../lib/format";
+import {
+  buildReportFinancialKpiItems,
+  buildReportOperationsKpiItems,
+} from "../../lib/reportFinancialKpis";
 import { PAYMENT_LABELS } from "../../lib/paymentMethods";
 import { parseLocalIsoDate, type ReportPeriodState } from "../../lib/reportPeriod";
 import { serviceOrderStatusLabel } from "../../lib/labels";
@@ -114,40 +118,15 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
       : report.operations.delayedOrders;
 
   const kpiItems = [
-    {
-      label: "Faturamento",
-      value: isLoading ? "—" : formatMoney(report.financial.revenue),
-      change: cmp?.revenueChange,
-      tone: "success" as const,
-      large: true,
-    },
-    {
-      label: "Lucro total",
-      value: isLoading ? "—" : formatMoney(report.financial.totalProfit),
-      change: cmp?.profitChange,
-      tone: "success" as const,
-      large: true,
-    },
-    {
-      label: "Ticket medio",
-      value: isLoading ? "—" : formatMoney(report.operations.averageTicket),
-      change: cmp?.averageTicketChange,
-    },
-    {
-      label: "Tempo medio",
-      value: isLoading ? "—" : `${report.operations.averageDeliveryDays}d`,
-    },
-    {
-      label: "Conversao",
-      value: isLoading ? "—" : `${report.commercial.quoteConversion.rate}%`,
-      tone: "warning" as const,
-    },
-    {
-      label: "Descontos",
-      value: isLoading ? "—" : formatMoney(report.financial.discountsGiven),
-      tone: "danger" as const,
-    },
+    ...buildReportFinancialKpiItems(report.financial, { isLoading, compare: cmp }),
+    ...buildReportOperationsKpiItems(report.financial, report.operations, report.commercial, {
+      isLoading,
+      compare: cmp,
+    }),
   ];
+
+  const expenses = report.financial.expenses ?? report.financial.expense ?? 0;
+  const grossProfit = report.financial.grossProfit ?? report.financial.partsProfit + report.financial.servicesProfit;
 
   return (
     <div id="reports-bi-dashboard" className="reports-bi-dashboard">
@@ -187,7 +166,7 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
           </ReportSection>
           <ReportSection
             title="Resultado"
-            subtitle="Receita, despesas e lucro"
+            subtitle="Receita, despesas pagas e saldo"
             className="xl:col-span-4"
             period={period}
             token={token}
@@ -200,6 +179,48 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
               expense={report.financial.expense}
               result={report.financial.result}
             />
+            </div>
+          </ReportSection>
+          <ReportSection
+            title="Lucro do periodo"
+            subtitle="Pecas + servicos − despesas pagas"
+            className="xl:col-span-12"
+            period={period}
+            token={token}
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="h-[240px]">
+                <ReportWaterfallChart
+                  revenue={grossProfit}
+                  expense={expenses}
+                  result={report.financial.totalProfit}
+                  labels={{
+                    revenue: "Lucro bruto",
+                    expense: "Despesas",
+                    result: "Lucro total",
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-[13px] content-center">
+                <div className="rounded-xl border border-[#E2E8F0] p-4">
+                  <p className="text-[#64748B]">Lucro pecas</p>
+                  <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.partsProfit)}</p>
+                </div>
+                <div className="rounded-xl border border-[#E2E8F0] p-4">
+                  <p className="text-[#64748B]">Lucro servicos</p>
+                  <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.servicesProfit)}</p>
+                </div>
+                <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
+                  <p className="text-[#991B1B]">Despesas pagas</p>
+                  <p className="text-lg font-bold text-[#DC2626]">{formatNegativeMoney(expenses)}</p>
+                </div>
+                <div className="rounded-xl border border-[#E2E8F0] p-4">
+                  <p className="text-[#64748B]">Lucro total</p>
+                  <p className={`text-lg font-bold ${report.financial.totalProfit >= 0 ? "text-[#16A34A]" : "text-[#DC2626]"}`}>
+                    {formatMoney(report.financial.totalProfit)}
+                  </p>
+                </div>
+              </div>
             </div>
           </ReportSection>
           <ReportSection
@@ -269,6 +290,32 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
 
       {tab === "financial" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ReportSection title="Resumo de lucro" className="lg:col-span-2" period={period} token={token}>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-[13px]">
+              <div className="rounded-xl border border-[#E2E8F0] p-4">
+                <p className="text-[#64748B]">Faturamento</p>
+                <p className="text-lg font-bold text-[#16A34A]">{formatMoney(report.financial.revenue)}</p>
+              </div>
+              <div className="rounded-xl border border-[#E2E8F0] p-4">
+                <p className="text-[#64748B]">Lucro pecas</p>
+                <p className="text-lg font-bold">{formatMoney(report.financial.partsProfit)}</p>
+              </div>
+              <div className="rounded-xl border border-[#E2E8F0] p-4">
+                <p className="text-[#64748B]">Lucro servicos</p>
+                <p className="text-lg font-bold">{formatMoney(report.financial.servicesProfit)}</p>
+              </div>
+              <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
+                <p className="text-[#991B1B]">Despesas pagas</p>
+                <p className="text-lg font-bold text-[#DC2626]">{formatNegativeMoney(expenses)}</p>
+              </div>
+              <div className="rounded-xl border border-[#E2E8F0] p-4">
+                <p className="text-[#64748B]">Lucro total</p>
+                <p className={`text-lg font-bold ${report.financial.totalProfit >= 0 ? "text-[#16A34A]" : "text-[#DC2626]"}`}>
+                  {formatMoney(report.financial.totalProfit)}
+                </p>
+              </div>
+            </div>
+          </ReportSection>
           <ReportSection title="DRE mensal" className="lg:col-span-2" period={period} token={token}>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
@@ -291,9 +338,13 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
                 { name: "Servicos", value: report.financial.servicesProfit, key: "services" },
               ].filter((r) => r.value > 0)}
             />
-            <p className="text-center font-bold text-[#16A34A] mt-2">
-              {formatMoney(report.financial.totalProfit)}
-            </p>
+            <div className="mt-3 space-y-1 text-[12px] text-[#64748B] text-center">
+              <p>Lucro bruto: <span className="font-semibold text-[#1E293B]">{formatMoney(grossProfit)}</span></p>
+              <p>Despesas: <span className="font-semibold text-[#DC2626]">{formatNegativeMoney(expenses)}</span></p>
+              <p className="text-[14px] font-bold text-[#16A34A] pt-1">
+                Lucro total: {formatMoney(report.financial.totalProfit)}
+              </p>
+            </div>
           </ReportSection>
           <ReportSection title="Fluxo de caixa" period={period} token={token} exportType="cash-flow" exportFile="fluxo-caixa.csv">
             <ReportCashFlowChart {...report.financial.cashFlow} />

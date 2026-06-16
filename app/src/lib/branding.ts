@@ -1,25 +1,33 @@
-const TAGLINE = "OFICINA MECÂNICA";
+const TAGLINE = "Studio especializado em linhas premium";
 
-/** Logo oficial — único asset de marca em todo o sistema. */
-export const OFFICIAL_LOGO_URL = "/logo-oficinadobeto.png";
+/** URLs de logo antigas — ignoradas em favor do logo do deploy. */
+const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
 
-/** Instância dedicada (ex.: OFICINA DO BETO) — uma empresa por deploy. */
+/** Instância dedicada — uma empresa por deploy. */
 export const branding = {
   appName: import.meta.env.VITE_APP_NAME ?? "OFICINA DO BETO",
   appTagline: import.meta.env.VITE_APP_TAGLINE ?? TAGLINE,
   defaultOrganizationName:
     import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "OFICINA DO BETO",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
-  logoUrl: OFFICIAL_LOGO_URL,
-  watermarkUrl: OFFICIAL_LOGO_URL,
+  /** Logo em public/logo-oficinadobeto.png */
+  logoUrl: "/logo-oficinadobeto.png",
+  watermarkUrl: "/logo-oficinadobeto.png",
   printContact: {
-    address: "Rua Azarias de Melo, 490 - Taquaral - Campinas/SP - CEP 13076-008",
+    address: "",
     email: "oficinadobeto@gmail.com",
-    instagram: "@oficinadobeto",
+    instagram: "",
   },
+  /** WhatsApp da oficina — links de compartilhamento e portal */
+  contactWhatsApp:
+    (import.meta.env.VITE_CONTACT_WHATSAPP as string | undefined)?.trim() || "",
 } as const;
 
-export function resolveBrandingLogoUrl(_path?: string | null): string {
+export function resolveBrandingLogoUrl(path: string | null | undefined): string {
+  const trimmed = path?.trim();
+  if (!trimmed || LEGACY_LOGO_URLS.has(trimmed)) return branding.logoUrl;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  if (trimmed.startsWith("/api/")) return trimmed;
   return branding.logoUrl;
 }
 

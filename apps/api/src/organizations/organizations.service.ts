@@ -4,19 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { BRANDING_BUCKET, SupabaseStorageService } from '../storage/supabase-storage.service';
 import { UpdateOrganizationSettingsDto } from './dto/update-organization-settings.dto';
 import { assertValidLogoFile, logoExtensionFromMime } from './organization-logo.util';
-import { formatAddressLine } from '../common/address.util';
-
-const ADDRESS_FIELDS = [
-  'zipCode',
-  'street',
-  'addressNumber',
-  'complement',
-  'district',
-  'city',
-  'state',
-] as const;
-
-type AddressField = (typeof ADDRESS_FIELDS)[number];
+import { formatBranchAddress } from '../common/format-branch-address';
 
 @Injectable()
 export class OrganizationsService {
@@ -50,73 +38,84 @@ export class OrganizationsService {
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
     if (!org) throw new NotFoundException('Organização não encontrada');
 
-    const hasAddressUpdate = ADDRESS_FIELDS.some((field) => dto[field] !== undefined);
+    const updated = await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.tradeName !== undefined ? { tradeName: dto.tradeName || null } : {}),
+        ...(dto.document !== undefined
+          ? { document: dto.document.replace(/\D/g, '') || null }
+          : {}),
+        ...(dto.email !== undefined ? { email: dto.email || null } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone || null } : {}),
+        ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl || null } : {}),
+        ...(dto.primaryColor !== undefined ? { primaryColor: dto.primaryColor } : {}),
+        ...(dto.accentColor !== undefined ? { accentColor: dto.accentColor } : {}),
+        ...(dto.footerText !== undefined ? { footerText: dto.footerText || null } : {}),
+        ...(dto.termsServiceOrder !== undefined
+          ? { termsServiceOrder: dto.termsServiceOrder || null }
+          : {}),
+        ...(dto.termsQuote !== undefined ? { termsQuote: dto.termsQuote || null } : {}),
+        ...(dto.portalWelcome !== undefined ? { portalWelcome: dto.portalWelcome || null } : {}),
+      },
+      include: { branches: true },
+    });
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.organization.update({
-        where: { id: organizationId },
-        data: {
-          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-          ...(dto.tradeName !== undefined ? { tradeName: dto.tradeName || null } : {}),
-          ...(dto.document !== undefined
-            ? { document: dto.document.replace(/\D/g, '') || null }
-            : {}),
-          ...(dto.email !== undefined ? { email: dto.email || null } : {}),
-          ...(dto.phone !== undefined ? { phone: dto.phone || null } : {}),
-          ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl || null } : {}),
-          ...(dto.primaryColor !== undefined ? { primaryColor: dto.primaryColor } : {}),
-          ...(dto.accentColor !== undefined ? { accentColor: dto.accentColor } : {}),
-          ...(dto.footerText !== undefined ? { footerText: dto.footerText || null } : {}),
-          ...(dto.termsServiceOrder !== undefined
-            ? { termsServiceOrder: dto.termsServiceOrder || null }
-            : {}),
-          ...(dto.termsQuote !== undefined ? { termsQuote: dto.termsQuote || null } : {}),
-          ...(dto.portalWelcome !== undefined ? { portalWelcome: dto.portalWelcome || null } : {}),
-        },
+    const hasAddressUpdate =
+      dto.zipCode !== undefined ||
+      dto.street !== undefined ||
+      dto.addressNumber !== undefined ||
+      dto.complement !== undefined ||
+      dto.district !== undefined ||
+      dto.city !== undefined ||
+      dto.state !== undefined;
+
+    if (hasAddressUpdate) {
+      const mainBranch = await this.prisma.branch.findFirst({
+        where: { organizationId, isMain: true },
       });
+      if (mainBranch) {
+        const zipCode = dto.zipCode !== undefined ? dto.zipCode || null : mainBranch.zipCode;
+        const street = dto.street !== undefined ? dto.street || null : mainBranch.street;
+        const addressNumber =
+          dto.addressNumber !== undefined ? dto.addressNumber || null : mainBranch.addressNumber;
+        const complement =
+          dto.complement !== undefined ? dto.complement || null : mainBranch.complement;
+        const district = dto.district !== undefined ? dto.district || null : mainBranch.district;
+        const city = dto.city !== undefined ? dto.city || null : mainBranch.city;
+        const state = dto.state !== undefined ? dto.state || null : mainBranch.state;
 
-      if (hasAddressUpdate) {
-        const mainBranch = await tx.branch.findFirst({
-          where: { organizationId, isMain: true },
-        });
-        if (!mainBranch) throw new NotFoundException('Filial matriz não encontrada');
-
-        const next = ADDRESS_FIELDS.reduce(
-          (acc, field) => {
-            if (dto[field] !== undefined) {
-              acc[field] = dto[field]?.trim() || null;
-            }
-            return acc;
-          },
-          {} as Partial<Record<AddressField, string | null>>,
-        );
-
-        const merged = {
-          zipCode: next.zipCode !== undefined ? next.zipCode : mainBranch.zipCode,
-          street: next.street !== undefined ? next.street : mainBranch.street,
-          addressNumber:
-            next.addressNumber !== undefined ? next.addressNumber : mainBranch.addressNumber,
-          complement: next.complement !== undefined ? next.complement : mainBranch.complement,
-          district: next.district !== undefined ? next.district : mainBranch.district,
-          city: next.city !== undefined ? next.city : mainBranch.city,
-          state: next.state !== undefined ? next.state : mainBranch.state,
-        };
-
-        await tx.branch.update({
+        await this.prisma.branch.update({
           where: { id: mainBranch.id },
           data: {
-            ...merged,
-            address: formatAddressLine(merged) || null,
+            zipCode,
+            street,
+            addressNumber,
+            complement,
+            district,
+            city,
+            state,
+            address: formatBranchAddress({
+              zipCode,
+              street,
+              addressNumber,
+              complement,
+              district,
+              city,
+              state,
+            }),
           },
         });
       }
-    });
+    }
 
-    const updated = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      include: { branches: true },
-    });
-    if (!updated) throw new NotFoundException('Organização não encontrada');
+    if (hasAddressUpdate) {
+      await this.audit.log(organizationId, 'settings.update', 'organization', {
+        userId,
+        metadata: { fields: Object.keys(dto) },
+      });
+      return this.getOrganization(organizationId);
+    }
 
     await this.audit.log(organizationId, 'settings.update', 'organization', {
       userId,

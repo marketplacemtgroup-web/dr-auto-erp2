@@ -1,6 +1,6 @@
 # Fluxo de cadastro — Produtos e estoque
 
-Manual para cadastrar **peças e materiais** no estoque do OFICINA DO BETO ERP, controlar quantidades, estoque mínimo e uso nas Ordens de Serviço.
+Manual para cadastrar **peças e materiais** no estoque do WTEC Motors ERP, controlar quantidades, estoque mínimo e uso nas Ordens de Serviço.
 
 ---
 

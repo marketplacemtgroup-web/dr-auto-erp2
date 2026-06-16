@@ -1,4 +1,4 @@
-# Fluxo financeiro — OFICINA DO BETO ERP
+# Fluxo financeiro — WTEC Motors ERP
 
 Manual de **contas a pagar e receber**, **caixa da oficina**, faturamento a partir da OS e acompanhamento de receitas no dashboard.
 

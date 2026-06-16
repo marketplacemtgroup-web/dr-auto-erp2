@@ -14,6 +14,12 @@ export function formatMoney(
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+export function formatNegativeMoney(value: string | number | null | undefined) {
+  const n = Number(value ?? 0);
+  if (n <= 0) return formatMoney(0);
+  return `− ${formatMoney(n)}`;
+}
+
 export function formatDate(value: string | null | undefined) {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("pt-BR");

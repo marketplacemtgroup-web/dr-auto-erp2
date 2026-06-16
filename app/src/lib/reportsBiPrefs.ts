@@ -1,7 +1,7 @@
 import type { ReportPeriodState } from "./reportPeriod";
 
-const GOAL_KEY = "oficinadobeto-reports-monthly-goal";
-const FILTERS_KEY = "oficinadobeto-reports-saved-filters";
+const GOAL_KEY = "wtec-reports-monthly-goal";
+const FILTERS_KEY = "wtec-reports-saved-filters";
 
 export type SavedReportFilter = {
   id: string;

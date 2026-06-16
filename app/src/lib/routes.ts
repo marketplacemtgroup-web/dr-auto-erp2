@@ -16,6 +16,8 @@ export const routes = {
   agenda: "/dashboard/agenda",
   estoque: "/dashboard/estoque",
   compras: "/dashboard/compras",
+  fornecedores: "/dashboard/fornecedores",
+  fornecedorDetalhe: (id: string) => `/dashboard/fornecedores/${id}`,
   financeiro: "/dashboard/financeiro",
   relatorios: "/dashboard/relatorios",
   configuracoes: "/dashboard/configuracoes",
@@ -34,9 +36,15 @@ export const routes = {
 /** Portal público do cliente — links enviados por WhatsApp sempre apontam aqui. */
 export const PORTAL_PUBLIC_BASE_URL = "https://oficinadobeto-portal.vercel.app";
 
+const LEGACY_PORTAL_URLS = new Set([
+  "https://dr-auto-erp2-portal.vercel.app",
+  "https://wtecmotors-portal.vercel.app",
+  "https://wtec-motors-portal.vercel.app",
+]);
+
 export function portalBaseUrl() {
   const configured = (import.meta.env.VITE_PORTAL_URL as string | undefined)?.trim().replace(/\/$/, "");
-  if (configured) return configured;
+  if (configured && !LEGACY_PORTAL_URLS.has(configured)) return configured;
   return PORTAL_PUBLIC_BASE_URL;
 }
 

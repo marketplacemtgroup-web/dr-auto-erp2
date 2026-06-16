@@ -141,26 +141,22 @@ export class ReportsService {
     const profit = await this.calcProfit(organizationId, period);
 
     const [
-      dailyToday,
       paidEntries,
       paymentSplitDetails,
       openReceivablesAgg,
       openPayablesAgg,
       overdueReceivables,
       cashMovements,
-      revenueByDay,
       discountsAgg,
+      interestFeesAgg,
     ] = await Promise.all([
-      this.prisma.dailyRevenue.findUnique({
-        where: { organizationId_date: { organizationId, date: today } },
-      }),
       this.prisma.financialEntry.findMany({
         where: {
           organizationId,
           status: 'PAID',
           paidAt: { gte: period.from, lte: period.to },
         },
-        select: { type: true, amount: true, paidAt: true },
+        select: { type: true, amount: true, amountReceived: true, paidAt: true },
       }),
       this.prisma.financialPaymentSplit.findMany({
         where: {
@@ -215,13 +211,6 @@ export class ReportsService {
         },
         select: { movementType: true, amount: true },
       }),
-      this.prisma.dailyRevenue.findMany({
-        where: {
-          organizationId,
-          date: { gte: period.from, lte: period.to },
-        },
-        orderBy: { date: 'asc' },
-      }),
       this.prisma.financialEntry.aggregate({
         where: {
           organizationId,
@@ -231,6 +220,18 @@ export class ReportsService {
         },
         _sum: { discountAmount: true },
       }),
+      this.prisma.financialEntry.aggregate({
+        where: {
+          organizationId,
+          status: 'PAID',
+          paidAt: { gte: period.from, lte: period.to },
+        },
+        _sum: {
+          interestAmount: true,
+          penaltyAmount: true,
+          feeAmount: true,
+        },
+      }),
     ]);
 
     let revenue = 0;
@@ -238,7 +239,7 @@ export class ReportsService {
     const dreByMonth = new Map<string, { revenue: number; expense: number }>();
     for (const entry of paidEntries) {
       if (!entry.paidAt) continue;
-      const amt = Number(entry.amount);
+      const amt = this.paidEntryAmount(entry);
       const key = `${entry.paidAt.getFullYear()}-${String(entry.paidAt.getMonth() + 1).padStart(2, '0')}`;
       const row = dreByMonth.get(key) ?? { revenue: 0, expense: 0 };
       if (entry.type === 'RECEIVABLE') {
@@ -250,6 +251,11 @@ export class ReportsService {
       }
       dreByMonth.set(key, row);
     }
+
+    const profitMetrics = this.composeProfitMetrics(
+      profit,
+      paidEntries.filter((entry) => entry.type === 'PAYABLE'),
+    );
 
     const paymentMethodMap = new Map<string, { amount: number; count: number }>();
     const paymentReceipts: Array<{
@@ -308,17 +314,53 @@ export class ReportsService {
       else if (m.movementType === 'PAYMENT_OUT') paymentOut += amt;
     }
 
+    const todayEnd = endOfDay(today);
+    const revenueToday = roundMoney(
+      paidEntries
+        .filter(
+          (e) =>
+            e.type === 'RECEIVABLE' &&
+            e.paidAt &&
+            e.paidAt >= today &&
+            e.paidAt <= todayEnd,
+        )
+        .reduce((sum, e) => sum + this.paidEntryAmount(e), 0),
+    );
+
+    const revenueByDayMap = new Map<string, { date: Date; amount: number }>();
+    for (const entry of paidEntries) {
+      if (entry.type !== 'RECEIVABLE' || !entry.paidAt) continue;
+      const day = startOfDay(entry.paidAt);
+      const key = this.toLocalIsoDate(day);
+      const row = revenueByDayMap.get(key) ?? { date: day, amount: 0 };
+      row.amount += this.paidEntryAmount(entry);
+      revenueByDayMap.set(key, row);
+    }
+    const revenueByDay = Array.from(revenueByDayMap.values())
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .map((row) => ({
+        date: row.date,
+        amount: roundMoney(row.amount),
+      }));
+
     return {
-      revenueToday: Number(dailyToday?.amount ?? 0),
+      revenueToday,
       revenue: roundMoney(revenue),
       expense: roundMoney(expense),
+      expenses: profitMetrics.expenses,
       result: roundMoney(revenue - expense),
-      partsProfit: profit.partsProfit,
-      servicesProfit: profit.servicesProfit,
-      totalProfit: roundMoney(profit.partsProfit + profit.servicesProfit),
+      partsProfit: profitMetrics.partsProfit,
+      servicesProfit: profitMetrics.servicesProfit,
+      grossProfit: profitMetrics.grossProfit,
+      totalProfit: profitMetrics.totalProfit,
       partsRevenue: profit.partsRevenue,
       servicesRevenue: profit.servicesRevenue,
       discountsGiven: roundMoney(Number(discountsAgg._sum.discountAmount ?? 0)),
+      interestPaid: roundMoney(
+        Number(interestFeesAgg._sum.interestAmount ?? 0) +
+          Number(interestFeesAgg._sum.penaltyAmount ?? 0),
+      ),
+      cardFees: roundMoney(Number(interestFeesAgg._sum.feeAmount ?? 0)),
       openReceivables: {
         count: openReceivablesAgg._count._all,
         amount: Number(openReceivablesAgg._sum.amount ?? 0),
@@ -359,7 +401,7 @@ export class ReportsService {
         })),
       revenueByDay: revenueByDay.map((r) => ({
         date: r.date,
-        amount: Number(r.amount),
+        amount: r.amount,
       })),
       paymentReceipts: paymentReceipts.sort(
         (a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0),
@@ -792,8 +834,16 @@ export class ReportsService {
         where: {
           organizationId,
           createdAt: { gte: period.from, lte: period.to },
+          status: { not: 'CANCELLED' },
         },
-        select: { supplierName: true, totalAmount: true, status: true, number: true, createdAt: true },
+        select: {
+          supplierName: true,
+          totalAmount: true,
+          status: true,
+          number: true,
+          createdAt: true,
+          supplier: { select: { legalName: true, tradeName: true } },
+        },
       }),
       this.prisma.serviceOrderItem.findMany({
         where: {
@@ -851,14 +901,16 @@ export class ReportsService {
 
     const supplierMap = new Map<string, { supplier: string; count: number; total: number }>();
     for (const po of purchases) {
-      const cur = supplierMap.get(po.supplierName) ?? {
-        supplier: po.supplierName,
+      const name =
+        po.supplier?.tradeName || po.supplier?.legalName || po.supplierName;
+      const cur = supplierMap.get(name) ?? {
+        supplier: name,
         count: 0,
         total: 0,
       };
       cur.count += 1;
       cur.total += Number(po.totalAmount);
-      supplierMap.set(po.supplierName, cur);
+      supplierMap.set(name, cur);
     }
 
     return {
@@ -897,6 +949,78 @@ export class ReportsService {
     };
   }
 
+  async profitForPeriod(organizationId: string, period: DateRange) {
+    const [profit, paidReceivables, paidPayables] = await Promise.all([
+      this.calcProfit(organizationId, period),
+      this.prisma.financialEntry.findMany({
+        where: {
+          organizationId,
+          status: 'PAID',
+          type: 'RECEIVABLE',
+          paidAt: { gte: period.from, lte: period.to },
+        },
+        select: { amountReceived: true, amount: true },
+      }),
+      this.prisma.financialEntry.findMany({
+        where: {
+          organizationId,
+          status: 'PAID',
+          type: 'PAYABLE',
+          paidAt: { gte: period.from, lte: period.to },
+        },
+        select: { amountReceived: true, amount: true },
+      }),
+    ]);
+
+    const partsProfit = profit.partsProfit;
+    const servicesProfit = profit.servicesProfit;
+    const metrics = this.composeProfitMetrics(profit, paidPayables);
+
+    return {
+      from: this.toLocalIsoDate(period.from),
+      to: this.toLocalIsoDate(period.to),
+      revenue: roundMoney(
+        paidReceivables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
+      ),
+      expenses: metrics.expenses,
+      partsProfit,
+      servicesProfit,
+      grossProfit: metrics.grossProfit,
+      totalProfit: metrics.totalProfit,
+      partsRevenue: profit.partsRevenue,
+      servicesRevenue: profit.servicesRevenue,
+    };
+  }
+
+  private paidEntryAmount(entry: {
+    amount: { toString(): string } | number;
+    amountReceived?: { toString(): string } | number | null;
+  }) {
+    return Number(entry.amountReceived ?? entry.amount);
+  }
+
+  private composeProfitMetrics(
+    profit: ProfitTotals,
+    paidPayables: Array<{
+      amount: { toString(): string } | number;
+      amountReceived?: { toString(): string } | number | null;
+    }>,
+  ) {
+    const partsProfit = profit.partsProfit;
+    const servicesProfit = profit.servicesProfit;
+    const grossProfit = roundMoney(partsProfit + servicesProfit);
+    const expenses = roundMoney(
+      paidPayables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
+    );
+    return {
+      partsProfit,
+      servicesProfit,
+      grossProfit,
+      expenses,
+      totalProfit: roundMoney(grossProfit - expenses),
+    };
+  }
+
   private async calcProfit(organizationId: string, period: DateRange): Promise<ProfitTotals> {
     const items = await this.prisma.serviceOrderItem.findMany({
       where: {
@@ -907,7 +1031,7 @@ export class ReportsService {
           deletedAt: null,
         },
       },
-      include: { product: { select: { costPrice: true } } },
+      include: { product: { select: { costPrice: true, averageCost: true } } },
     });
 
     let partsProfit = 0;
@@ -915,10 +1039,14 @@ export class ReportsService {
     let partsRevenue = 0;
     let servicesRevenue = 0;
     for (const item of items) {
-      const revenue = Number(item.unitPrice) * item.quantity;
+      const revenue = Number(item.unitPrice) * item.quantity - Number(item.discount);
       if (item.itemType === 'PART') {
         partsRevenue += revenue;
-        const cost = Number(item.product?.costPrice ?? 0) * item.quantity;
+        const unitCost =
+          item.unitCost != null
+            ? Number(item.unitCost)
+            : Number(item.product?.averageCost) || Number(item.product?.costPrice ?? 0);
+        const cost = unitCost * item.quantity;
         partsProfit += revenue - cost;
       } else {
         servicesRevenue += revenue;
@@ -1009,6 +1137,13 @@ export class ReportsService {
     }
   }
 
+  private toLocalIsoDate(date: Date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
   private flattenSummary(report: Awaited<ReturnType<ReportsService['full']>>) {
     return {
       periodo_inicio: report.period.from,
@@ -1018,6 +1153,8 @@ export class ReportsService {
       resultado: report.financial.result,
       lucro_pecas: report.financial.partsProfit,
       lucro_servicos: report.financial.servicesProfit,
+      lucro_bruto: report.financial.grossProfit,
+      despesas_pagas: report.financial.expenses,
       lucro_total: report.financial.totalProfit,
       descontos: report.financial.discountsGiven,
       ticket_medio: report.operations.averageTicket,

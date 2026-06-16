@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { ReportsFull } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
+import { buildReportFinancialKpiItems } from "../../lib/reportFinancialKpis";
 import { formatPeriodLabel } from "../../lib/reportPeriod";
 import ReportAreaChart from "./charts/ReportAreaChart";
 import ReportKpiGrid from "./ReportKpiGrid";
@@ -40,7 +41,7 @@ export default function ReportsTvMode({
     <div className="fixed inset-0 z-[300] bg-[#0F172A] text-white p-6 overflow-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">OFICINA DO BETO — Painel ao vivo</h1>
+          <h1 className="text-2xl font-bold">WTEC Motors — Painel ao vivo</h1>
           <p className="text-[#94A3B8] mt-1">{periodLabel} · atualiza a cada 60s</p>
         </div>
         <button
@@ -56,8 +57,7 @@ export default function ReportsTvMode({
       <div className="[&_.text-\\[\\#1E293B\\]]:text-white [&_.text-\\[\\#64748B\\]]:text-[#CBD5E1] [&_.border-\\[\\#E2E8F0\\]]:border-white/10 [&_.from-white]:from-[#1E293B] [&_.to-\\[\\#F8FAFC\\]]:to-[#0F172A]">
         <ReportKpiGrid
           items={[
-            { label: "Faturamento", value: formatMoney(f.revenue), tone: "success", large: true },
-            { label: "Lucro", value: formatMoney(f.totalProfit), tone: "success", large: true },
+            ...buildReportFinancialKpiItems(f),
             { label: "Ticket medio", value: formatMoney(o.averageTicket) },
             { label: "OS entregues", value: String(o.deliveredCount) },
             { label: "Em andamento", value: String(o.openOrdersCount), tone: "warning" },

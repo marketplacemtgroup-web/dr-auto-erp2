@@ -10,7 +10,13 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  @RequirePermissions('dashboard.view')
+  @RequirePermissions(
+    'dashboard.view',
+    'customers.manage',
+    'vehicles.manage',
+    'service_orders.manage',
+    'quotes.manage',
+  )
   global(
     @CurrentUser() user: { organizationId: string },
     @Query('q') q: string,

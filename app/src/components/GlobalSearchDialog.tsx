@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { Search } from "lucide-react";
 import { api, type GlobalSearchResult } from "../lib/api";
@@ -17,39 +18,56 @@ export default function GlobalSearchDialog({ open, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GlobalSearchResult | null>(null);
 
   useEffect(() => {
     if (open) {
       setQ("");
       setData(null);
+      setError(null);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!open || !token || q.trim().length < 2) {
-      setData(null);
-      return;
-    }
-    const t = setTimeout(() => {
-      setLoading(true);
-      api
-        .globalSearch(token, q.trim())
-        .then(setData)
-        .finally(() => setLoading(false));
-    }, 280);
-    return () => clearTimeout(t);
-  }, [q, open, token]);
-
-  useEffect(() => {
     if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || !token || q.trim().length < 2) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      api
+        .globalSearch(token, q.trim())
+        .then((result) => {
+          setData(result);
+          setError(null);
+        })
+        .catch((err: unknown) => {
+          setData(null);
+          setError(err instanceof Error ? err.message : "Erro ao buscar");
+        })
+        .finally(() => setLoading(false));
+    }, 280);
+    return () => clearTimeout(t);
+  }, [q, open, token]);
 
   if (!open) return null;
 
@@ -58,40 +76,57 @@ export default function GlobalSearchDialog({ open, onClose }: Props) {
     onClose();
   }
 
+  const trimmed = q.trim();
+  const hasQuery = trimmed.length >= 2;
   const empty =
+    hasQuery &&
+    !loading &&
+    !error &&
     data &&
     !data.customers.length &&
     !data.vehicles.length &&
     !data.serviceOrders.length &&
     !data.quotes.length;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4">
-      <button type="button" className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Fechar" />
-      <div className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl border border-[#E2E8F0] overflow-hidden">
-        <div className="flex items-center gap-2 px-4 border-b border-[#E2E8F0]">
-          <Search size={18} className="text-[#94A3B8]" />
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-label="Fechar busca"
+      />
+      <div
+        className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-[#E2E8F0] overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Busca global"
+      >
+        <div className="flex items-center gap-2 px-4 border-b border-[#E2E8F0] bg-[#F8FAFC]">
+          <Search size={18} className="text-[#94A3B8] shrink-0" />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Cliente, placa, OS #, orcamento #..."
-            className="flex-1 h-12 text-[14px] outline-none"
+            className="flex-1 h-12 text-[14px] outline-none bg-transparent"
           />
-          <kbd className="text-[10px] text-[#94A3B8] bg-[#F1F5F9] px-2 py-0.5 rounded">ESC</kbd>
+          <kbd className="text-[10px] text-[#94A3B8] bg-[#F1F5F9] px-2 py-0.5 rounded shrink-0">ESC</kbd>
         </div>
-        <div className="max-h-[50vh] overflow-y-auto p-2">
-          {q.trim().length < 2 ? (
+        <div className="max-h-[min(60vh,520px)] overflow-y-auto p-2">
+          {!hasQuery ? (
             <p className="text-sm text-[#94A3B8] px-3 py-4">Digite pelo menos 2 caracteres.</p>
           ) : loading ? (
             <p className="text-sm text-[#94A3B8] px-3 py-4">Buscando...</p>
+          ) : error ? (
+            <p className="text-sm text-red-600 px-3 py-4">{error}</p>
           ) : empty ? (
-            <p className="text-sm text-[#94A3B8] px-3 py-4">Nenhum resultado.</p>
-          ) : (
+            <p className="text-sm text-[#94A3B8] px-3 py-4">Nenhum resultado para &quot;{trimmed}&quot;.</p>
+          ) : data ? (
             <>
-              {data!.customers.length > 0 && (
+              {data.customers.length > 0 && (
                 <Section title="Clientes">
-                  {data!.customers.map((c) => (
+                  {data.customers.map((c) => (
                     <ResultRow
                       key={c.id}
                       label={c.name}
@@ -101,9 +136,9 @@ export default function GlobalSearchDialog({ open, onClose }: Props) {
                   ))}
                 </Section>
               )}
-              {data!.vehicles.length > 0 && (
+              {data.vehicles.length > 0 && (
                 <Section title="Veiculos">
-                  {data!.vehicles.map((v) => (
+                  {data.vehicles.map((v) => (
                     <ResultRow
                       key={v.id}
                       label={v.plate}
@@ -113,9 +148,9 @@ export default function GlobalSearchDialog({ open, onClose }: Props) {
                   ))}
                 </Section>
               )}
-              {data!.serviceOrders.length > 0 && (
+              {data.serviceOrders.length > 0 && (
                 <Section title="Ordens de servico">
-                  {data!.serviceOrders.map((o) => (
+                  {data.serviceOrders.map((o) => (
                     <ResultRow
                       key={o.id}
                       label={`OS #${o.number}`}
@@ -125,23 +160,24 @@ export default function GlobalSearchDialog({ open, onClose }: Props) {
                   ))}
                 </Section>
               )}
-              {data!.quotes.length > 0 && (
+              {data.quotes.length > 0 && (
                 <Section title="Orcamentos">
-                  {data!.quotes.map((q) => (
+                  {data.quotes.map((quote) => (
                     <ResultRow
-                      key={q.id}
-                      label={`Orc. #${q.number ?? "—"}`}
-                      sub={`OS #${q.serviceOrder.number} · ${q.serviceOrder.vehicle.plate}`}
-                      onClick={() => go(routes.ordemDeServicoDetalhe(q.serviceOrder.id))}
+                      key={quote.id}
+                      label={`Orc. #${quote.number ?? "—"}`}
+                      sub={`OS #${quote.serviceOrder.number} · ${quote.serviceOrder.vehicle.plate}`}
+                      onClick={() => go(routes.ordemDeServicoDetalhe(quote.serviceOrder.id))}
                     />
                   ))}
                 </Section>
               )}
             </>
-          )}
+          ) : null}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
