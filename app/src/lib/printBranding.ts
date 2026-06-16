@@ -19,9 +19,7 @@ export function resolvePrintBranding(org?: OrganizationDetail | null) {
     logoUrl: resolvePrintLogoUrl(),
     document: org?.document ?? null,
     phone: org?.phone ?? null,
-    email: branding.printContact.email,
     address,
-    instagram: branding.printContact.instagram,
     footerText: org?.footerText ?? null,
   };
 }

@@ -9,7 +9,7 @@ type Props = {
 
 export default function PrintOrgHeader({ org, right }: Props) {
   const info = resolvePrintBranding(org);
-  const contactLine = [info.email, info.instagram, info.phone].filter(Boolean).join(" · ");
+  const contactLine = info.phone ?? "";
 
   return (
     <header className="flex justify-between items-end gap-4 border-b-2 border-[#0F3D4C] pb-3 mb-4">
