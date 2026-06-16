@@ -298,6 +298,13 @@ model Branch {
   name           String
   code           String?
   address        String?
+  street         String?
+  addressNumber  String?  @map("address_number")
+  complement     String?
+  district       String?
+  city           String?
+  state          String?
+  zipCode        String?  @map("zip_code")
   isMain         Boolean  @default(false) @map("is_main")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")

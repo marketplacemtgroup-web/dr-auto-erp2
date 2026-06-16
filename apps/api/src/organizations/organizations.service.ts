@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { BRANDING_BUCKET, SupabaseStorageService } from '../storage/supabase-storage.service';
 import { UpdateOrganizationSettingsDto } from './dto/update-organization-settings.dto';
 import { assertValidLogoFile, logoExtensionFromMime } from './organization-logo.util';
+import { formatBranchAddress } from '../common/format-branch-address';
 
 @Injectable()
 export class OrganizationsService {
@@ -59,6 +60,62 @@ export class OrganizationsService {
       },
       include: { branches: true },
     });
+
+    const hasAddressUpdate =
+      dto.zipCode !== undefined ||
+      dto.street !== undefined ||
+      dto.addressNumber !== undefined ||
+      dto.complement !== undefined ||
+      dto.district !== undefined ||
+      dto.city !== undefined ||
+      dto.state !== undefined;
+
+    if (hasAddressUpdate) {
+      const mainBranch = await this.prisma.branch.findFirst({
+        where: { organizationId, isMain: true },
+      });
+      if (mainBranch) {
+        const zipCode = dto.zipCode !== undefined ? dto.zipCode || null : mainBranch.zipCode;
+        const street = dto.street !== undefined ? dto.street || null : mainBranch.street;
+        const addressNumber =
+          dto.addressNumber !== undefined ? dto.addressNumber || null : mainBranch.addressNumber;
+        const complement =
+          dto.complement !== undefined ? dto.complement || null : mainBranch.complement;
+        const district = dto.district !== undefined ? dto.district || null : mainBranch.district;
+        const city = dto.city !== undefined ? dto.city || null : mainBranch.city;
+        const state = dto.state !== undefined ? dto.state || null : mainBranch.state;
+
+        await this.prisma.branch.update({
+          where: { id: mainBranch.id },
+          data: {
+            zipCode,
+            street,
+            addressNumber,
+            complement,
+            district,
+            city,
+            state,
+            address: formatBranchAddress({
+              zipCode,
+              street,
+              addressNumber,
+              complement,
+              district,
+              city,
+              state,
+            }),
+          },
+        });
+      }
+    }
+
+    if (hasAddressUpdate) {
+      await this.audit.log(organizationId, 'settings.update', 'organization', {
+        userId,
+        metadata: { fields: Object.keys(dto) },
+      });
+      return this.getOrganization(organizationId);
+    }
 
     await this.audit.log(organizationId, 'settings.update', 'organization', {
       userId,

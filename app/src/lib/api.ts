@@ -1424,6 +1424,13 @@ export const api = {
       termsServiceOrder: string;
       termsQuote: string;
       portalWelcome: string;
+      zipCode: string;
+      street: string;
+      addressNumber: string;
+      complement: string;
+      district: string;
+      city: string;
+      state: string;
     }>,
   ) =>
     request<OrganizationDetail>("/organizations/current", {
@@ -2142,4 +2149,12 @@ export interface BranchRow {
   name: string;
   code: string | null;
   isMain: boolean;
+  address?: string | null;
+  street?: string | null;
+  addressNumber?: string | null;
+  complement?: string | null;
+  district?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
 }

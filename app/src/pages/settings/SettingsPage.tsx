@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import { branding, subscription } from "../../lib/branding";
 import { resolveAssetUrl } from "../../lib/assetUrl";
-import { api, ApiError, type OrganizationDetail } from "../../lib/api";
+import { api, ApiError, type BranchRow, type OrganizationDetail } from "../../lib/api";
+import { fetchAddressByCep, formatCepInput, normalizeCep } from "../../lib/cep";
 import { useAuthStore } from "../../stores/authStore";
 import { useBrandingStore } from "../../stores/brandingStore";
 import { routes } from "../../lib/routes";
@@ -23,7 +24,24 @@ const AUDIT_LABELS: Record<string, string> = {
   "financial.pay": "Pagamento baixado",
 };
 
+function mainBranch(org?: OrganizationDetail | null): BranchRow | undefined {
+  return org?.branches?.find((b) => b.isMain) ?? org?.branches?.[0];
+}
+
+function branchAddressLabel(branch?: BranchRow): string | null {
+  if (!branch) return null;
+  if (branch.address) return branch.address;
+  const parts = [
+    [branch.street, branch.addressNumber].filter(Boolean).join(", "),
+    branch.district,
+    branch.city && branch.state ? `${branch.city}/${branch.state}` : branch.city || branch.state,
+    branch.zipCode ? `CEP ${branch.zipCode}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" - ") : null;
+}
+
 function orgToForm(org: OrganizationDetail) {
+  const branch = mainBranch(org);
   return {
     name: org.name ?? "",
     tradeName: org.tradeName ?? "",
@@ -37,6 +55,13 @@ function orgToForm(org: OrganizationDetail) {
     termsServiceOrder: org.termsServiceOrder ?? "",
     termsQuote: org.termsQuote ?? "",
     portalWelcome: org.portalWelcome ?? "",
+    zipCode: branch?.zipCode ?? "",
+    street: branch?.street ?? "",
+    addressNumber: branch?.addressNumber ?? "",
+    complement: branch?.complement ?? "",
+    district: branch?.district ?? "",
+    city: branch?.city ?? "",
+    state: branch?.state ?? "",
   };
 }
 
@@ -46,10 +71,14 @@ export default function SettingsPage() {
   const applyBranding = useBrandingStore((s) => s.apply);
   const queryClient = useQueryClient();
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const cepLookupRef = useRef("");
+  const numberInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<"dados" | "visual" | "termos" | "auditoria">("dados");
   const [editOpen, setEditOpen] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     tradeName: "",
@@ -63,6 +92,13 @@ export default function SettingsPage() {
     termsServiceOrder: "",
     termsQuote: "",
     portalWelcome: "",
+    zipCode: "",
+    street: "",
+    addressNumber: "",
+    complement: "",
+    district: "",
+    city: "",
+    state: "",
   });
 
   const { data: org } = useQuery({
@@ -80,6 +116,39 @@ export default function SettingsPage() {
   useEffect(() => {
     if (org) setForm(orgToForm(org));
   }, [org]);
+
+  const lookupCep = useCallback(async (rawCep: string) => {
+    const digits = normalizeCep(rawCep);
+    if (digits.length !== 8 || digits === cepLookupRef.current) return;
+
+    cepLookupRef.current = digits;
+    setCepLoading(true);
+    setCepError(null);
+
+    try {
+      const address = await fetchAddressByCep(digits);
+      if (!address) {
+        setCepError("CEP não encontrado");
+        cepLookupRef.current = "";
+        return;
+      }
+
+      setForm((f) => ({
+        ...f,
+        zipCode: address.zipCode,
+        street: address.street || f.street,
+        district: address.district || f.district,
+        city: address.city || f.city,
+        state: address.state || f.state,
+      }));
+      numberInputRef.current?.focus();
+    } catch {
+      setCepError("Não foi possível consultar o CEP");
+      cepLookupRef.current = "";
+    } finally {
+      setCepLoading(false);
+    }
+  }, []);
 
   const save = useMutation({
     mutationFn: () => api.updateOrganization(token!, form),
@@ -112,6 +181,7 @@ export default function SettingsPage() {
   }
 
   const logoSrc = resolveAssetUrl(org?.logoUrl);
+  const orgAddress = branchAddressLabel(mainBranch(org));
 
   return (
     <>
@@ -169,6 +239,7 @@ export default function SettingsPage() {
                 <Row label="CNPJ" value={org?.document} />
                 <Row label="E-mail" value={org?.email} />
                 <Row label="Telefone" value={org?.phone} />
+                <Row label="Endereco" value={orgAddress} />
                 <Row label="Plano" value={org?.plan} highlight />
               </dl>
             </div>
@@ -325,6 +396,89 @@ export default function SettingsPage() {
         <FormField label="Telefone">
           <input className={inputClass} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
         </FormField>
+
+        <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wide pt-1">
+          Endereco da oficina
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <FormField label="CEP" className="col-span-1">
+            <input
+              className={inputClass}
+              value={form.zipCode}
+              placeholder="00000-000"
+              maxLength={9}
+              inputMode="numeric"
+              onChange={(e) => {
+                const formatted = formatCepInput(e.target.value);
+                setForm((f) => ({ ...f, zipCode: formatted }));
+                const digits = normalizeCep(formatted);
+                if (digits.length !== 8) {
+                  cepLookupRef.current = "";
+                  setCepError(null);
+                  return;
+                }
+                void lookupCep(formatted);
+              }}
+              onBlur={() => void lookupCep(form.zipCode)}
+            />
+            {cepLoading && (
+              <p className="text-[11px] text-[#64748B] mt-1">Buscando endereco...</p>
+            )}
+            {cepError && !cepLoading && (
+              <p className="text-[11px] text-[#DC2626] mt-1">{cepError}</p>
+            )}
+          </FormField>
+          <FormField label="Cidade" className="col-span-2">
+            <input
+              className={inputClass}
+              value={form.city}
+              onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+            />
+          </FormField>
+        </div>
+        <FormField label="Rua / logradouro">
+          <input
+            className={inputClass}
+            value={form.street}
+            onChange={(e) => setForm((f) => ({ ...f, street: e.target.value }))}
+          />
+        </FormField>
+        <div className="grid grid-cols-3 gap-3">
+          <FormField label="Numero">
+            <input
+              ref={numberInputRef}
+              className={inputClass}
+              value={form.addressNumber}
+              onChange={(e) => setForm((f) => ({ ...f, addressNumber: e.target.value }))}
+              placeholder="Informe o numero"
+            />
+          </FormField>
+          <FormField label="Bairro" className="col-span-2">
+            <input
+              className={inputClass}
+              value={form.district}
+              onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
+            />
+          </FormField>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <FormField label="UF">
+            <input
+              className={inputClass}
+              value={form.state}
+              maxLength={2}
+              onChange={(e) => setForm((f) => ({ ...f, state: e.target.value.toUpperCase() }))}
+            />
+          </FormField>
+          <FormField label="Complemento" className="col-span-2">
+            <input
+              className={inputClass}
+              value={form.complement}
+              onChange={(e) => setForm((f) => ({ ...f, complement: e.target.value }))}
+            />
+          </FormField>
+        </div>
+
         <FormField label="URL do logo">
           <input className={inputClass} value={form.logoUrl} onChange={(e) => setForm((f) => ({ ...f, logoUrl: e.target.value }))} />
         </FormField>

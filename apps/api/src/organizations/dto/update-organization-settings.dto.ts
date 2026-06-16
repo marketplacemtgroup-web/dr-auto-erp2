@@ -52,4 +52,33 @@ export class UpdateOrganizationSettingsDto {
   @IsOptional()
   @IsString()
   portalWelcome?: string;
+
+  @IsOptional()
+  @IsString()
+  zipCode?: string;
+
+  @IsOptional()
+  @IsString()
+  street?: string;
+
+  @IsOptional()
+  @IsString()
+  addressNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  complement?: string;
+
+  @IsOptional()
+  @IsString()
+  district?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  state?: string;
 }
