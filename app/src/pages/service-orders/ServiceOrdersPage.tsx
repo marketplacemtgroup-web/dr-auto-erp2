@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, Printer } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ModuleFilters, { FilterSelect } from "../../components/modules/ModuleFilters";
@@ -14,20 +15,6 @@ import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { osStatusLabel, osStatusToVariant } from "../../lib/service-order-status";
 import { routes } from "../../lib/routes";
 
-const STATUS_OPTIONS = [
-  "",
-  "RECEIVED",
-  "DIAGNOSIS",
-  "AWAITING_QUOTE",
-  "AWAITING_APPROVAL",
-  "APPROVED",
-  "IN_PROGRESS",
-  "AWAITING_PART",
-  "FINISHED",
-  "DELIVERED",
-  "CANCELLED",
-] as const;
-
 const CREATE_STATUS = [
   "RECEIVED",
   "DIAGNOSIS",
@@ -40,12 +27,29 @@ const CREATE_STATUS = [
   "DELIVERED",
 ] as const;
 
+const OPEN_STATUSES = [
+  "RECEIVED",
+  "DIAGNOSIS",
+  "AWAITING_QUOTE",
+  "AWAITING_APPROVAL",
+  "APPROVED",
+  "IN_PROGRESS",
+  "AWAITING_PART",
+  "PAUSED",
+  "AWAITING_PAYMENT",
+] as const;
+
+const HISTORY_STATUSES = ["FINISHED", "DELIVERED"] as const;
+
+type ViewTab = "ativas" | "historico";
+
 export default function ServiceOrdersPage() {
   const navigate = useNavigate();
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [viewTab, setViewTab] = useState<ViewTab>("ativas");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState({
     vehicleId: "",
@@ -76,54 +80,116 @@ export default function ServiceOrdersPage() {
     },
   });
 
-  const open = data?.filter((o) =>
-    [
-      "RECEIVED",
-      "DIAGNOSIS",
-      "AWAITING_QUOTE",
-      "AWAITING_APPROVAL",
-      "IN_PROGRESS",
-      "AWAITING_PART",
-    ].includes(o.status),
-  ).length;
+  const open = data?.filter((o) => OPEN_STATUSES.includes(o.status as (typeof OPEN_STATUSES)[number]))
+    .length;
+
+  const historyRows =
+    data?.filter((o) =>
+      HISTORY_STATUSES.includes(o.status as (typeof HISTORY_STATUSES)[number]),
+    ) ?? [];
+
+  const activeRows =
+    data?.filter((o) => {
+      if (!OPEN_STATUSES.includes(o.status as (typeof OPEN_STATUSES)[number])) return false;
+      if (statusFilter && o.status !== statusFilter) return false;
+      return true;
+    }) ?? [];
+
+  function openOs(id: string) {
+    navigate(routes.ordemDeServicoDetalhe(id));
+  }
+
+  function openOsPrint(id: string) {
+    navigate(`${routes.ordemDeServicoDetalhe(id)}?print=1`);
+  }
 
   return (
     <>
       <ModulePageShell
         title="Ordem de Servico"
-        description="Checklist, diagnostico, pecas e execucao"
+        description={
+          viewTab === "historico"
+            ? "Servicos finalizados e entregues — abra ou imprima quando precisar"
+            : "Checklist, diagnostico, pecas e execucao"
+        }
         actionLabel="Nova OS"
         onAction={() => setDrawerOpen(true)}
         onSearch={setSearch}
       >
-        <ModuleFilters>
-          <FilterSelect
-            label="Status"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={[
-              { value: "", label: "Todos" },
-              ...STATUS_OPTIONS.filter(Boolean).map((s) => ({
-                value: s,
-                label: osStatusLabel(s),
-              })),
-            ]}
-          />
-        </ModuleFilters>
+        <div className="flex gap-2 mb-4 border-b border-[#E2E8F0]">
+          <button
+            type="button"
+            onClick={() => {
+              setViewTab("ativas");
+              setStatusFilter("");
+            }}
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px ${
+              viewTab === "ativas"
+                ? "border-[#0E7490] text-[#0E7490]"
+                : "border-transparent text-[#64748B] hover:text-[#1E293B]"
+            }`}
+          >
+            Em andamento
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewTab("historico");
+              setStatusFilter("");
+            }}
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px ${
+              viewTab === "historico"
+                ? "border-[#0E7490] text-[#0E7490]"
+                : "border-transparent text-[#64748B] hover:text-[#1E293B]"
+            }`}
+          >
+            Historico ({historyRows.length})
+          </button>
+        </div>
+
+        {viewTab === "ativas" ? (
+          <ModuleFilters>
+            <FilterSelect
+              label="Status"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "", label: "Todos em andamento" },
+                ...OPEN_STATUSES.map((s) => ({
+                  value: s,
+                  label: osStatusLabel(s),
+                })),
+              ]}
+            />
+          </ModuleFilters>
+        ) : (
+          <ModuleFilters>
+            <FilterSelect
+              label="Status"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: "", label: "Finalizadas e entregues" },
+                ...HISTORY_STATUSES.map((s) => ({
+                  value: s,
+                  label: osStatusLabel(s),
+                })),
+              ]}
+            />
+          </ModuleFilters>
+        )}
         <KpiStrip
           items={[
-            { label: "Total", value: String(data?.length ?? 0) },
-            { label: "Em aberto", value: String(open ?? 0), tone: "warning" },
+            { label: "Em andamento", value: String(open ?? 0), tone: "warning" },
             {
-              label: "Finalizadas",
-              value: String(
-                data?.filter((o) => o.status === "FINISHED" || o.status === "DELIVERED")
-                  .length ?? 0,
-              ),
+              label: "Historico",
+              value: String(historyRows.length),
               tone: "success",
             },
+            { label: "Total listado", value: String(data?.length ?? 0) },
           ]}
         />
+        {viewTab === "ativas" ? (
         <DataTable
           columns={[
             {
@@ -170,12 +236,97 @@ export default function ServiceOrdersPage() {
               ),
             },
           ]}
-          rows={data ?? []}
+          rows={activeRows}
           loading={isLoading}
           error={error}
-          emptyMessage="Nenhuma OS. Abra a primeira ordem de servico."
-          onRowClick={(os) => navigate(routes.ordemDeServicoDetalhe(os.id))}
+          emptyMessage="Nenhuma OS em andamento."
+          onRowClick={(os) => openOs(os.id)}
         />
+        ) : (
+          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
+            {isLoading ? (
+              <p className="px-4 py-8 text-center text-sm text-[#64748B]">Carregando...</p>
+            ) : error ? (
+              <p className="px-4 py-8 text-center text-sm text-red-600">{error.message}</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[#F8FAFC] text-left text-[#64748B] text-xs uppercase tracking-wide">
+                    <th className="px-4 py-3 font-medium">OS</th>
+                    <th className="px-4 py-3 font-medium">Cliente / Veiculo</th>
+                    <th className="px-4 py-3 font-medium">Placa</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Concluida em</th>
+                    <th className="px-4 py-3 font-medium text-right">Valor</th>
+                    <th className="px-4 py-3 font-medium text-right w-40">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(statusFilter
+                    ? historyRows.filter((o) => o.status === statusFilter)
+                    : historyRows
+                  ).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-[#94A3B8]">
+                        Nenhuma OS finalizada ou entregue ainda.
+                      </td>
+                    </tr>
+                  ) : (
+                    (statusFilter
+                      ? historyRows.filter((o) => o.status === statusFilter)
+                      : historyRows
+                    ).map((os) => (
+                      <tr
+                        key={os.id}
+                        className="border-t border-[#F1F5F9] hover:bg-[#F8FAFC] cursor-pointer"
+                        onClick={() => openOs(os.id)}
+                      >
+                        <td className="px-4 py-3 font-bold text-[#0E7490]">#{os.number}</td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{os.vehicle.customer.name}</p>
+                          <p className="text-xs text-[#94A3B8]">
+                            {[os.vehicle.brand, os.vehicle.model].filter(Boolean).join(" ")}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">{os.vehicle.plate}</td>
+                        <td className="px-4 py-3">
+                          <StatusBadge variant={osStatusToVariant(os.status)} />
+                          <span className="sr-only">{osStatusLabel(os.status)}</span>
+                        </td>
+                        <td className="px-4 py-3 text-[#64748B]">{formatDateTime(os.updatedAt)}</td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {formatMoney(os.totalAmount)}
+                        </td>
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              title="Abrir OS"
+                              onClick={() => openOs(os.id)}
+                              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-[#E2E8F0] text-[11px] text-[#64748B] hover:bg-white"
+                            >
+                              <ExternalLink size={14} />
+                              Abrir
+                            </button>
+                            <button
+                              type="button"
+                              title="Imprimir OS"
+                              onClick={() => openOsPrint(os.id)}
+                              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-[#0E7490] text-[11px] text-[#0E7490] hover:bg-[#ECFEFF]"
+                            >
+                              <Printer size={14} />
+                              Imprimir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </ModulePageShell>
 
       <FormDrawer

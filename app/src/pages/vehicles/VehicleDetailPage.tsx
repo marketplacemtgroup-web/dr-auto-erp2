@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, Printer, Upload } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
 import KpiStrip from "../../components/modules/KpiStrip";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
@@ -216,6 +216,7 @@ export default function VehicleDetailPage() {
                 <th className="px-4 py-2 text-left">Status</th>
                 <th className="px-4 py-2 text-left">Atualizado</th>
                 <th className="px-4 py-2 text-right">Total</th>
+                <th className="px-4 py-2 text-right w-36">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -231,6 +232,16 @@ export default function VehicleDetailPage() {
                   </td>
                   <td className="px-4 py-3 text-[#64748B]">{formatDateTime(o.updatedAt)}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatMoney(o.totalAmount)}</td>
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`${routes.ordemDeServicoDetalhe(o.id)}?print=1`)}
+                      className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-[#0E7490] text-[11px] text-[#0E7490] hover:bg-[#ECFEFF]"
+                    >
+                      <Printer size={14} />
+                      Imprimir
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

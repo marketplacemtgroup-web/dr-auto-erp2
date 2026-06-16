@@ -26,14 +26,16 @@ export function FormField({
   label,
   children,
   className = "",
+  labelClassName = "block text-xs font-medium text-[#64748B] mb-1",
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  labelClassName?: string;
 }) {
   return (
     <div className={className}>
-      <label className="block text-xs font-medium text-[#64748B] mb-1">{label}</label>
+      <label className={labelClassName}>{label}</label>
       {children}
     </div>
   );
@@ -41,6 +43,12 @@ export function FormField({
 
 export const inputClass =
   "w-full h-9 px-3 rounded-lg border border-[#E2E8F0] text-sm text-[#1E293B] focus:outline-none focus:border-[#0E7490] focus:ring-1 focus:ring-[#0E7490]";
+
+/** Campo numérico sem setas de subir/descer — digitação livre. */
+export const plainNumberInputClass =
+  `${inputClass} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`;
+
+export const itemFieldLabelClass = "block text-sm font-medium text-[#0F172A] mb-1.5";
 
 export const selectClass = inputClass;
 

@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
-import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
+import FormDrawer, {
+  FormField,
+  inputClass,
+  itemFieldLabelClass,
+  plainNumberInputClass,
+} from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
 import { useAuthStore } from "../../stores/authStore";
 import { api, type ProductRow, type PurchaseOrderRow, type SupplierRow } from "../../lib/api";
@@ -354,8 +359,9 @@ export default function PurchasesPage() {
               {items.map((item, idx) => (
                 <div key={item.id} className="border border-[#E2E8F0] rounded-lg p-3 space-y-3">
                   <p className="text-[11px] font-semibold text-[#94A3B8]">Item {idx + 1}</p>
-                  <FormField label="Descrição">
+                  <FormField label="Descrição" labelClassName={itemFieldLabelClass}>
                     <input
+                      type="text"
                       className={inputClass}
                       value={item.description}
                       onChange={(e) =>
@@ -368,11 +374,11 @@ export default function PurchasesPage() {
                     />
                   </FormField>
                   <div className="grid grid-cols-3 gap-3">
-                    <FormField label="Quantidade">
+                    <FormField label="Qtd" labelClassName={itemFieldLabelClass}>
                       <input
-                        type="number"
-                        min={1}
-                        className={inputClass}
+                        type="text"
+                        inputMode="numeric"
+                        className={plainNumberInputClass}
                         value={item.quantity}
                         onChange={(e) =>
                           setItems((prev) =>
@@ -383,12 +389,11 @@ export default function PurchasesPage() {
                         }
                       />
                     </FormField>
-                    <FormField label="Custo unitário (R$)">
+                    <FormField label="Custo unit." labelClassName={itemFieldLabelClass}>
                       <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        className={inputClass}
+                        type="text"
+                        inputMode="decimal"
+                        className={plainNumberInputClass}
                         value={item.unitCost}
                         onChange={(e) =>
                           setItems((prev) =>
@@ -399,12 +404,11 @@ export default function PurchasesPage() {
                         }
                       />
                     </FormField>
-                    <FormField label="Desconto (R$)">
+                    <FormField label="Desconto" labelClassName={itemFieldLabelClass}>
                       <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        className={inputClass}
+                        type="text"
+                        inputMode="decimal"
+                        className={plainNumberInputClass}
                         value={item.discount}
                         onChange={(e) =>
                           setItems((prev) =>
