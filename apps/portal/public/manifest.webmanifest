@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "OFICINA DO BETO — Portal do Cliente",
+  "short_name": "OFICINA DO BETO",
+  "description": "Acompanhe seu veículo e orçamentos na OFICINA DO BETO",
+  "theme_color": "#0F3D4C",
+  "background_color": "#F1F5F9",
+  "display": "standalone",
+  "orientation": "portrait",
+  "prefer_related_applications": false,
+  "categories": ["business", "utilities"],
+  "start_url": "/login?utm_source=pwa",
+  "scope": "/",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/logo-oficinadobeto.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-oficinadobeto.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-oficinadobeto.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

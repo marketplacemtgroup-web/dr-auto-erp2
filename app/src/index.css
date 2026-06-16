@@ -1,0 +1,241 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 187 85% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 187 85% 30%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 187 85% 30%;
+    --radius: 0.75rem;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 215 16% 57%;
+    --sidebar-primary: 187 85% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 100% / 0.08;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.06;
+    --sidebar-ring: 187 85% 30%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-[#F1F5F9] text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Marca d'água — imagem PNG sem fundo, bem suave atrás do conteúdo */
+  .brand-watermark-bg {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .brand-watermark-bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: url("/logo-oficinadobeto.png");
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: min(1560px, 156vmin);
+    opacity: 0.08;
+  }
+
+  .brand-watermark-bg > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Logo + slogan — espaçamento limpo abaixo do escudo */
+  .brand-header-mark {
+    gap: 0.625rem;
+  }
+
+  .brand-header-mark .brand-tagline {
+    margin-top: -0.75rem;
+    padding-top: 0.25rem;
+  }
+
+  .brand-header-mark--auth .brand-tagline {
+    margin-top: -1rem;
+  }
+
+  .brand-header-mark--dashboard .brand-tagline {
+    margin-top: -0.5rem;
+  }
+  .brand-logo {
+    line-height: 0;
+  }
+
+  .brand-logo__img {
+    vertical-align: bottom;
+  }
+
+  .brand-logo--auth {
+    width: clamp(12.5rem, min(88vw, 22.5rem), 22.5rem);
+  }
+
+  @media (min-width: 640px) {
+    .brand-logo--auth {
+      width: clamp(16rem, 42vw, 22.5rem);
+    }
+  }
+
+  .brand-logo--dashboard {
+    width: clamp(10rem, 92%, 13rem);
+  }
+
+  @media (min-width: 1024px) {
+    .brand-logo--dashboard {
+      width: clamp(11rem, 92%, 13.5rem);
+    }
+  }
+
+  .brand-logo--compact {
+    width: clamp(3rem, 14vw, 4rem);
+  }
+
+  .brand-watermark-bg--login::before {
+    opacity: 0.06;
+    background-size: min(1200px, 210vmin);
+  }
+
+  .brand-watermark-bg--hero::before {
+    opacity: 0.12;
+    background-size: min(1680px, 180vmin);
+  }
+
+  .card-shadow {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  }
+  .card-shadow-hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .dropdown-shadow {
+    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Sparkline tooltip */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* Folha de impressao — fora da tela no ERP, visivel somente ao imprimir */
+.service-order-print,
+.quote-print {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 210mm;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Impressao — folha de OS/orcamento e esconder shell do ERP */
+@media print {
+  @page {
+    margin: 12mm;
+    size: A4;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  body.printing-os,
+  body.printing-quote,
+  body.printing-reports {
+    visibility: hidden;
+  }
+
+  body.printing-os .service-order-print,
+  body.printing-os .service-order-print *,
+  body.printing-quote .quote-print,
+  body.printing-quote .quote-print *,
+  body.printing-reports .reports-print,
+  body.printing-reports .reports-print * {
+    visibility: visible;
+  }
+
+  body.printing-os .service-order-print,
+  body.printing-quote .quote-print,
+  body.printing-reports .reports-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block !important;
+    max-width: none !important;
+    visibility: visible;
+    pointer-events: auto;
+    padding: 0;
+    background: #fff;
+  }
+
+  .brand-watermark-bg::before {
+    display: none !important;
+  }
+
+  .app-shell-sidebar,
+  .app-shell-topbar {
+    display: none !important;
+  }
+
+  .app-shell-main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-legal-terms {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-signatures {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

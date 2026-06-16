@@ -1,0 +1,237 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  :root[data-portal-theme="light"] {
+    --portal-bg: #f4f6f9;
+    --portal-bg-secondary: #ffffff;
+    --portal-card: #ffffff;
+    --portal-primary: #0284c7;
+    --portal-accent: #0ea5e9;
+    --portal-text: #0f172a;
+    --portal-text-muted: #475569;
+    --portal-border: #e2e8f0;
+    --portal-success: #16a34a;
+    --portal-danger: #dc2626;
+    --portal-nav-bg: rgba(255, 255, 255, 0.92);
+    --background: 210 40% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 187 85% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 187 85% 30%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 187 85% 30%;
+    --radius: 0.75rem;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 215 16% 57%;
+    --sidebar-primary: 187 85% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 100% / 0.08;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.06;
+    --sidebar-ring: 187 85% 30%;
+  }
+
+  :root[data-portal-theme="dark"] {
+    --portal-bg: #020b1c;
+    --portal-bg-secondary: #06152d;
+    --portal-card: #081b35;
+    --portal-primary: #0099ff;
+    --portal-accent: #00c2ff;
+    --portal-text: #ffffff;
+    --portal-text-muted: #a8b3c7;
+    --portal-border: rgba(255, 255, 255, 0.08);
+    --portal-success: #22c55e;
+    --portal-danger: #ef4444;
+    --portal-nav-bg: rgba(6, 21, 45, 0.95);
+    --background: 222 47% 6%;
+    --foreground: 0 0% 98%;
+    --border: 0 0% 100% / 0.08;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    background: var(--portal-bg);
+    color: var(--portal-text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .card-shadow {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  }
+  .card-shadow-hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .dropdown-shadow {
+    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+  }
+
+  .brand-header-mark {
+    gap: 0.625rem;
+  }
+
+  .brand-header-mark .brand-tagline {
+    margin-top: -0.75rem;
+    padding-top: 0.25rem;
+  }
+
+  .brand-header-mark--auth .brand-tagline {
+    margin-top: -1rem;
+  }
+
+  .brand-logo {
+    line-height: 0;
+  }
+
+  .brand-logo__img {
+    vertical-align: bottom;
+  }
+
+  .brand-logo--auth {
+    width: clamp(12.5rem, min(88vw, 22.5rem), 22.5rem);
+  }
+
+  @media (min-width: 640px) {
+    .brand-logo--auth {
+      width: clamp(16rem, 42vw, 22.5rem);
+    }
+  }
+
+  .brand-logo--dashboard {
+    width: clamp(10rem, 92%, 13rem);
+  }
+
+  .brand-logo--compact {
+    width: clamp(3rem, 14vw, 4rem);
+  }
+
+  .portal-bg {
+    background: var(--portal-bg);
+  }
+
+  .portal-bg__image {
+    position: fixed;
+    inset: 0;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: min(720px, 85vmin);
+    opacity: 0.07;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .portal-bg__overlay {
+    display: none;
+  }
+
+  .portal-card {
+    background: var(--portal-card);
+    border: 1px solid var(--portal-border);
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .portal-text-muted {
+    color: var(--portal-text-muted);
+  }
+
+  .portal-text {
+    color: var(--portal-text);
+  }
+
+  .portal-accent {
+    color: var(--portal-accent);
+  }
+
+  .portal-primary-bg {
+    background: var(--portal-primary);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Sparkline tooltip */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* Impressao — folha de OS e esconder shell do ERP */
+@media print {
+  @page {
+    margin: 12mm;
+    size: A4;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .app-shell-sidebar,
+  .app-shell-topbar {
+    display: none !important;
+  }
+
+  .app-shell-main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  .service-order-print {
+    display: block !important;
+    padding: 0;
+  }
+
+  .public-quote-page {
+    background: #fff !important;
+  }
+
+  .public-quote-page main,
+  .public-quote-page .bg-white {
+    box-shadow: none !important;
+    border-color: #e2e8f0 !important;
+  }
+}
