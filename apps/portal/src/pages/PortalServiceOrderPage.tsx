@@ -8,7 +8,7 @@ import { resolveMediaUrl } from "../lib/mediaUrl";
 import { isImageMime, isVideoMime } from "../lib/mediaTypes";
 import { routes } from "../lib/routes";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel, quoteStatusVariant } from "../lib/service-order-status";
-import { whatsappUrl, resolveOrganizationWhatsApp, formatBrazilPhoneDisplay } from "../lib/whatsapp";
+import { whatsappUrl, resolveOrganizationWhatsApp } from "../lib/whatsapp";
 import { usePortalStore } from "../stores/portalStore";
 
 export default function PortalServiceOrderPage() {
