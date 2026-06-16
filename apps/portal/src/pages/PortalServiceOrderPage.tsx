@@ -32,7 +32,7 @@ export default function PortalServiceOrderPage() {
     void load();
   }, [load]);
 
-  const whatsapp = resolveOrganizationWhatsApp(data?.organization.phone);
+  const whatsapp = resolveOrganizationWhatsApp();
 
   async function approve(quoteId: string) {
     if (!session?.accessToken) return;

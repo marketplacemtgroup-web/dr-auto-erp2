@@ -12,6 +12,7 @@ export class AuditService {
     resource: string,
     options?: {
       userId?: string;
+      reason?: string;
       metadata?: Prisma.InputJsonValue;
       ipAddress?: string;
     },
@@ -22,6 +23,7 @@ export class AuditService {
         userId: options?.userId ?? null,
         action,
         resource,
+        reason: options?.reason?.trim() || null,
         metadata: options?.metadata ?? undefined,
         ipAddress: options?.ipAddress ?? null,
       },
@@ -40,8 +42,9 @@ export class AuditService {
         ...(options?.search
           ? {
               OR: [
-                { action: { contains: options.search, mode: 'insensitive' } },
-                { resource: { contains: options.search, mode: 'insensitive' } },
+                { action: { contains: options.search, mode: 'insensitive' as const } },
+                { resource: { contains: options.search, mode: 'insensitive' as const } },
+                { reason: { contains: options.search, mode: 'insensitive' as const } },
               ],
             }
           : {}),

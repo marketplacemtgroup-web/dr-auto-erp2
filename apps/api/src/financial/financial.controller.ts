@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
@@ -7,6 +7,7 @@ import {
   CreateInstallmentsDto,
   PayFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
+import { DeleteFinancialEntryDto } from './dto/delete-financial-entry.dto';
 import { FinancialService } from './financial.service';
 
 @Controller('financial')
@@ -69,5 +70,15 @@ export class FinancialController {
     @Body() dto: PayFinancialEntryDto,
   ) {
     return this.financialService.markPaid(user.organizationId, id, dto, user.userId);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('financial.manage')
+  remove(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+    @Body() dto: DeleteFinancialEntryDto,
+  ) {
+    return this.financialService.remove(user.organizationId, id, dto.reason, user.userId);
   }
 }

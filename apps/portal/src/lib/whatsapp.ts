@@ -7,11 +7,9 @@ export function whatsappUrl(phone: string, message?: string) {
   return `https://wa.me/${withCountry}${text}`;
 }
 
-/** Telefone da oficina para contato no portal (WhatsApp corporativo). */
-export function resolveOrganizationWhatsApp(organizationPhone?: string | null): string {
-  const configured = branding.contactWhatsApp.trim();
-  if (configured) return configured;
-  return organizationPhone?.trim() ?? "";
+/** Telefone fixo da oficina (VITE_CONTACT_WHATSAPP no deploy). Não usa telefone do cliente nem da API. */
+export function resolveOrganizationWhatsApp(): string {
+  return branding.contactWhatsApp.trim();
 }
 
 export function formatBrazilPhoneDisplay(phone: string): string {

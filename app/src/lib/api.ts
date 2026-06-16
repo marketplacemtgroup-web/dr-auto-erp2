@@ -1573,6 +1573,12 @@ export const api = {
       body: JSON.stringify(data ?? {}),
     }, token),
 
+  deleteFinancialEntry: (token: string, id: string, reason: string) =>
+    request<{ ok: boolean }>(`/financial/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason }),
+    }, token),
+
   createFinancialInstallments: (
     token: string,
     data: {
@@ -2139,6 +2145,7 @@ export interface AuditLogRow {
   id: string;
   action: string;
   resource: string | null;
+  reason: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
   user?: { id: string; name: string; email: string } | null;

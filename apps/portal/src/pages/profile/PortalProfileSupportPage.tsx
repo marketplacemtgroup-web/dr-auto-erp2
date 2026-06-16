@@ -9,9 +9,9 @@ export default function PortalProfileSupportPage() {
   const session = usePortalStore((s) => s.session);
 
   const orgName = dashboard?.organization.name ?? session?.organizationName ?? "Oficina";
-  const whatsapp = resolveOrganizationWhatsApp(dashboard?.organization.phone);
+  const whatsapp = resolveOrganizationWhatsApp();
   const whatsappLabel = whatsapp ? formatBrazilPhoneDisplay(whatsapp) : "";
-  const phone = dashboard?.organization.phone?.trim() || whatsappLabel;
+  const phone = whatsappLabel;
   const address = dashboard?.organization.address ?? "Endereço não informado";
 
   return (
@@ -77,7 +77,7 @@ export default function PortalProfileSupportPage() {
           <div>
             <p className="portal-text font-semibold text-sm">Horário de atendimento</p>
             <p className="portal-text-muted text-xs mt-1 whitespace-pre-line">
-              Segunda a Sexta: 08:00 às 18:00{"\n"}Sábado: 08:00 às 12:00
+              {`Segunda a Sexta: 8:00 às 17:30\nAlmoço: 12:30 às 13:30\nFinais de semana: não abre.`}
             </p>
           </div>
         </div>

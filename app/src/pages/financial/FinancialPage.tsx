@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
+import { Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
+import DeleteEntryModal from "../../components/financial/DeleteEntryModal";
 import PayEntryModal from "../../components/financial/PayEntryModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
@@ -72,6 +74,8 @@ export default function FinancialPage() {
   const [receiveQueue, setReceiveQueue] = useState<FinancialReceiveQueue | null>(null);
   const [queueLoading, setQueueLoading] = useState(false);
   const [chargingOrderId, setChargingOrderId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FinancialEntryRow | null>(null);
 
   async function loadEntries(nextSearch?: string) {
     if (!token) return;
@@ -223,6 +227,29 @@ export default function FinancialPage() {
     }
   }
 
+  async function deleteEntry(row: FinancialEntryRow) {
+    setDeleteTarget(row);
+  }
+
+  async function confirmDeleteEntry(reason: string) {
+    if (!token || !deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    try {
+      await api.deleteFinancialEntry(token, deleteTarget.id, reason);
+      void loadEntries(search);
+      void loadCash();
+      void loadReceiveQueue();
+      void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
+      if (expandedId === deleteTarget.id) setExpandedId(null);
+      setDeleteTarget(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Nao foi possivel excluir o lancamento");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <>
       <ModulePageShell
@@ -325,6 +352,15 @@ export default function FinancialPage() {
                                 onClick={() => openPay(r)}
                               />
                             )}
+                            <button
+                              type="button"
+                              title="Excluir lancamento"
+                              disabled={!token || deletingId === r.id}
+                              onClick={() => void deleteEntry(r)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </td>
                         </tr>
                         {expandedId === r.id && r.installments?.map((p) => (
@@ -333,12 +369,21 @@ export default function FinancialPage() {
                             <td />
                             <td className="px-4 py-2 text-[12px]">{formatDate(p.dueDate)}</td>
                             <td className="px-4 py-2 text-right text-[12px]">{formatCurrency(Number(p.amount))}</td>
-                            <td className="px-4 py-2 text-right">
+                            <td className="px-4 py-2 text-right space-x-1">
                               {p.status === "OPEN" ? (
                                 <FinancialPayButton type={p.type} onClick={() => openPay(p)} />
                               ) : (
                                 <span className="text-[11px] text-[#94A3B8]">Pago</span>
                               )}
+                              <button
+                                type="button"
+                                title="Excluir parcela"
+                                disabled={!token || deletingId === p.id}
+                                onClick={() => void deleteEntry(p)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -381,7 +426,7 @@ export default function FinancialPage() {
                                 </p>
                                 <p className="text-[12px] text-[#64748B]">{r.description}</p>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <span className="text-sm font-bold text-[#16A34A]">
                                   {formatCurrency(Number(r.amount))}
                                 </span>
@@ -389,6 +434,15 @@ export default function FinancialPage() {
                                   type="RECEIVABLE"
                                   onClick={() => openPay(r)}
                                 />
+                                <button
+                                  type="button"
+                                  title="Excluir recebivel"
+                                  disabled={!token || deletingId === r.id}
+                                  onClick={() => void deleteEntry(r)}
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </li>
                           ))}
@@ -558,6 +612,13 @@ export default function FinancialPage() {
         onFormChange={setPayForm}
         onConfirm={() => pay.mutate()}
         onClose={() => setPayTarget(null)}
+      />
+
+      <DeleteEntryModal
+        entry={deleteTarget}
+        loading={!!deletingId}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={(reason) => void confirmDeleteEntry(reason)}
       />
     </>
   );

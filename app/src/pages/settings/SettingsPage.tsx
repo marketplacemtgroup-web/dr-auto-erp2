@@ -5,7 +5,7 @@ import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import { branding, subscription } from "../../lib/branding";
 import { resolveAssetUrl } from "../../lib/assetUrl";
-import { api, ApiError, type BranchRow, type OrganizationDetail } from "../../lib/api";
+import { api, ApiError, type AuditLogRow, type BranchRow, type OrganizationDetail } from "../../lib/api";
 import { fetchAddressByCep, formatCepInput, normalizeCep } from "../../lib/cep";
 import { useAuthStore } from "../../stores/authStore";
 import { useBrandingStore } from "../../stores/brandingStore";
@@ -22,7 +22,30 @@ const AUDIT_LABELS: Record<string, string> = {
   "service_order.amount_change": "Valor da OS",
   "service_order.delete": "OS excluida",
   "financial.pay": "Pagamento baixado",
+  "financial.delete": "Lancamento financeiro excluido",
 };
+
+function formatAuditDetail(log: {
+  action: string;
+  reason?: string | null;
+  metadata?: Record<string, unknown> | null;
+  resource?: string | null;
+}): string {
+  const meta = log.metadata ?? {};
+  if (log.action === "financial.delete") {
+    const description = typeof meta.description === "string" ? meta.description : "Lancamento";
+    const amount =
+      typeof meta.amount === "number"
+        ? meta.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+        : null;
+    const parts = [description, amount].filter(Boolean);
+    return parts.join(" · ");
+  }
+  if (log.metadata && Object.keys(log.metadata).length > 0) {
+    return JSON.stringify(log.metadata);
+  }
+  return log.resource ?? "—";
+}
 
 function mainBranch(org?: OrganizationDetail | null): BranchRow | undefined {
   return org?.branches?.find((b) => b.isMain) ?? org?.branches?.[0];
@@ -334,23 +357,24 @@ export default function SettingsPage() {
                   <th className="text-left px-4 py-2">Usuario</th>
                   <th className="text-left px-4 py-2">Acao</th>
                   <th className="text-left px-4 py-2">Detalhe</th>
+                  <th className="text-left px-4 py-2">Motivo</th>
                 </tr>
               </thead>
               <tbody>
                 {auditLoading ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-[#64748B]">
+                    <td colSpan={5} className="px-4 py-6 text-[#64748B]">
                       Carregando...
                     </td>
                   </tr>
                 ) : !auditLogs?.length ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-[#64748B]">
+                    <td colSpan={5} className="px-4 py-6 text-[#64748B]">
                       Nenhum registro de auditoria.
                     </td>
                   </tr>
                 ) : (
-                  auditLogs.map((log) => (
+                  auditLogs.map((log: AuditLogRow) => (
                     <tr key={log.id} className="border-t border-[#E2E8F0]">
                       <td className="px-4 py-3 text-[#64748B]">
                         {new Date(log.createdAt).toLocaleString("pt-BR")}
@@ -359,8 +383,11 @@ export default function SettingsPage() {
                       <td className="px-4 py-3 font-medium">
                         {AUDIT_LABELS[log.action] ?? log.action}
                       </td>
-                      <td className="px-4 py-3 text-[12px] text-[#64748B] max-w-xs truncate">
-                        {log.metadata ? JSON.stringify(log.metadata) : log.resource ?? "—"}
+                      <td className="px-4 py-3 text-[12px] text-[#64748B] max-w-xs">
+                        {formatAuditDetail(log)}
+                      </td>
+                      <td className="px-4 py-3 text-[12px] text-[#1E293B] max-w-sm whitespace-pre-wrap">
+                        {log.reason ?? "—"}
                       </td>
                     </tr>
                   ))

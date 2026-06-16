@@ -423,6 +423,7 @@ model AuditLog {
   userId         String?  @map("user_id")
   action         String
   resource       String?
+  reason         String?
   metadata       Json?
   ipAddress      String?  @map("ip_address")
   createdAt      DateTime @default(now()) @map("created_at")

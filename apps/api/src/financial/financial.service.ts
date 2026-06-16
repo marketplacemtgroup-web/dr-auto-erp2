@@ -333,6 +333,100 @@ export class FinancialService {
     return updated;
   }
 
+  private startOfDay(date: Date) {
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    return day;
+  }
+
+  private async reversePaidEntryEffects(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    entry: {
+      type: string;
+      serviceOrderId: string | null;
+      paidAt: Date | null;
+      amountReceived: Prisma.Decimal | null;
+      amount: Prisma.Decimal;
+    },
+  ) {
+    const netAmount = Number(entry.amountReceived ?? entry.amount);
+    if (entry.type !== 'RECEIVABLE' || !entry.serviceOrderId || !entry.paidAt || netAmount <= 0) {
+      return;
+    }
+
+    const day = this.startOfDay(entry.paidAt);
+    const row = await tx.dailyRevenue.findUnique({
+      where: { organizationId_date: { organizationId, date: day } },
+    });
+    if (!row) return;
+
+    const next = this.roundMoney(Number(row.amount) - netAmount);
+    if (next <= 0) {
+      await tx.dailyRevenue.delete({
+        where: { organizationId_date: { organizationId, date: day } },
+      });
+      return;
+    }
+
+    await tx.dailyRevenue.update({
+      where: { organizationId_date: { organizationId, date: day } },
+      data: { amount: new Prisma.Decimal(next) },
+    });
+  }
+
+  async remove(organizationId: string, id: string, reason: string, userId?: string) {
+    const trimmedReason = reason?.trim();
+    if (!trimmedReason || trimmedReason.length < 3) {
+      throw new BadRequestException('Informe o motivo da exclusão');
+    }
+
+    const entry = await this.prisma.financialEntry.findFirst({
+      where: { id, organizationId },
+      include: { installments: true },
+    });
+    if (!entry) throw new NotFoundException('Lançamento não encontrado');
+
+    const entriesToRemove = entry.parentEntryId
+      ? [entry]
+      : [entry, ...entry.installments];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const row of entriesToRemove) {
+        if (row.status === 'PAID') {
+          await this.reversePaidEntryEffects(tx, organizationId, row);
+        }
+      }
+
+      const ids = entriesToRemove.map((row) => row.id);
+      await tx.cashRegisterMovement.deleteMany({
+        where: { financialEntryId: { in: ids } },
+      });
+
+      if (!entry.parentEntryId && entry.installments.length > 0) {
+        await tx.financialEntry.deleteMany({ where: { parentEntryId: entry.id } });
+      }
+
+      await tx.financialEntry.delete({ where: { id: entry.id } });
+    });
+
+    await this.audit.log(organizationId, 'financial.delete', 'financial_entry', {
+      userId,
+      reason: trimmedReason,
+      metadata: {
+        entryId: id,
+        description: entry.description,
+        type: entry.type,
+        status: entry.status,
+        amount: Number(entry.amount),
+        serviceOrderId: entry.serviceOrderId,
+        customerId: entry.customerId,
+      },
+    });
+
+    return { ok: true };
+  }
+
   async cashFlow(organizationId: string, months = 6) {
     const start = new Date();
     start.setMonth(start.getMonth() - (months - 1));

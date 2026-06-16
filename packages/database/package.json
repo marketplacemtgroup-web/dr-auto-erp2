@@ -9,7 +9,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:reset": "prisma migrate reset --force",
-    "generate": "prisma generate",
+    "generate": "node scripts/sync-prisma-workspaces.mjs",
     "seed": "tsx prisma/seed.ts",
     "studio": "prisma studio"
   },
