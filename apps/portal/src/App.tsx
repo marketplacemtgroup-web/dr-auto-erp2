@@ -8,6 +8,7 @@ import PortalLoginPage from "./pages/PortalLoginPage";
 import PortalNotificationsPage from "./pages/PortalNotificationsPage";
 import PortalOrdersPage from "./pages/PortalOrdersPage";
 import PortalProfilePage from "./pages/PortalProfilePage";
+import PortalQuotePage from "./pages/PortalQuotePage";
 import PortalServiceOrderPage from "./pages/PortalServiceOrderPage";
 import PortalSplashPage from "./pages/PortalSplashPage";
 import PortalProfileDataPage from "./pages/profile/PortalProfileDataPage";
@@ -33,6 +34,7 @@ export default function App() {
           <Route path={routes.home} element={<PortalHomePage />} />
           <Route path={routes.orders} element={<PortalOrdersPage />} />
           <Route path="/os/:id" element={<PortalServiceOrderPage />} />
+          <Route path="/orcamentos/:id" element={<PortalQuotePage />} />
           <Route path={routes.notifications} element={<PortalNotificationsPage />} />
           <Route path={routes.profile} element={<PortalProfilePage />} />
           <Route path={routes.profileSupport} element={<PortalProfileSupportPage />} />

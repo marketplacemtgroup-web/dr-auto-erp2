@@ -1432,11 +1432,25 @@ export const api = {
   ) =>
     request<QuoteRow>(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
 
-  approveQuote: (token: string, id: string) =>
-    request<QuoteRow>(`/quotes/${id}/approve`, { method: "PATCH" }, token),
+  approveQuote: (
+    token: string,
+    id: string,
+    data?: { lines?: Array<{ lineId: string; approved: boolean }> },
+  ) =>
+    request<QuoteRow>(`/quotes/${id}/approve`, {
+      method: "PATCH",
+      body: JSON.stringify(data ?? {}),
+    }, token),
 
   rejectQuote: (token: string, id: string) =>
     request<QuoteRow>(`/quotes/${id}/reject`, { method: "PATCH" }, token),
+
+  reopenQuoteSupplement: (token: string, id: string) =>
+    request<QuoteDetail>(
+      `/quotes/${id}/reopen-supplement`,
+      { method: "POST", body: "{}" },
+      token,
+    ),
 
   deleteQuote: (token: string, id: string) =>
     request<{ ok: boolean }>(`/quotes/${id}`, { method: "DELETE" }, token),

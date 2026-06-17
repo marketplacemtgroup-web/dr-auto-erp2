@@ -13,6 +13,7 @@ export const routes = {
   profilePrivacy: "/perfil/privacidade",
   access: (token: string) => `/acesso/${token}`,
   serviceOrder: (id: string) => `/os/${id}`,
+  quote: (id: string) => `/orcamentos/${id}`,
   orcamentoPublico: (token: string) => `/orcamento/${token}`,
 } as const;
 

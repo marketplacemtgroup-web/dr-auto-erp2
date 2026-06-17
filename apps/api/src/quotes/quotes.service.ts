@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
+import { ApproveLinesDto } from './dto/approve-lines.dto';
 import { QuotesSyncService } from './quotes-sync.service';
 import { EventsService } from '../events/events.service';
 import { notDeleted } from '../common/soft-delete';
@@ -232,26 +233,114 @@ export class QuotesService {
     return row;
   }
 
-  async approveFromOffice(organizationId: string, quoteId: string, userId?: string) {
+  private lineTotal(line: {
+    unitPrice: Prisma.Decimal;
+    quantity: number;
+    discount: Prisma.Decimal;
+  }) {
+    return Number(line.unitPrice) * line.quantity - Number(line.discount);
+  }
+
+  private approvedLinesAmount(lines: Array<{ unitPrice: Prisma.Decimal; quantity: number; discount: Prisma.Decimal; approved: boolean | null }>) {
+    return lines
+      .filter((l) => l.approved === true)
+      .reduce((sum, l) => sum + this.lineTotal(l), 0);
+  }
+
+  async reopenForSupplement(organizationId: string, quoteId: string, userId?: string) {
+    const quote = await this.findOne(organizationId, quoteId);
+    if (quote.status !== 'APPROVED') {
+      throw new BadRequestException('Somente orçamentos aprovados podem ser reabertos para complemento');
+    }
+
+    const allowed: ServiceOrderStatus[] = ['IN_PROGRESS', 'APPROVED', 'AWAITING_PART'];
+    if (!allowed.includes(quote.serviceOrder.status)) {
+      throw new BadRequestException(
+        'Complemento não permitido para o status atual da ordem de serviço',
+      );
+    }
+
+    const reopenedId = await this.quotesSync.reopenForSupplement(
+      organizationId,
+      quoteId,
+      userId,
+    );
+    if (!reopenedId) {
+      throw new BadRequestException('Não foi possível reabrir o orçamento para complemento');
+    }
+
+    await this.quotesSync.syncQuoteLines(
+      reopenedId,
+      quote.serviceOrderId,
+      organizationId,
+    );
+
+    const updated = await this.findOne(organizationId, reopenedId);
+    if (updated.status !== 'PENDING') {
+      throw new BadRequestException('Não foi possível reabrir o orçamento para complemento');
+    }
+    return updated;
+  }
+
+  async approveFromOffice(
+    organizationId: string,
+    quoteId: string,
+    userId?: string,
+    dto?: ApproveLinesDto,
+  ) {
     const quote = await this.findOne(organizationId, quoteId);
     if (quote.status === 'APPROVED') return quote;
 
-    await this.prisma.quoteLine.updateMany({
-      where: { quoteId },
-      data: { approved: true },
-    });
+    const lines = quote.lines;
+    const hasPriorApproved = lines.some((l) => l.approved === true);
+    const pendingLines = lines.filter((l) => l.approved === null);
 
-    const amount = Number(quote.amount);
+    if (dto?.lines?.length) {
+      for (const line of dto.lines) {
+        const existing = lines.find((l) => l.id === line.lineId);
+        if (!existing || existing.approved !== null) continue;
+        await this.prisma.quoteLine.update({
+          where: { id: line.lineId },
+          data: { approved: line.approved },
+        });
+      }
+    } else if (pendingLines.length > 0) {
+      await this.prisma.quoteLine.updateMany({
+        where: { quoteId, approved: null },
+        data: { approved: true },
+      });
+    } else {
+      await this.prisma.quoteLine.updateMany({
+        where: { quoteId },
+        data: { approved: true },
+      });
+    }
+
+    const refreshedLines = await this.prisma.quoteLine.findMany({ where: { quoteId } });
+    const stillPending = refreshedLines.some((l) => l.approved === null);
+    if (stillPending) {
+      throw new BadRequestException('Ainda há itens aguardando aprovação');
+    }
+
+    const approvedAmount = this.approvedLinesAmount(refreshedLines);
+    const osStatus =
+      hasPriorApproved || quote.serviceOrder.status === 'IN_PROGRESS'
+        ? 'IN_PROGRESS'
+        : 'IN_PROGRESS';
+
     const [updated] = await this.prisma.$transaction([
       this.prisma.quote.update({
         where: { id: quoteId },
-        data: { status: 'APPROVED' },
+        data: {
+          status: 'APPROVED',
+          amount: new Prisma.Decimal(approvedAmount),
+        },
       }),
       this.prisma.serviceOrder.update({
         where: { id: quote.serviceOrderId },
         data: {
-          status: 'IN_PROGRESS',
-          totalAmount: new Prisma.Decimal(amount),
+          status: osStatus,
+          totalAmount: new Prisma.Decimal(approvedAmount),
         },
       }),
       this.prisma.serviceOrderStatusHistory.create({
@@ -259,16 +348,18 @@ export class QuotesService {
           organizationId,
           serviceOrderId: quote.serviceOrderId,
           fromStatus: quote.serviceOrder.status,
-          toStatus: 'IN_PROGRESS',
+          toStatus: osStatus,
           userId: userId ?? null,
-          notes: 'Orçamento aprovado manualmente pela oficina — OS liberada',
+          notes: hasPriorApproved
+            ? 'Complemento de orçamento aprovado manualmente pela oficina'
+            : 'Orçamento aprovado manualmente pela oficina — OS liberada',
         },
       }),
     ]);
 
     await this.events.emitOffice(organizationId, {
       type: 'quote.approved',
-      title: 'Orçamento aprovado',
+      title: hasPriorApproved ? 'Complemento aprovado' : 'Orçamento aprovado',
       message: `OS #${quote.serviceOrder.number} — aprovado pela oficina`,
       metadata: {
         quoteId,
@@ -281,9 +372,95 @@ export class QuotesService {
     return this.findOne(organizationId, updated.id);
   }
 
+  private async removeRejectedSupplementItems(
+    organizationId: string,
+    serviceOrderId: string,
+    quoteId: string,
+  ) {
+    const rejected = await this.prisma.quoteLine.findMany({
+      where: { quoteId, approved: false, serviceOrderItemId: { not: null } },
+    });
+    for (const line of rejected) {
+      if (!line.serviceOrderItemId) continue;
+      const item = await this.prisma.serviceOrderItem.findFirst({
+        where: { id: line.serviceOrderItemId, serviceOrderId, organizationId },
+      });
+      if (!item) continue;
+      await this.prisma.serviceOrderItem.delete({ where: { id: item.id } });
+    }
+    await this.prisma.quoteLine.deleteMany({
+      where: { quoteId, approved: false },
+    });
+  }
+
   async rejectFromOffice(organizationId: string, quoteId: string, userId?: string) {
     const quote = await this.findOne(organizationId, quoteId);
     if (quote.status === 'REJECTED') return quote;
+
+    const hasPriorApproved = quote.lines.some((l) => l.approved === true);
+    const hasPending = quote.lines.some((l) => l.approved === null);
+
+    if (hasPriorApproved && hasPending) {
+      await this.prisma.quoteLine.updateMany({
+        where: { quoteId, approved: null },
+        data: { approved: false },
+      });
+      await this.removeRejectedSupplementItems(
+        organizationId,
+        quote.serviceOrderId,
+        quoteId,
+      );
+      await this.quotesSync.syncQuoteLines(
+        quoteId,
+        quote.serviceOrderId,
+        organizationId,
+      );
+
+      const approvedAmount = this.approvedLinesAmount(
+        await this.prisma.quoteLine.findMany({ where: { quoteId } }),
+      );
+
+      const [updated] = await this.prisma.$transaction([
+        this.prisma.quote.update({
+          where: { id: quoteId },
+          data: {
+            status: 'APPROVED',
+            amount: new Prisma.Decimal(approvedAmount),
+          },
+        }),
+        this.prisma.serviceOrder.update({
+          where: { id: quote.serviceOrderId },
+          data: {
+            status: 'IN_PROGRESS',
+            totalAmount: new Prisma.Decimal(approvedAmount),
+          },
+        }),
+        this.prisma.serviceOrderStatusHistory.create({
+          data: {
+            organizationId,
+            serviceOrderId: quote.serviceOrderId,
+            fromStatus: quote.serviceOrder.status,
+            toStatus: 'IN_PROGRESS',
+            userId: userId ?? null,
+            notes: 'Itens novos do complemento recusados pela oficina',
+          },
+        }),
+      ]);
+
+      await this.events.emitOffice(organizationId, {
+        type: 'quote.rejected',
+        title: 'Complemento recusado',
+        message: `OS #${quote.serviceOrder.number} — itens novos recusados`,
+        metadata: {
+          quoteId,
+          serviceOrderId: quote.serviceOrderId,
+          serviceOrderNumber: quote.serviceOrder.number,
+        },
+        vehicleId: quote.serviceOrder.vehicleId,
+      });
+
+      return this.findOne(organizationId, updated.id);
+    }
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.quote.update({
@@ -370,14 +547,17 @@ export class QuotesService {
     });
 
     if (so) {
+      const isSupplement = await this.quotesSync.isSupplementQuote(quoteId);
       await this.events.emitOffice(organizationId, {
-        type: 'quote.sent',
-        title: 'Orçamento disponível para o cliente',
+        type: isSupplement ? 'quote.supplement' : 'quote.sent',
+        title: isSupplement ? 'Complemento disponível para o cliente' : 'Orçamento disponível para o cliente',
         message: `OS #${so.number} — link gerado`,
         metadata: { quoteId, serviceOrderId: so.id, serviceOrderNumber: so.number },
         vehicleId: so.vehicleId,
-        pushTitle: 'Novo orçamento',
-        pushBody: `Confira o orçamento da OS #${so.number}`,
+        pushTitle: isSupplement ? 'Itens adicionais no orçamento' : 'Novo orçamento',
+        pushBody: isSupplement
+          ? `Novos itens na OS #${so.number} — confira e aprove`
+          : `Confira o orçamento da OS #${so.number}`,
         pushUrl: `/orcamento/${token}`,
         portalNotificationType: 'orcamento',
         serviceOrderId: so.id,

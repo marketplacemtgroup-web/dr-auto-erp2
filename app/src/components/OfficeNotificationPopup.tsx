@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { X } from "lucide-react";
 import { api } from "../lib/api";
@@ -6,6 +7,7 @@ import { routes } from "../lib/routes";
 import { useAuthStore } from "../stores/authStore";
 import { useOfficeEvents, type OfficeLiveEvent } from "../hooks/useOfficeEvents";
 import { formatMoney } from "../lib/format";
+import { playOfficeNotificationSound } from "../lib/notificationSound";
 
 type PopupItem = OfficeLiveEvent & { id?: string };
 
@@ -17,11 +19,34 @@ export default function OfficeNotificationPopup() {
 
   const pushEvent = useCallback((ev: OfficeLiveEvent) => {
     if (ev.type === "quote.approved" || ev.type === "quote.rejected") {
+      playOfficeNotificationSound(ev.type === "quote.approved");
       setQueue((q) => [...q, ev]);
     }
   }, []);
 
   useOfficeEvents(pushEvent);
+
+  function dismiss() {
+    if (!current) return;
+    const notifId =
+      current.id ?? (current.metadata?.notificationId as string | undefined);
+    if (token && notifId) void api.notificationMarkRead(token, notifId);
+    setQueue((q) => q.slice(1));
+  }
+
+  useEffect(() => {
+    if (!current) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") dismiss();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [current]);
 
   if (!current) return null;
 
@@ -29,17 +54,15 @@ export default function OfficeNotificationPopup() {
   const osId = meta.serviceOrderId as string | undefined;
   const amount = meta.amount as number | undefined;
 
-  function dismiss() {
-    const notifId =
-      current.id ?? (current.metadata?.notificationId as string | undefined);
-    if (token && notifId) void api.notificationMarkRead(token, notifId);
-    setQueue((q) => q.slice(1));
-  }
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/45">
+  return createPortal(
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4">
       <div
-        className={`w-full max-w-md rounded-2xl shadow-2xl border-2 bg-white p-5 animate-in fade-in zoom-in-95 ${
+        className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
+        onClick={dismiss}
+        aria-hidden
+      />
+      <div
+        className={`relative w-full max-w-md rounded-2xl shadow-2xl border-2 bg-white p-5 animate-in fade-in zoom-in-95 ${
           current.type === "quote.rejected" ? "border-[#DC2626]" : "border-[#16A34A]"
         }`}
         role="dialog"
@@ -104,6 +127,7 @@ export default function OfficeNotificationPopup() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -171,6 +171,8 @@ export interface PortalQuoteRow {
   amount: string | number;
   createdAt: string;
   canRespond?: boolean;
+  isSupplement?: boolean;
+  pendingLineCount?: number;
   lines?: QuoteLineRow[];
   serviceOrder: {
     id: string;
@@ -246,6 +248,9 @@ export const api = {
 
   portalQuotes: (token: string) =>
     request<PortalQuoteRow[]>("/portal/quotes", { method: "GET" }, token),
+
+  portalQuote: (token: string, quoteId: string) =>
+    request<PortalQuoteRow>(`/portal/quotes/${quoteId}`, { method: "GET" }, token),
 
   portalApprove: (
     token: string,

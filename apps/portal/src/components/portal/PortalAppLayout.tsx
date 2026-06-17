@@ -23,7 +23,8 @@ export default function PortalAppLayout() {
   const loadNotifications = usePortalStore((s) => s.loadNotifications);
   const unread = useUnreadNotificationCount();
   const isDetailOs = /^\/os\/[^/]+$/.test(pathname);
-  const showBottomNav = !isDetailOs && !pathname.startsWith("/perfil/");
+  const isDetailQuote = /^\/orcamentos\/[^/]+$/.test(pathname);
+  const showBottomNav = !isDetailOs && !isDetailQuote && !pathname.startsWith("/perfil/");
 
   useEffect(() => {
     void loadNotifications();
@@ -37,7 +38,7 @@ export default function PortalAppLayout() {
     <MotoBackground>
       <PortalPolling />
       <div className={`min-h-screen ${showBottomNav ? "pb-24" : "pb-6"}`}>
-        {!isDetailOs ? (
+        {!isDetailOs && !isDetailQuote ? (
           <header className="safe-area-top px-5 pt-4 pb-2">
             <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">

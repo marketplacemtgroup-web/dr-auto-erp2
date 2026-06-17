@@ -21,10 +21,14 @@ export default function PortalNotificationsPage() {
     void loadNotifications().finally(() => setLoading(false));
   }, [loadNotifications]);
 
-  async function handleClick(id: string, serviceOrderId: string | null) {
+  async function handleClick(id: string, serviceOrderId: string | null, quoteId: string | null) {
     if (!session?.accessToken) return;
     await api.portalMarkNotificationRead(session.accessToken, id);
     await loadNotifications();
+    if (quoteId) {
+      navigate(routes.quote(quoteId));
+      return;
+    }
     if (serviceOrderId) {
       navigate(routes.serviceOrder(serviceOrderId));
     }
@@ -73,7 +77,7 @@ export default function PortalNotificationsPage() {
             <li key={n.id}>
               <button
                 type="button"
-                onClick={() => void handleClick(n.id, n.serviceOrderId)}
+                onClick={() => void handleClick(n.id, n.serviceOrderId, n.quoteId)}
                 className="portal-card w-full p-4 text-left"
                 style={{
                   opacity: n.read ? 0.75 : 1,

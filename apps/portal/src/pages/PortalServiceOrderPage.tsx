@@ -1,28 +1,38 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
-import { ArrowLeft, Check, Loader2, MessageCircle, X } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router";
+import { ArrowLeft, Loader2, MessageCircle } from "lucide-react";
+import QuoteDetailContent from "../components/portal/QuoteDetailContent";
 import StatusBadge from "../components/StatusBadge";
 import { ApiError, api, type PortalServiceOrderDetail } from "../lib/api";
 import { formatDateTime, formatMoney } from "../lib/format";
 import { resolveMediaUrl } from "../lib/mediaUrl";
 import { isImageMime, isVideoMime } from "../lib/mediaTypes";
+import { buildApprovePayload, initialLineChoices } from "../lib/quote-lines";
 import { routes } from "../lib/routes";
-import { osStatusLabel, osStatusToVariant, quoteStatusLabel, quoteStatusVariant } from "../lib/service-order-status";
+import { osStatusLabel, osStatusToVariant, quoteStatusLabel } from "../lib/service-order-status";
 import { whatsappUrl, resolveOrganizationWhatsApp } from "../lib/whatsapp";
 import { usePortalStore } from "../stores/portalStore";
 
 export default function PortalServiceOrderPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const session = usePortalStore((s) => s.session);
   const [data, setData] = useState<PortalServiceOrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [lineChoicesByQuote, setLineChoicesByQuote] = useState<Record<string, Record<string, boolean>>>({});
 
   const load = useCallback(async () => {
     if (!session?.accessToken || !id) return;
     setError(null);
     try {
-      setData(await api.portalServiceOrder(session.accessToken, id));
+      const next = await api.portalServiceOrder(session.accessToken, id);
+      setData(next);
+      const choices: Record<string, Record<string, boolean>> = {};
+      for (const quote of next.quotes) {
+        choices[quote.id] = initialLineChoices(quote.lines ?? []);
+      }
+      setLineChoicesByQuote(choices);
     } catch (err) {
       setError(err instanceof ApiError ? String(err.message) : "Não foi possível carregar a OS");
     }
@@ -40,10 +50,7 @@ export default function PortalServiceOrderPage() {
   async function approve(quoteId: string) {
     if (!session?.accessToken) return;
     const quote = data?.quotes.find((q) => q.id === quoteId);
-    const payload =
-      quote?.lines && quote.lines.length > 0
-        ? { lines: quote.lines.map((l) => ({ lineId: l.id, approved: true })) }
-        : undefined;
+    const payload = buildApprovePayload(quote?.lines ?? [], lineChoicesByQuote[quoteId] ?? {});
     setActingId(quoteId);
     try {
       await api.portalApprove(session.accessToken, quoteId, payload);
@@ -67,6 +74,9 @@ export default function PortalServiceOrderPage() {
       setActingId(null);
     }
   }
+
+  const pendingQuotes = data?.quotes.filter((q) => q.status === "PENDING" || q.canRespond) ?? [];
+  const otherQuotes = data?.quotes.filter((q) => q.status !== "PENDING" && !q.canRespond) ?? [];
 
   return (
     <div className="space-y-4 -mt-2">
@@ -123,6 +133,62 @@ export default function PortalServiceOrderPage() {
             ) : null}
           </section>
 
+          {pendingQuotes.map((quote) => (
+            <section key={quote.id} className="space-y-3">
+              <QuoteDetailContent
+                quote={quote}
+                lineChoices={lineChoicesByQuote[quote.id] ?? {}}
+                onLineChoiceChange={(lineId, approved) =>
+                  setLineChoicesByQuote((current) => ({
+                    ...current,
+                    [quote.id]: { ...current[quote.id], [lineId]: approved },
+                  }))
+                }
+                busy={actingId === quote.id}
+                onApprove={() => void approve(quote.id)}
+                onReject={() => void reject(quote.id)}
+              />
+              <button
+                type="button"
+                onClick={() => navigate(routes.quote(quote.id))}
+                className="portal-card w-full p-3 text-sm font-medium portal-accent"
+              >
+                Abrir orçamento em tela cheia
+              </button>
+            </section>
+          ))}
+
+          {otherQuotes.length > 0 ? (
+            <section className="portal-card overflow-hidden">
+              <h2 className="px-4 py-3 text-sm font-semibold portal-text border-b" style={{ borderColor: "var(--portal-border)" }}>
+                Orçamentos anteriores
+              </h2>
+              <ul className="divide-y" style={{ borderColor: "var(--portal-border)" }}>
+                {otherQuotes.map((quote) => (
+                  <li key={quote.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(routes.quote(quote.id))}
+                      className="w-full px-4 py-3 text-left"
+                    >
+                      <div className="flex justify-between items-center gap-3">
+                        <div>
+                          <p className="text-sm portal-text font-medium">
+                            Orçamento {quote.number ? `#${quote.number}` : ""}
+                          </p>
+                          <p className="text-xs portal-text-muted mt-1">{quoteStatusLabel(quote.status)}</p>
+                        </div>
+                        <p className="font-bold" style={{ color: "var(--portal-primary)" }}>
+                          {formatMoney(quote.amount)}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           {data.timeline.length > 0 ? (
             <section className="portal-card overflow-hidden">
               <h2 className="px-4 py-3 text-sm font-semibold portal-text border-b" style={{ borderColor: "var(--portal-border)" }}>
@@ -175,49 +241,6 @@ export default function PortalServiceOrderPage() {
                   );
                 })}
               </div>
-            </section>
-          ) : null}
-
-          {data.quotes.length > 0 ? (
-            <section className="portal-card overflow-hidden">
-              <h2 className="px-4 py-3 text-sm font-semibold portal-text border-b" style={{ borderColor: "var(--portal-border)" }}>
-                Orçamentos
-              </h2>
-              <ul className="divide-y" style={{ borderColor: "var(--portal-border)" }}>
-                {data.quotes.map((q) => (
-                  <li key={q.id} className="px-4 py-3">
-                    <div className="flex justify-between items-start">
-                      <StatusBadge variant={quoteStatusVariant(q.status)} />
-                      <p className="font-bold" style={{ color: "var(--portal-primary)" }}>
-                        {formatMoney(q.amount)}
-                      </p>
-                    </div>
-                    <p className="text-xs portal-text-muted mt-1">{quoteStatusLabel(q.status)}</p>
-                    {(q.status === "PENDING" || q.canRespond) ? (
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          disabled={actingId === q.id}
-                          onClick={() => approve(q.id)}
-                          className="h-10 rounded-lg bg-green-600 text-white text-sm flex items-center justify-center gap-1"
-                        >
-                          <Check size={16} />
-                          Aprovar
-                        </button>
-                        <button
-                          type="button"
-                          disabled={actingId === q.id}
-                          onClick={() => reject(q.id)}
-                          className="h-10 rounded-lg border border-red-600 text-red-600 text-sm flex items-center justify-center gap-1"
-                        >
-                          <X size={16} />
-                          Recusar
-                        </button>
-                      </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
             </section>
           ) : null}
         </>

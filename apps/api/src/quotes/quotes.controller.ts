@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
+import { ApproveLinesDto } from './dto/approve-lines.dto';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermissions } from '../auth/permissions.guard';
@@ -70,8 +71,18 @@ export class QuotesController {
   approve(
     @CurrentUser() user: { organizationId: string; userId: string },
     @Param('id') id: string,
+    @Body() dto?: ApproveLinesDto,
   ) {
-    return this.quotesService.approveFromOffice(user.organizationId, id, user.userId);
+    return this.quotesService.approveFromOffice(user.organizationId, id, user.userId, dto);
+  }
+
+  @Post(':id/reopen-supplement')
+  @RequirePermissions('quotes.manage')
+  reopenSupplement(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+  ) {
+    return this.quotesService.reopenForSupplement(user.organizationId, id, user.userId);
   }
 
   @Patch(':id/reject')

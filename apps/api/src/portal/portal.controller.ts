@@ -61,6 +61,15 @@ export class PortalController {
     return this.portalService.listQuotes(user);
   }
 
+  @Get('quotes/:id')
+  @UseGuards(PortalJwtGuard)
+  getQuote(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Param('id') id: string,
+  ) {
+    return this.portalService.getQuoteForPortal(user, id);
+  }
+
   @Patch('quotes/:id/approve')
   @UseGuards(PortalJwtGuard)
   approve(

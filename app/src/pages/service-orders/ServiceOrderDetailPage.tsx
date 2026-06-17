@@ -60,12 +60,14 @@ type OsQuote = {
 };
 
 function getActiveQuote(quotes: OsQuote[]) {
-  return (
-    quotes.find((q) => q.status === "PENDING") ??
-    quotes.find((q) => q.status === "DRAFT") ??
-    quotes[0] ??
-    null
-  );
+  const pending = quotes.find((q) => q.status === "PENDING");
+  const draft = quotes.find((q) => q.status === "DRAFT");
+  const approved = quotes.find((q) => q.status === "APPROVED");
+  return pending ?? draft ?? approved ?? quotes[0] ?? null;
+}
+
+function getApprovedQuote(quotes: OsQuote[]) {
+  return quotes.find((q) => q.status === "APPROVED") ?? null;
 }
 
 function getLineForItem(
@@ -78,6 +80,16 @@ function getLineForItem(
   if (byId) return byId;
   return quote.lines[itemIndex] ?? null;
 }
+
+function isSupplementQuote(quote: OsQuote | null) {
+  if (!quote?.lines?.length) return false;
+  return (
+    quote.lines.some((l) => l.approved === true) &&
+    quote.lines.some((l) => l.approved === null)
+  );
+}
+
+const SUPPLEMENT_OS_STATUSES = new Set(["IN_PROGRESS", "APPROVED", "AWAITING_PART"]);
 
 export default function ServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -94,6 +106,7 @@ export default function ServiceOrderDetailPage() {
   const [editingItem, setEditingItem] = useState<ServiceOrderItemRow | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareDialog, setShareDialog] = useState<ShareLinkDialogData | null>(null);
+  const [supplementUnlocked, setSupplementUnlocked] = useState(false);
   const [itemForm, setItemForm] = useState({
     description: "",
     itemType: "SERVICE" as "SERVICE" | "PART",
@@ -117,6 +130,22 @@ export default function ServiceOrderDetailPage() {
   const { data: activeEmployees } = useApiQuery(["employees-active"], (t) => api.employees(t, { status: "ACTIVE" }));
   const { data: technicians } = useApiQuery(["employee-technicians"], (t) => api.employeeTechnicians(t));
   const org = useOrganizationBranding();
+
+  useEffect(() => {
+    if (!os) return;
+    const pending = os.quotes.find((q) => q.status === "PENDING");
+    const approved = os.quotes.find((q) => q.status === "APPROVED");
+    const supplementInProgress =
+      !!pending &&
+      (!!approved || isSupplementQuote(pending) || pending.lines?.some((l) => l.approved === true));
+    if (supplementInProgress) {
+      setSupplementUnlocked(true);
+      return;
+    }
+    if (!pending && approved) {
+      setSupplementUnlocked(false);
+    }
+  }, [os]);
 
   useEffect(() => {
     if (!os || searchParams.get("print") !== "1") return;
@@ -206,6 +235,22 @@ export default function ServiceOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["service-order", id] });
       setItemDrawer(false);
       resetItemForm();
+    },
+  });
+
+  const reopenSupplement = useMutation({
+    mutationFn: (quoteId: string) => api.reopenQuoteSupplement(token!, quoteId),
+    onMutate: () => {
+      setSupplementUnlocked(true);
+    },
+    onSuccess: () => {
+      openAddItem();
+      void queryClient.refetchQueries({ queryKey: ["service-order", id] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+    },
+    onError: (err) => {
+      setSupplementUnlocked(false);
+      alert(err instanceof Error ? err.message : "Não foi possível reabrir o orçamento para complemento.");
     },
   });
 
@@ -364,7 +409,27 @@ export default function ServiceOrderDetailPage() {
   }
 
   const activeQuote = getActiveQuote(os.quotes);
-  const canManageQuote = !activeQuote || activeQuote.status !== "APPROVED";
+  const approvedQuote = getApprovedQuote(os.quotes);
+  const isSupplement = isSupplementQuote(activeQuote);
+  const pendingLineCount =
+    activeQuote?.lines?.filter((l) => l.approved === null).length ?? 0;
+  const hasOpenSupplement = os.quotes.some((q) => q.status === "PENDING");
+  const canIncreaseQuote =
+    !!approvedQuote?.id &&
+    !hasOpenSupplement &&
+    !supplementUnlocked &&
+    SUPPLEMENT_OS_STATUSES.has(os.status);
+  const canManageQuote =
+    supplementUnlocked ||
+    !activeQuote ||
+    activeQuote.status === "PENDING" ||
+    activeQuote.status === "DRAFT";
+  const canEditQuoteItems = canManageQuote;
+
+  function itemLineApproved(item: ServiceOrderItemRow, index: number) {
+    const line = getLineForItem(item, index, activeQuote);
+    return line?.approved === true;
+  }
   const quoteTotal = Number(activeQuote?.amount ?? os.totalAmount);
   const canPrintQuote = os.items.length > 0;
   const quotePrintData = buildQuotePrintData(os, activeQuote);
@@ -656,6 +721,20 @@ export default function ServiceOrderDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-[#F1F5F9]">
+              {canIncreaseQuote && (
+                <button
+                  type="button"
+                  disabled={reopenSupplement.isPending}
+                  onClick={() => {
+                    if (!approvedQuote?.id) return;
+                    reopenSupplement.mutate(approvedQuote.id);
+                  }}
+                  className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#0F3D4C] text-white text-sm font-medium hover:bg-[#0a2d38] disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  {reopenSupplement.isPending ? "Abrindo..." : "Aumentar orçamento"}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!canPrintQuote}
@@ -665,52 +744,50 @@ export default function ServiceOrderDetailPage() {
                 <Printer size={16} />
                 Imprimir orçamento
               </button>
-              {activeQuote?.status === "PENDING" && activeQuote.id && (
+              {activeQuote?.status === "PENDING" && activeQuote.id && pendingLineCount > 0 && (
                 <button
                   type="button"
                   onClick={() => void shareQuoteLink(activeQuote.id)}
                   className="inline-flex items-center gap-1 h-10 px-3 rounded-lg border border-[#0E7490] text-sm text-[#0E7490] hover:bg-[#ECFEFF]"
                 >
                   <Link2 size={16} />
-                  Link cliente
+                  {isSupplement ? "Enviar complemento" : "Link cliente"}
                 </button>
               )}
-              {activeQuote && activeQuote.status !== "APPROVED" && (
+              {activeQuote && activeQuote.status === "PENDING" && pendingLineCount > 0 && (
                 <button
                   type="button"
                   disabled={approveQuote.isPending}
                   onClick={() => {
-                    if (
-                      confirm(
-                        "Marcar orçamento como aprovado? Use quando o cliente aprovou fora do app.",
-                      )
-                    ) {
+                    const msg = isSupplement
+                      ? "Aprovar os itens novos do orçamento? Use quando o cliente aprovou fora do app."
+                      : "Marcar orçamento como aprovado? Use quando o cliente aprovou fora do app.";
+                    if (confirm(msg) && activeQuote.id) {
                       approveQuote.mutate(activeQuote.id);
                     }
                   }}
                   className="inline-flex items-center gap-1 h-10 px-3 rounded-lg bg-[#16A34A] text-white text-sm disabled:opacity-50"
                 >
                   <Check size={16} />
-                  Aprovado
+                  {isSupplement ? "Aprovar itens novos" : "Aprovado"}
                 </button>
               )}
-              {activeQuote && activeQuote.status !== "REJECTED" && (
+              {activeQuote && activeQuote.status === "PENDING" && pendingLineCount > 0 && (
                 <button
                   type="button"
                   disabled={rejectQuote.isPending}
                   onClick={() => {
-                    if (
-                      confirm(
-                        "Marcar orçamento como recusado? Use quando o cliente recusou fora do app.",
-                      )
-                    ) {
+                    const msg = isSupplement
+                      ? "Recusar os itens novos? Eles serão removidos do orçamento."
+                      : "Marcar orçamento como recusado? Use quando o cliente recusou fora do app.";
+                    if (confirm(msg) && activeQuote.id) {
                       rejectQuote.mutate(activeQuote.id);
                     }
                   }}
                   className="inline-flex items-center gap-1 h-10 px-3 rounded-lg border border-red-300 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
                 >
                   <X size={16} />
-                  Recusado
+                  {isSupplement ? "Recusar itens novos" : "Recusado"}
                 </button>
               )}
               {activeQuote?.id && (
@@ -722,6 +799,19 @@ export default function ServiceOrderDetailPage() {
                 </Link>
               )}
             </div>
+
+            {isSupplement && pendingLineCount > 0 && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Aguardando aprovação de {pendingLineCount} item(ns) novo(s). Os itens já aprovados
+                permanecem liberados para execução.
+              </div>
+            )}
+
+            {(supplementUnlocked || (canManageQuote && activeQuote?.status === "PENDING" && !isSupplement && pendingLineCount === 0)) && (
+              <div className="mt-4 rounded-lg border border-[#0E7490]/30 bg-[#ECFEFF] px-4 py-3 text-sm text-[#0F3D4C]">
+                Orçamento reaberto para complemento. Adicione os novos serviços ou peças abaixo.
+              </div>
+            )}
 
             {activeQuote && (
               <div className="mt-4 pt-4 border-t border-[#F1F5F9]">
@@ -752,7 +842,7 @@ export default function ServiceOrderDetailPage() {
           <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
             <div className="flex justify-between items-center px-5 py-3 border-b border-[#F1F5F9]">
               <p className="text-sm font-medium text-[#1E293B]">Serviços e peças do orçamento</p>
-              {canManageQuote && (
+              {canEditQuoteItems && (
                 <button
                   type="button"
                   onClick={openAddItem}
@@ -771,23 +861,29 @@ export default function ServiceOrderDetailPage() {
                   <th className="px-4 py-2 text-right">Qtd</th>
                   <th className="px-4 py-2 text-right">Unit.</th>
                   <th className="px-4 py-2 text-right">Total</th>
+                  <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-left">Executor</th>
                   <th className="px-4 py-2 text-right">Comissão prev.</th>
-                  {canManageQuote && <th className="w-24" />}
+                  {canEditQuoteItems && <th className="w-24" />}
                 </tr>
               </thead>
               <tbody>
                 {os.items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={canManageQuote ? 8 : 7}
+                      colSpan={canEditQuoteItems ? 9 : 8}
                       className="px-4 py-8 text-center text-[#94A3B8]"
                     >
                       Nenhum item no orçamento. Adicione serviços ou peças.
                     </td>
                   </tr>
                 )}
-                {os.items.map((item) => (
+                {os.items.map((item, itemIndex) => {
+                  const line = getLineForItem(item, itemIndex, activeQuote);
+                  const approvalStatus = line?.approved;
+                  const quoteStatus = activeQuote?.status;
+                  const editable = canEditQuoteItems && !itemLineApproved(item, itemIndex);
+                  return (
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
                     <td className="px-4 py-3">{item.description}</td>
                     <td className="px-4 py-3 text-[#64748B]">
@@ -797,6 +893,12 @@ export default function ServiceOrderDetailPage() {
                     <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
                     <td className="px-4 py-3 text-right font-medium">
                       {formatMoney(Number(item.unitPrice) * item.quantity)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge variant={lineApprovalVariant(approvalStatus, quoteStatus)} />
+                      <span className="ml-2 text-xs text-[#64748B]">
+                        {lineApprovalLabel(approvalStatus, quoteStatus)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-[#64748B] text-xs">
                       {item.itemType === "SERVICE"
@@ -808,7 +910,7 @@ export default function ServiceOrderDetailPage() {
                         ? formatMoney(item.expectedCommission)
                         : "—"}
                     </td>
-                    {canManageQuote && (
+                    {editable && (
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
                           <button
@@ -830,19 +932,21 @@ export default function ServiceOrderDetailPage() {
                         </div>
                       </td>
                     )}
+                    {canEditQuoteItems && !editable && <td className="px-4 py-3" />}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               {os.items.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-[#0F3D4C] bg-[#F8FAFC]">
-                    <td colSpan={canManageQuote ? 6 : 6} className="px-4 py-3 text-right font-semibold">
+                    <td colSpan={canEditQuoteItems ? 7 : 6} className="px-4 py-3 text-right font-semibold">
                       Total do orçamento
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-[#0F3D4C]">
                       {formatMoney(quoteTotal)}
                     </td>
-                    {canManageQuote && <td />}
+                    {canEditQuoteItems && <td />}
                   </tr>
                 </tfoot>
               )}

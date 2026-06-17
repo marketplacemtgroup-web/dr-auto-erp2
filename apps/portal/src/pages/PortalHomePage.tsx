@@ -13,6 +13,7 @@ import QuoteActionCard from "../components/portal/QuoteActionCard";
 import QuickServiceGrid from "../components/portal/QuickServiceGrid";
 import VehicleCard from "../components/portal/VehicleCard";
 import { ApiError, api, type PortalQuoteRow } from "../lib/api";
+import { buildApprovePayload } from "../lib/quote-lines";
 import { formatMoney } from "../lib/format";
 import {
   hasPendingQuote,
@@ -78,10 +79,7 @@ export default function PortalHomePage() {
   async function approve(id: string) {
     if (!session?.accessToken) return;
     const quote = quotes.find((q) => q.id === id);
-    const payload =
-      quote?.lines && quote.lines.length > 0
-        ? { lines: quote.lines.map((l) => ({ lineId: l.id, approved: true })) }
-        : undefined;
+    const payload = buildApprovePayload(quote?.lines ?? [], {});
     setActingId(id);
     try {
       await api.portalApprove(session.accessToken, id, payload);
@@ -113,6 +111,18 @@ export default function PortalHomePage() {
     isAwaitingApproval(activeOs.status) &&
     hasPendingQuote(quotes, activeOs.id);
 
+  const pendingQuoteForActiveOs = useMemo(
+    () =>
+      activeOs
+        ? quotes.find(
+            (q) =>
+              q.serviceOrder.id === activeOs.id &&
+              (q.status === "PENDING" || q.canRespond),
+          )
+        : null,
+    [activeOs, quotes],
+  );
+
   const quickItems = [
     {
       title: "Minhas OS",
@@ -123,7 +133,9 @@ export default function PortalHomePage() {
       title: showBudgetShortcut ? "Aprovar Orçamento" : "Preços",
       icon: Calculator,
       onClick: () => {
-        if (activeOs && showBudgetShortcut) {
+        if (pendingQuoteForActiveOs) {
+          navigate(routes.quote(pendingQuoteForActiveOs.id));
+        } else if (activeOs && showBudgetShortcut) {
           navigate(routes.serviceOrder(activeOs.id));
         } else {
           navigate(routes.orders);
@@ -211,6 +223,7 @@ export default function PortalHomePage() {
                   key={q.id}
                   quote={q}
                   busy={actingId === q.id}
+                  onOpen={() => navigate(routes.quote(q.id))}
                   onApprove={() => approve(q.id)}
                   onReject={() => reject(q.id)}
                 />

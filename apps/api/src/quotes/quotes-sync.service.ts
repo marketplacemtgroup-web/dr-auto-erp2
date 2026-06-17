@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, QuoteLineType } from '@prisma/client';
+import { Prisma, QuoteLineType, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-/** Mantém orçamento PENDING alinhado aos itens da OS para o portal do cliente. */
+const SUPPLEMENT_OS_STATUSES: ServiceOrderStatus[] = [
+  'IN_PROGRESS',
+  'APPROVED',
+  'AWAITING_PART',
+];
+
+/** Mantém orçamento alinhado aos itens da OS para o portal do cliente. */
 @Injectable()
 export class QuotesSyncService {
   constructor(private readonly prisma: PrismaService) {}
@@ -21,38 +27,175 @@ export class QuotesSyncService {
     return 'SERVICE';
   }
 
+  private lineTotal(line: { unitPrice: Prisma.Decimal; quantity: number; discount: Prisma.Decimal }) {
+    return Number(line.unitPrice) * line.quantity - Number(line.discount);
+  }
+
+  async hasPendingLines(quoteId: string) {
+    const count = await this.prisma.quoteLine.count({
+      where: { quoteId, approved: null },
+    });
+    return count > 0;
+  }
+
+  async isSupplementQuote(quoteId: string) {
+    const [approved, pending] = await Promise.all([
+      this.prisma.quoteLine.count({ where: { quoteId, approved: true } }),
+      this.prisma.quoteLine.count({ where: { quoteId, approved: null } }),
+    ]);
+    return approved > 0 && pending > 0;
+  }
+
+  /** Upsert linhas por serviceOrderItemId, preservando approved. */
   async syncQuoteLines(quoteId: string, serviceOrderId: string, organizationId: string) {
     const items = await this.prisma.serviceOrderItem.findMany({
       where: { serviceOrderId, organizationId },
       orderBy: { createdAt: 'asc' },
     });
 
-    await this.prisma.quoteLine.deleteMany({ where: { quoteId } });
+    const existingLines = await this.prisma.quoteLine.findMany({
+      where: { quoteId },
+    });
+    const byItemId = new Map(
+      existingLines
+        .filter((l) => l.serviceOrderItemId)
+        .map((l) => [l.serviceOrderItemId!, l]),
+    );
+    const itemIds = new Set(items.map((i) => i.id));
 
-    if (items.length === 0) return;
+    const toDelete = existingLines.filter(
+      (l) => l.serviceOrderItemId && !itemIds.has(l.serviceOrderItemId),
+    );
+    if (toDelete.length) {
+      await this.prisma.quoteLine.deleteMany({
+        where: { id: { in: toDelete.map((l) => l.id) } },
+      });
+    }
 
-    await this.prisma.quoteLine.createMany({
-      data: items.map((item, idx) => ({
-        organizationId,
-        quoteId,
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const existing = byItemId.get(item.id);
+      const lineData = {
         lineType: this.mapItemType(item.itemType),
         description: item.description,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        discount: item.discount,
         sortOrder: idx,
         serviceOrderItemId: item.id,
-        approved: null,
-      })),
-    });
+      };
 
-    const total = items.reduce(
-      (sum, i) => sum + Number(i.unitPrice) * i.quantity,
-      0,
-    );
+      if (existing) {
+        await this.prisma.quoteLine.update({
+          where: { id: existing.id },
+          data: lineData,
+        });
+      } else {
+        await this.prisma.quoteLine.create({
+          data: {
+            organizationId,
+            quoteId,
+            ...lineData,
+            approved: null,
+          },
+        });
+      }
+    }
+
+    const lines = await this.prisma.quoteLine.findMany({ where: { quoteId } });
+    const total = lines.reduce((sum, l) => sum + this.lineTotal(l), 0);
     await this.prisma.quote.update({
       where: { id: quoteId },
       data: { amount: new Prisma.Decimal(total) },
     });
+
+    const hasPending = lines.some((l) => l.approved === null);
+    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
+    if (quote?.status === 'APPROVED' && hasPending) {
+      await this.prisma.quote.update({
+        where: { id: quoteId },
+        data: { status: 'PENDING' },
+      });
+    }
+  }
+
+  /**
+   * Reabre orçamento aprovado para complemento (mesma OS, mesmo número).
+   */
+  async reopenForSupplement(
+    organizationId: string,
+    quoteId: string,
+    userId?: string,
+  ) {
+    const quote = await this.prisma.quote.findFirst({
+      where: { id: quoteId, organizationId },
+      include: { serviceOrder: true, lines: true },
+    });
+    if (!quote) return null;
+    if (quote.status !== 'APPROVED') {
+      return null;
+    }
+
+    const so = quote.serviceOrder;
+    if (!SUPPLEMENT_OS_STATUSES.includes(so.status)) {
+      return null;
+    }
+
+    const pendingQuote = await this.prisma.quote.findFirst({
+      where: {
+        organizationId,
+        serviceOrderId: so.id,
+        status: 'PENDING',
+      },
+    });
+    if (pendingQuote && pendingQuote.id !== quoteId) {
+      return pendingQuote.id;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.quote.update({
+        where: { id: quoteId },
+        data: { status: 'PENDING' },
+      }),
+      this.prisma.quoteLine.updateMany({
+        where: { quoteId, approved: null },
+        data: { approved: true },
+      }),
+      this.prisma.serviceOrderStatusHistory.create({
+        data: {
+          organizationId,
+          serviceOrderId: so.id,
+          fromStatus: so.status,
+          toStatus: so.status,
+          userId: userId ?? null,
+          notes: 'Complemento de orçamento solicitado',
+        },
+      }),
+    ]);
+
+    return quoteId;
+  }
+
+  /** Antes de sincronizar itens: reabre orçamento aprovado se a OS está em execução. */
+  async ensureSupplementBeforeItemSync(organizationId: string, serviceOrderId: string) {
+    const so = await this.prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, organizationId },
+      include: {
+        quotes: {
+          where: { status: { in: ['PENDING', 'APPROVED'] } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+    if (!so || !SUPPLEMENT_OS_STATUSES.includes(so.status)) return;
+
+    const pending = so.quotes.find((q) => q.status === 'PENDING');
+    if (pending) return;
+
+    const approved = so.quotes.find((q) => q.status === 'APPROVED');
+    if (approved) {
+      await this.reopenForSupplement(organizationId, approved.id);
+    }
   }
 
   async syncForServiceOrder(organizationId: string, serviceOrderId: string) {
@@ -61,7 +204,7 @@ export class QuotesSyncService {
       include: {
         items: { orderBy: { createdAt: 'asc' } },
         quotes: {
-          where: { status: { in: ['PENDING', 'DRAFT'] } },
+          where: { status: { in: ['PENDING', 'DRAFT', 'APPROVED'] } },
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -76,6 +219,7 @@ export class QuotesSyncService {
 
     const pending = so.quotes.find((q) => q.status === 'PENDING');
     const draft = so.quotes.find((q) => q.status === 'DRAFT');
+    const approved = so.quotes.find((q) => q.status === 'APPROVED');
 
     if (pending) {
       await this.syncQuoteLines(pending.id, serviceOrderId, organizationId);
@@ -100,6 +244,12 @@ export class QuotesSyncService {
       ]);
       await this.syncQuoteLines(draft.id, serviceOrderId, organizationId);
       return draft.id;
+    }
+
+    if (approved && SUPPLEMENT_OS_STATUSES.includes(so.status)) {
+      await this.reopenForSupplement(organizationId, approved.id);
+      await this.syncQuoteLines(approved.id, serviceOrderId, organizationId);
+      return approved.id;
     }
 
     const quoteNumber = await this.nextQuoteNumber(organizationId);
@@ -141,6 +291,9 @@ export class QuotesSyncService {
             'AWAITING_QUOTE',
             'DIAGNOSIS',
             'RECEIVED',
+            'IN_PROGRESS',
+            'APPROVED',
+            'AWAITING_PART',
           ],
         },
       },

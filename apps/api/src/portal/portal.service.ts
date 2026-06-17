@@ -1,6 +1,7 @@
 import {
   Injectable,
   Logger,
+  BadRequestException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -544,6 +545,10 @@ export class PortalService {
             sortOrder: idx,
           }));
 
+    const hasApprovedLines = lines.some((l) => l.approved === true);
+    const pendingLines = lines.filter((l) => l.approved === null);
+    const isSupplement = hasApprovedLines && pendingLines.length > 0;
+
     return {
       id: q.id,
       number: q.number,
@@ -553,6 +558,8 @@ export class PortalService {
       terms: q.terms,
       createdAt: q.createdAt,
       lines,
+      isSupplement,
+      pendingLineCount: pendingLines.length,
       serviceOrder: {
         id: q.serviceOrder.id,
         number: q.serviceOrder.number,
@@ -564,7 +571,7 @@ export class PortalService {
           unitPrice: Number(item.unitPrice),
         })),
       },
-      canRespond: q.status === 'PENDING',
+      canRespond: q.status === 'PENDING' && pendingLines.length > 0,
     };
   }
 
@@ -598,45 +605,125 @@ export class PortalService {
     return rows.map((q) => this.mapQuoteResponse(q));
   }
 
+  async getQuoteForPortal(
+    ctx: { organizationId: string; vehicleId: string },
+    quoteId: string,
+  ) {
+    try {
+      await this.quotesSync.syncForVehicle(ctx.organizationId, ctx.vehicleId);
+    } catch (err) {
+      this.logger.warn(
+        `Sincronização de orçamentos ignorada: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    const row = await this.prisma.quote.findFirst({
+      where: {
+        id: quoteId,
+        organizationId: ctx.organizationId,
+        serviceOrder: { vehicleId: ctx.vehicleId },
+        status: { not: 'DRAFT' },
+        deletedAt: null,
+      },
+      include: {
+        lines: { orderBy: { sortOrder: 'asc' } },
+        serviceOrder: {
+          include: {
+            items: { orderBy: { createdAt: 'asc' } },
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Orçamento não encontrado');
+    return this.mapQuoteResponse(row);
+  }
+
+  private lineTotal(line: {
+    unitPrice: Prisma.Decimal;
+    quantity: number;
+    discount: Prisma.Decimal;
+  }) {
+    return Number(line.unitPrice) * line.quantity - Number(line.discount);
+  }
+
+  private async removeRejectedSupplementItems(
+    organizationId: string,
+    serviceOrderId: string,
+    quoteId: string,
+  ) {
+    const rejected = await this.prisma.quoteLine.findMany({
+      where: { quoteId, approved: false, serviceOrderItemId: { not: null } },
+    });
+    for (const line of rejected) {
+      if (!line.serviceOrderItemId) continue;
+      const item = await this.prisma.serviceOrderItem.findFirst({
+        where: { id: line.serviceOrderItemId, serviceOrderId, organizationId },
+      });
+      if (!item) continue;
+      await this.prisma.serviceOrderItem.delete({ where: { id: item.id } });
+    }
+    await this.prisma.quoteLine.deleteMany({
+      where: { quoteId, approved: false },
+    });
+  }
+
   private async applyLineApprovals(
     quoteId: string,
     serviceOrderId: string,
     dto?: ApproveLinesDto,
+    opts?: { priorLines?: Array<{ id: string; approved: boolean | null }> },
   ) {
+    const priorApproved = (opts?.priorLines ?? []).some((l) => l.approved === true);
+
     if (!dto?.lines?.length) {
       await this.prisma.quoteLine.updateMany({
-        where: { quoteId },
+        where: { quoteId, approved: null },
         data: { approved: true },
       });
-      const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
-      return {
-        allApproved: true,
-        allRejected: false,
-        approvedAmount: quote ? Number(quote.amount) : 0,
-      };
-    }
-
-    for (const line of dto.lines) {
-      await this.prisma.quoteLine.updateMany({
-        where: { id: line.lineId, quoteId },
-        data: { approved: line.approved },
-      });
+      if (!(await this.prisma.quoteLine.count({ where: { quoteId, approved: null } }))) {
+        await this.prisma.quoteLine.updateMany({
+          where: { quoteId },
+          data: { approved: true },
+        });
+      }
+    } else {
+      for (const line of dto.lines) {
+        const existing = await this.prisma.quoteLine.findFirst({
+          where: { id: line.lineId, quoteId },
+        });
+        if (!existing || existing.approved !== null) continue;
+        await this.prisma.quoteLine.update({
+          where: { id: line.lineId },
+          data: { approved: line.approved },
+        });
+      }
     }
 
     const lines = await this.prisma.quoteLine.findMany({ where: { quoteId } });
-    const decided = lines.filter((l) => l.approved !== null);
-    const approvedLines = decided.filter((l) => l.approved === true);
-    const rejectedLines = decided.filter((l) => l.approved === false);
+    const pendingLines = lines.filter((l) => l.approved === null);
+    const approvedLines = lines.filter((l) => l.approved === true);
+    const rejectedLines = lines.filter((l) => l.approved === false);
 
     const approvedAmount = approvedLines.reduce(
-      (sum, l) => sum + Number(l.unitPrice) * l.quantity - Number(l.discount),
+      (sum, l) => sum + this.lineTotal(l),
       0,
     );
 
+    const allApproved =
+      lines.length > 0 && pendingLines.length === 0 && rejectedLines.length === 0;
+    const allPendingRejected =
+      priorApproved &&
+      pendingLines.length === 0 &&
+      rejectedLines.length > 0 &&
+      approvedLines.length > 0;
+    const allRejected = lines.length > 0 && approvedLines.length === 0;
+
     return {
-      allApproved: lines.length > 0 && approvedLines.length === lines.length,
-      allRejected: lines.length > 0 && rejectedLines.length === lines.length,
+      allApproved,
+      allRejected: allRejected || allPendingRejected,
+      supplementRejectOnly: allPendingRejected,
       approvedAmount,
+      priorApproved,
     };
   }
 
@@ -655,30 +742,113 @@ export class PortalService {
     });
     if (!quote) throw new UnauthorizedException();
 
-    const { allApproved, allRejected, approvedAmount } = await this.applyLineApprovals(
-      quote.id,
-      quote.serviceOrderId,
-      dto,
-    );
+    const { allApproved, allRejected, supplementRejectOnly, approvedAmount, priorApproved } =
+      await this.applyLineApprovals(quote.id, quote.serviceOrderId, dto, {
+        priorLines: quote.lines,
+      });
+
+    if (allRejected && supplementRejectOnly) {
+      await this.removeRejectedSupplementItems(
+        ctx.organizationId,
+        quote.serviceOrderId,
+        quote.id,
+      );
+      await this.quotesSync.syncQuoteLines(
+        quote.id,
+        quote.serviceOrderId,
+        ctx.organizationId,
+      );
+
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const q = await tx.quote.update({
+          where: { id: quote.id },
+          data: {
+            status: 'APPROVED',
+            amount: new Prisma.Decimal(approvedAmount),
+            customerComment: dto?.comment ?? quote.customerComment,
+          },
+        });
+        await tx.serviceOrder.update({
+          where: { id: quote.serviceOrderId },
+          data: {
+            status: 'IN_PROGRESS',
+            totalAmount: new Prisma.Decimal(approvedAmount),
+          },
+        });
+        await tx.serviceOrderStatusHistory.create({
+          data: {
+            organizationId: ctx.organizationId,
+            serviceOrderId: quote.serviceOrderId,
+            fromStatus: quote.serviceOrder.status,
+            toStatus: 'IN_PROGRESS',
+            notes: 'Itens novos do complemento recusados pelo cliente',
+          },
+        });
+        return q;
+      });
+
+      const soFull = await this.prisma.serviceOrder.findFirst({
+        where: { id: quote.serviceOrderId },
+        include: { vehicle: { include: { customer: true } } },
+      });
+      if (soFull) {
+        await this.notifyQuoteRejected(ctx.organizationId, soFull.vehicleId, updated, soFull);
+      }
+      return updated;
+    }
 
     if (allRejected) {
       return this.rejectQuote(ctx, quoteId, dto?.comment);
     }
+
+    const linesAfter = await this.prisma.quoteLine.findMany({ where: { quoteId: quote.id } });
+    const stillPending = linesAfter.some((l) => l.approved === null);
+    if (stillPending) {
+      throw new BadRequestException('Responda todos os itens novos antes de enviar');
+    }
+
+    if (priorApproved) {
+      const rejectedNew = linesAfter.filter((l) => l.approved === false);
+      if (rejectedNew.length > 0) {
+        await this.removeRejectedSupplementItems(
+          ctx.organizationId,
+          quote.serviceOrderId,
+          quote.id,
+        );
+        await this.quotesSync.syncQuoteLines(
+          quote.id,
+          quote.serviceOrderId,
+          ctx.organizationId,
+        );
+      }
+    }
+
+    const finalLines = await this.prisma.quoteLine.findMany({ where: { quoteId: quote.id } });
+    const finalApprovedAmount = finalLines
+      .filter((l) => l.approved === true)
+      .reduce((sum, l) => sum + this.lineTotal(l), 0);
+
+    const osNextStatus =
+      priorApproved || quote.serviceOrder.status === 'IN_PROGRESS'
+        ? 'IN_PROGRESS'
+        : allApproved
+          ? 'APPROVED'
+          : 'IN_PROGRESS';
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const q = await tx.quote.update({
         where: { id: quote.id },
         data: {
           status: 'APPROVED',
-          amount: new Prisma.Decimal(approvedAmount || Number(quote.amount)),
+          amount: new Prisma.Decimal(finalApprovedAmount || Number(quote.amount)),
           customerComment: dto?.comment ?? quote.customerComment,
         },
       });
       await tx.serviceOrder.update({
         where: { id: quote.serviceOrderId },
         data: {
-          status: allApproved ? 'APPROVED' : 'IN_PROGRESS',
-          totalAmount: new Prisma.Decimal(approvedAmount || Number(quote.amount)),
+          status: osNextStatus,
+          totalAmount: new Prisma.Decimal(finalApprovedAmount || Number(quote.amount)),
         },
       });
       await tx.serviceOrderStatusHistory.create({
@@ -686,10 +856,12 @@ export class PortalService {
           organizationId: ctx.organizationId,
           serviceOrderId: quote.serviceOrderId,
           fromStatus: quote.serviceOrder.status,
-          toStatus: allApproved ? 'APPROVED' : 'IN_PROGRESS',
-          notes: allApproved
-            ? 'Orçamento aprovado pelo cliente (portal)'
-            : 'Orçamento aprovado parcialmente pelo cliente',
+          toStatus: osNextStatus,
+          notes: priorApproved
+            ? 'Complemento de orçamento aprovado pelo cliente (portal)'
+            : allApproved
+              ? 'Orçamento aprovado pelo cliente (portal)'
+              : 'Orçamento aprovado parcialmente pelo cliente',
         },
       });
       return q;
@@ -700,7 +872,7 @@ export class PortalService {
       include: { vehicle: { include: { customer: true } } },
     });
     if (soFull) {
-      await this.notifyQuoteApproved(ctx, updated, soFull, approvedAmount);
+      await this.notifyQuoteApproved(ctx, updated, soFull, finalApprovedAmount);
     }
 
     return updated;
@@ -722,9 +894,71 @@ export class PortalService {
             }
           : {}),
       },
-      include: { serviceOrder: true },
+      include: { serviceOrder: true, lines: true },
     });
     if (!quote) throw opts?.byToken ? new NotFoundException() : new UnauthorizedException();
+
+    const hasPriorApproved = quote.lines.some((l) => l.approved === true);
+    const hasPending = quote.lines.some((l) => l.approved === null);
+
+    if (hasPriorApproved && hasPending) {
+      await this.prisma.quoteLine.updateMany({
+        where: { quoteId, approved: null },
+        data: { approved: false },
+      });
+      await this.removeRejectedSupplementItems(
+        quote.organizationId,
+        quote.serviceOrderId,
+        quoteId,
+      );
+      await this.quotesSync.syncQuoteLines(
+        quoteId,
+        quote.serviceOrderId,
+        quote.organizationId,
+      );
+
+      const refreshedLines = await this.prisma.quoteLine.findMany({ where: { quoteId } });
+      const approvedAmount = refreshedLines
+        .filter((l) => l.approved === true)
+        .reduce((sum, l) => sum + this.lineTotal(l), 0);
+
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const q = await tx.quote.update({
+          where: { id: quote.id },
+          data: {
+            status: 'APPROVED',
+            amount: new Prisma.Decimal(approvedAmount),
+            customerComment: comment ?? quote.customerComment,
+          },
+        });
+        await tx.serviceOrder.update({
+          where: { id: quote.serviceOrderId },
+          data: {
+            status: 'IN_PROGRESS',
+            totalAmount: new Prisma.Decimal(approvedAmount),
+          },
+        });
+        await tx.serviceOrderStatusHistory.create({
+          data: {
+            organizationId: quote.organizationId,
+            serviceOrderId: quote.serviceOrderId,
+            fromStatus: quote.serviceOrder.status,
+            toStatus: 'IN_PROGRESS',
+            notes: 'Itens novos do complemento recusados pelo cliente',
+          },
+        });
+        return q;
+      });
+
+      const soFull = await this.prisma.serviceOrder.findFirst({
+        where: { id: quote.serviceOrderId },
+        include: { vehicle: { include: { customer: true } } },
+      });
+      if (soFull && ctx) {
+        await this.notifyQuoteRejected(ctx.organizationId, soFull.vehicleId, updated, soFull);
+      }
+      return updated;
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const q = await tx.quote.update({
