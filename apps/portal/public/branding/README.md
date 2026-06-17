@@ -10,7 +10,7 @@ Substitua os arquivos desta pasta para personalizar o portal por cliente/projeto
 Configure também as variáveis em `.env`:
 
 ```env
-VITE_APP_NAME=WTEC Motors
+VITE_APP_NAME=OFICINA DO BETO
 VITE_APP_TAGLINE=Portal do Cliente
 VITE_BRAND_LOGO_URL=/branding/logo.png
 VITE_BRAND_BACKGROUND_URL=/branding/background.webp

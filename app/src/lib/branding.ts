@@ -1,4 +1,4 @@
-const TAGLINE = "Studio especializado em linhas premium";
+const TAGLINE = "OFICINA MECÂNICA";
 
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
 const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);

@@ -1,4 +1,4 @@
-# Mapeamento Portal Android → API WTEC
+# Mapeamento Portal Android → API OFICINA DO BETO
 
 Documento de referência para integração do app Android (`APK ANDROID`) com a API do portal do cliente (`/api/portal/*`).
 

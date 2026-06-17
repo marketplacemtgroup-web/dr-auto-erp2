@@ -1,4 +1,4 @@
-# Manuais de fluxo — WTEC Motors ERP
+# Manuais de fluxo — OFICINA DO BETO ERP
 
 Documentação operacional para equipe da oficina. Cada arquivo pode ser exportado para PDF separadamente ou em conjunto.
 

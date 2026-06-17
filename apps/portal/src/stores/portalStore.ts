@@ -118,7 +118,7 @@ export const usePortalStore = create<PortalState>()(
       },
     }),
     {
-      name: "dr-auto-portal",
+      name: "oficina-beto-portal",
       partialize: (state) => ({
         session: state.session,
         dashboard: state.dashboard,

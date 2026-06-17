@@ -50,8 +50,8 @@ export default defineConfig({
       includeAssets: ["logo-oficinadobeto.png", "favicon.png", "favicon.ico"],
       manifest: {
         id: "/dashboard/",
-        name: "WTEC Motors — Studio especializado em linhas premium",
-        short_name: "WTEC Motors",
+        name: "OFICINA DO BETO — OFICINA MECÂNICA",
+        short_name: "OFICINA DO BETO",
         description: "Gestão da oficina em tempo real",
         theme_color: "#0F3D4C",
         background_color: "#F1F5F9",

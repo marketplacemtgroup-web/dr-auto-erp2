@@ -53,7 +53,7 @@ export default function RegisterOrganizationPage() {
       })
       .catch(() => {
         setStatusWarning(
-          "API indisponível. Confira https://dr-auto-erp2-api.vercel.app/api/env-check — remova aspas de DATABASE_URL e DIRECT_URL na Vercel (projeto API) e redeploy.",
+          "API indisponível. Confira /api/env-check na URL da sua API — remova aspas de DATABASE_URL e DIRECT_URL na Vercel (projeto API) e redeploy.",
         );
       })
       .finally(() => setStatusLoading(false));
@@ -249,7 +249,7 @@ export default function RegisterOrganizationPage() {
                     update("loginEmailDomain", e.target.value);
                   }}
                   className="flex-1 h-10 px-3 text-sm focus:outline-none"
-                  placeholder="wtecmotors.local"
+                  placeholder="oficinadobeto.local"
                   required
                 />
               </div>

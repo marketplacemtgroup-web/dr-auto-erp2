@@ -1,5 +1,5 @@
 self.addEventListener('push', (event) => {
-  let data = { title: 'WTEC Motors', body: 'Nova atualização', url: '/' };
+  let data = { title: 'OFICINA DO BETO', body: 'Nova atualização', url: '/' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {

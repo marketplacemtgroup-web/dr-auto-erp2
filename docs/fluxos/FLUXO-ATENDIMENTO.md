@@ -1,4 +1,4 @@
-# Fluxo de atendimento — WTEC Motors ERP
+# Fluxo de atendimento — OFICINA DO BETO ERP
 
 Este manual descreve o **ciclo completo de atendimento** na oficina: desde o cadastro prévio até a entrega do veículo, incluindo diagnóstico, orçamento, aprovação pelo cliente, execução, mídia e portal.
 
@@ -6,7 +6,7 @@ Este manual descreve o **ciclo completo de atendimento** na oficina: desde o cad
 
 ## 1. Visão geral
 
-O atendimento no WTEC Motors gira em torno da **Ordem de Serviço (OS)**. Cada OS está ligada a um **veículo**, que por sua vez pertence a um **cliente**.
+O atendimento na OFICINA DO BETO gira em torno da **Ordem de Serviço (OS)**. Cada OS está ligada a um **veículo**, que por sua vez pertence a um **cliente**.
 
 ```mermaid
 flowchart LR

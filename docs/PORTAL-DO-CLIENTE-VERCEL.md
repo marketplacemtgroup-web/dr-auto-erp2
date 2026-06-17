@@ -48,9 +48,9 @@ Em produção você terá **três endereços** na Vercel:
 
 | Sistema | Quem usa | Exemplo de URL |
 |---------|----------|----------------|
-| **API** | Backend (não abre para o cliente) | `https://wtec-motors-api.vercel.app` |
-| **ERP (Dashboard)** | Oficina / equipe | `https://wtec-motors-erp.vercel.app` |
-| **Portal do Cliente** | Cliente final | `https://wtec-motors-portal.vercel.app` |
+| **API** | Backend (não abre para o cliente) | `https://oficina-beto-api.vercel.app` |
+| **ERP (Dashboard)** | Oficina / equipe | `https://oficina-beto-erp.vercel.app` |
+| **Portal do Cliente** | Cliente final | `https://oficina-beto-portal.vercel.app` |
 
 O cliente só precisa conhecer o link do **Portal**.
 
@@ -100,13 +100,13 @@ Cada oficina deve ter **deploy próprio** na Vercel (API + ERP + Portal) e banco
 
 - Conta em [vercel.com](https://vercel.com)
 - Repositório do projeto no GitHub (ou GitLab/Bitbucket conectado à Vercel)
-- URL da API já publicada (ex.: `https://wtec-motors-api.vercel.app`)
-- URL do ERP já publicada (ex.: `https://wtec-motors-erp.vercel.app`)
+- URL da API já publicada (ex.: `https://oficina-beto-api.vercel.app`)
+- URL do ERP já publicada (ex.: `https://oficina-beto-erp.vercel.app`)
 
 ### 5.1 Criar o projeto do Portal
 
 1. Acesse [vercel.com](https://vercel.com) → **Add New…** → **Project**.
-2. Importe o repositório **wtecmotors** (ou o nome do seu repo).
+2. Importe o repositório **oficina-beto** (ou o nome do seu repo).
 3. Em **Root Directory**, clique em **Edit** e selecione:
 
    ```
@@ -137,7 +137,7 @@ Em **Settings → Environment Variables** do projeto **portal**, adicione para *
 |----------|--------|------------|
 | `VITE_API_URL` | `https://SUA-API.vercel.app` | **Sem** `/` no final; **sem** `/api` |
 | `VITE_DASHBOARD_URL` | `https://SEU-ERP.vercel.app` | Link “É da oficina?” no login |
-| `VITE_APP_NAME` | `WTEC Motors` | Nome exibido no portal |
+| `VITE_APP_NAME` | `OFICINA DO BETO` | Nome exibido no portal |
 | `VITE_APP_TAGLINE` | `Portal do Cliente` | Subtítulo |
 | `VITE_BRAND_LOGO_URL` | `/branding/logo.png` | Opcional se usar pasta padrão |
 | `VITE_BRAND_BACKGROUND_URL` | `/branding/background.webp` | Opcional |
@@ -145,9 +145,9 @@ Em **Settings → Environment Variables** do projeto **portal**, adicione para *
 Exemplo real:
 
 ```env
-VITE_API_URL=https://wtec-motors-api.vercel.app
-VITE_DASHBOARD_URL=https://wtec-motors-erp.vercel.app
-VITE_APP_NAME=WTEC Motors
+VITE_API_URL=https://oficina-beto-api.vercel.app
+VITE_DASHBOARD_URL=https://oficina-beto-erp.vercel.app
+VITE_APP_NAME=OFICINA DO BETO
 VITE_APP_TAGLINE=Portal do Cliente
 ```
 
@@ -155,14 +155,14 @@ VITE_APP_TAGLINE=Portal do Cliente
 
 1. Clique em **Deploy**.
 2. Aguarde o build terminar (verde).
-3. Anote a URL gerada, ex.: `https://wtec-motors-portal.vercel.app`
+3. Anote a URL gerada, ex.: `https://oficina-beto-portal.vercel.app`
 
 ### 5.4 Ajustar CORS na API (obrigatório)
 
 No projeto da **API** na Vercel, variável `CORS_ORIGIN` deve incluir as URLs do ERP e do Portal, **sem barra no final**, separadas por vírgula:
 
 ```env
-CORS_ORIGIN=https://wtec-motors-erp.vercel.app,https://wtec-motors-portal.vercel.app
+CORS_ORIGIN=https://oficina-beto-erp.vercel.app,https://oficina-beto-portal.vercel.app
 ```
 
 Salve e faça **Redeploy** da API.
@@ -172,8 +172,8 @@ Salve e faça **Redeploy** da API.
 No projeto **ERP** (`app/`), confirme:
 
 ```env
-VITE_API_URL=https://wtec-motors-api.vercel.app
-VITE_PORTAL_URL=https://wtec-motors-portal.vercel.app
+VITE_API_URL=https://oficina-beto-api.vercel.app
+VITE_PORTAL_URL=https://oficina-beto-portal.vercel.app
 ```
 
 Redeploy do ERP para os links “Link portal” e orçamento público usarem o endereço certo.
@@ -185,7 +185,7 @@ Redeploy do ERP para os links “Link portal” e orçamento público usarem o e
 Depois do deploy na Vercel, você pode usar um domínio da oficina.
 
 1. Vercel → projeto **portal** → **Settings** → **Domains**.
-2. Adicione, por exemplo: `cliente.wtecmotors.com.br`
+2. Adicione, por exemplo: `cliente.oficinadobeto.com.br`
 3. Configure o DNS conforme a Vercel indicar (CNAME ou A).
 4. Atualize:
    - `VITE_PORTAL_URL` no **ERP**
@@ -232,7 +232,7 @@ Você pode copiar e adaptar:
 
 ---
 
-**Portal do Cliente — WTEC Motors**
+**Portal do Cliente — OFICINA DO BETO**
 
 Olá! Seu acompanhamento de ordem de serviço agora é pelo **site**, no celular ou no computador.
 

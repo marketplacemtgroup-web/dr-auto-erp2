@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { ReportsFull } from "../../lib/api";
+import { branding } from "../../lib/branding";
 import { formatMoney } from "../../lib/format";
 import { buildReportFinancialKpiItems } from "../../lib/reportFinancialKpis";
 import { formatPeriodLabel } from "../../lib/reportPeriod";
@@ -41,7 +42,7 @@ export default function ReportsTvMode({
     <div className="fixed inset-0 z-[300] bg-[#0F172A] text-white p-6 overflow-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">WTEC Motors — Painel ao vivo</h1>
+          <h1 className="text-2xl font-bold">{branding.appName} — Painel ao vivo</h1>
           <p className="text-[#94A3B8] mt-1">{periodLabel} · atualiza a cada 60s</p>
         </div>
         <button

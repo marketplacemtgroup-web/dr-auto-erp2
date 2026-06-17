@@ -82,7 +82,7 @@ export class AuthService {
     }
 
     const defaultOrgName =
-      this.config.get<string>('DEFAULT_ORGANIZATION_NAME') ?? 'WTEC Motors';
+      this.config.get<string>('DEFAULT_ORGANIZATION_NAME') ?? 'OFICINA DO BETO';
     const organizationName = dto.organizationName?.trim() || defaultOrgName;
 
     const loginEmailDomain =
@@ -104,7 +104,7 @@ export class AuthService {
       const org = await tx.organization.create({
         data: {
           name: organizationName,
-          tradeName: dto.tradeName ?? 'WTEC Motors',
+          tradeName: dto.tradeName ?? 'OFICINA DO BETO',
           document: dto.document,
           email,
           loginEmailDomain,

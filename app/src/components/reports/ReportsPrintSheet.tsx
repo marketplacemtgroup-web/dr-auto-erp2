@@ -1,4 +1,5 @@
 import type { ReportsFull } from "../../lib/api";
+import { branding } from "../../lib/branding";
 import { formatPeriodLabel } from "../../lib/reportPeriod";
 import { formatMoney, formatNegativeMoney } from "../../lib/format";
 import { PAYMENT_LABELS } from "../../lib/paymentMethods";
@@ -22,7 +23,7 @@ export default function ReportsPrintSheet({ report }: Props) {
 
   return (
     <div className="reports-print hidden bg-white text-[#1E293B] p-8 text-[13px]">
-      <h1 className="text-xl font-bold mb-1">Relatorio gerencial — WTEC Motors</h1>
+      <h1 className="text-xl font-bold mb-1">Relatorio gerencial — {branding.appName}</h1>
       <p className="text-[#64748B] mb-6">
         Periodo: {formatPeriodLabel(report.period.from.slice(0, 10), report.period.to.slice(0, 10))}
       </p>

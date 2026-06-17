@@ -3,7 +3,7 @@
 | App | Pasta | Porta dev | Público | PWA |
 |-----|-------|-----------|---------|-----|
 | **Portal do cliente** | `apps/portal` | **3001** | Cliente final | Minha Oficina |
-| **Dashboard ERP** | `app` | **3000** | Dono / equipe da oficina | WTEC Motors ERP |
+| **Dashboard ERP** | `app` | **3000** | Dono / equipe da oficina | OFICINA DO BETO ERP |
 
 API única: `apps/api` na porta **4000**.
 

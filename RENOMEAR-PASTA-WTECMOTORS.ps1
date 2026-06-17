@@ -1,31 +1,31 @@
-# Feche o Cursor antes de executar este script.
-# Clique com botao direito > Executar com PowerShell
-# ou: powershell -ExecutionPolicy Bypass -File "e:\dr-auto-erp2\RENOMEAR-PASTA-WTECMOTORS.ps1"
+# Renomeia a pasta do projeto para OFICINA-BETO (opcional).
+# Uso: powershell -ExecutionPolicy Bypass -File ".\RENOMEAR-PASTA-WTECMOTORS.ps1"
+# ou: powershell -ExecutionPolicy Bypass -File "e:\OFICINA BETO\oficina-beto\RENOMEAR-PASTA-WTECMOTORS.ps1"
 
-$ErrorActionPreference = 'Stop'
-$src = 'e:\dr-auto-erp2'
-$dst = 'e:\WTECMOTORS'
+$src = Split-Path -Parent $PSScriptRoot
+if (-not $src) { $src = (Get-Location).Path }
+$dst = 'e:\OFICINA BETO\oficina-beto'
 
-if (Test-Path $dst) {
-  Write-Host "A pasta $dst ja existe. Nada a fazer."
+if ($src -eq $dst) {
+  Write-Host "A pasta já está em: $dst"
   exit 0
 }
 
 if (-not (Test-Path $src)) {
-  Write-Host "Pasta $src nao encontrada."
+  Write-Host "Pasta de origem não encontrada: $src"
   exit 1
 }
 
-Write-Host 'Encerrando processos Node do projeto...'
-Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
-  Where-Object { $_.CommandLine -match 'dr-auto-erp2' } |
-  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+if (Test-Path $dst) {
+  Write-Host "Destino já existe: $dst"
+  exit 1
+}
 
-Start-Sleep -Seconds 2
+$parent = Split-Path -Parent $dst
+if (-not (Test-Path $parent)) {
+  New-Item -ItemType Directory -Path $parent -Force | Out-Null
+}
 
-Write-Host "Renomeando $src -> $dst ..."
-Rename-Item -Path $src -NewName 'WTECMOTORS'
-
-Write-Host ''
-Write-Host 'Pronto! Pasta renomeada para e:\WTECMOTORS'
-Write-Host 'Abra no Cursor: File > Open Folder > e:\WTECMOTORS'
+Move-Item -Path $src -Destination $dst
+Write-Host "Pronto! Pasta movida para $dst"
+Write-Host 'Abra no Cursor: File > Open Folder > e:\OFICINA BETO\oficina-beto'

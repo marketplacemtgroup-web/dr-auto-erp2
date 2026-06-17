@@ -22,7 +22,7 @@ const altNames = [
   ...ips.map((ip) => ({ type: 7, ip })),
 ];
 
-const pems = selfsigned.generate([{ name: "commonName", value: "wtec-motors-dev" }], {
+const pems = selfsigned.generate([{ name: "commonName", value: "oficina-beto-dev" }], {
   days: 825,
   keySize: 2048,
   algorithm: "sha256",

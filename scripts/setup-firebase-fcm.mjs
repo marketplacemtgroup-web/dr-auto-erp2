@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Configura push FCM (Android) para a API WTEC.
+ * Configura push FCM (Android) para a API OFICINA DO BETO.
  *
  * Uso:
  *   node scripts/setup-firebase-fcm.mjs caminho/para/service-account.json
  *   node scripts/setup-firebase-fcm.mjs --base64 caminho/para/service-account.json
  *
- * Firebase Console → Projeto wtecmotors-portal → Configurações → Contas de serviço
+ * Firebase Console → Projeto oficinadobeto-portal → Configurações → Contas de serviço
  * → Gerar nova chave privada (JSON).
  */
 import { readFileSync, existsSync } from 'fs';
@@ -20,7 +20,7 @@ if (!fileArg) {
   console.error(`
 Uso: node scripts/setup-firebase-fcm.mjs <service-account.json> [--base64]
 
-1. Abra https://console.firebase.google.com/project/wtecmotors-portal/settings/serviceaccounts/adminsdk
+1. Abra https://console.firebase.google.com/project/oficinadobeto-portal/settings/serviceaccounts/adminsdk
 2. "Gerar nova chave privada" e salve o JSON
 3. Rode este script com o caminho do arquivo
 `);
@@ -49,25 +49,26 @@ if (missing.length) {
   process.exit(1);
 }
 
-if (parsed.project_id !== 'wtecmotors-portal') {
+const expectedProjectId = 'oficinadobeto-portal';
+if (parsed.project_id !== expectedProjectId) {
   console.warn(
-    `Aviso: project_id é "${parsed.project_id}" (esperado wtecmotors-portal). Confira se o JSON é do projeto certo.`,
+    `Aviso: project_id é "${parsed.project_id}" (esperado ${expectedProjectId}). Confira se o JSON é do projeto certo.`,
   );
 }
 
 const oneLine = JSON.stringify(parsed);
 const b64 = Buffer.from(oneLine, 'utf8').toString('base64');
 
-console.log('\n=== Firebase FCM — variáveis para a Vercel (wtecmotors-api) ===\n');
+console.log('\n=== Firebase FCM — variáveis para a Vercel (oficina-beto-api) ===\n');
 console.log('Opção A — JSON em uma linha (recomendado):\n');
 console.log(`FIREBASE_SERVICE_ACCOUNT=${oneLine}\n`);
 console.log('Opção B — Base64 (se a Vercel truncar o JSON):\n');
 console.log(`FIREBASE_SERVICE_ACCOUNT_BASE64=${b64}\n`);
 console.log('Passos na Vercel:');
-console.log('  1. https://vercel.com → projeto wtecmotors-api → Settings → Environment Variables');
+console.log('  1. https://vercel.com → projeto oficina-beto-api → Settings → Environment Variables');
 console.log('  2. Adicione FIREBASE_SERVICE_ACCOUNT (Production + Preview)');
 console.log('  3. Redeploy da API');
-console.log('  4. Confira: https://wtecmotors-api.vercel.app/api/env-check → push.firebaseFcm: true\n');
+console.log('  4. Confira: https://oficina-beto-api.vercel.app/api/env-check → push.firebaseFcm: true\n');
 
 if (base64Only) {
   console.log('(--base64) Use apenas FIREBASE_SERVICE_ACCOUNT_BASE64 na Vercel.\n');

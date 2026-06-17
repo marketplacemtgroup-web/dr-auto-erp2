@@ -1,6 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 
-const RELOAD_KEY = "wtec:chunk-reload";
+const RELOAD_KEY = "oficina-beto:chunk-reload";
 
 /**
  * Evita tela branca quando um deploy novo troca os hashes dos chunks

@@ -1,4 +1,4 @@
-# Deploy WTEC Motors — Vercel + Supabase
+# Deploy OFICINA DO BETO — Vercel + Supabase
 
 Hospedagem **100% na Vercel** (3 projetos) + **Supabase** (Postgres + fotos).
 
@@ -6,9 +6,9 @@ Hospedagem **100% na Vercel** (3 projetos) + **Supabase** (Postgres + fotos).
 
 | Vercel (projeto) | Pasta | URL exemplo |
 |------------------|-------|-------------|
-| **wtec-motors-api** | `apps/api` | `https://wtec-motors-api.vercel.app` |
-| **wtec-motors-erp** | `app` | `https://wtec-motors-erp.vercel.app` |
-| **wtec-motors-portal** | `apps/portal` | `https://wtec-motors-portal.vercel.app` |
+| **oficina-beto-api** | `apps/api` | `https://oficina-beto-api.vercel.app` |
+| **oficina-beto-erp** | `app` | `https://oficina-beto-erp.vercel.app` |
+| **oficina-beto-portal** | `apps/portal` | `https://oficina-beto-portal.vercel.app` |
 
 | Supabase | Uso |
 |----------|-----|
@@ -49,7 +49,7 @@ npm run supabase:init
 | `SUPABASE_URL` | `https://[ref].supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role (Settings → API) |
 | `SINGLE_TENANT` | `true` |
-| `CORS_ORIGIN` | `https://dr-auto-erp2.vercel.app,https://dr-auto-erp2-portal.vercel.app` (sem `/` final, separado por vírgula) |
+| `CORS_ORIGIN` | `https://oficina-beto-erp.vercel.app,https://oficina-beto-portal.vercel.app` (sem `/` final, separado por vírgula) |
 
 5. Deploy → anote a URL: `https://SEU-API.vercel.app`
 6. Teste (deve responder JSON, não 500):
@@ -84,8 +84,8 @@ npm run supabase:init
 ```
 VITE_API_URL=https://SEU-API.vercel.app
 VITE_PORTAL_URL=https://SEU-PORTAL.vercel.app
-VITE_APP_NAME=WTEC Motors
-VITE_APP_TAGLINE=Studio especializado em linhas premium
+VITE_APP_NAME=OFICINA DO BETO
+VITE_APP_TAGLINE=OFICINA MECÂNICA
 VITE_SINGLE_TENANT=true
 ```
 
@@ -112,7 +112,7 @@ CORS_ORIGIN=https://SEU-ERP.vercel.app,https://SEU-PORTAL.vercel.app
 Exemplo (seus projetos):
 
 ```
-CORS_ORIGIN=https://dr-auto-erp2.vercel.app,https://dr-auto-erp2-portal.vercel.app
+CORS_ORIGIN=https://oficina-beto-erp.vercel.app,https://oficina-beto-portal.vercel.app
 ```
 
 > Mesmo sem `CORS_ORIGIN` correto, domínios `*.vercel.app` são aceitos automaticamente após o redeploy com as correções de serverless.
@@ -137,7 +137,7 @@ Redeploy da API.
    - `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL` preenchidos
    - `CORS_ORIGIN` com URLs exatas do ERP e Portal
 
-3. Portal → **Environment Variables** → `VITE_API_URL=https://dr-auto-erp2-api.vercel.app` (sem barra final)
+3. Portal → **Environment Variables** → `VITE_API_URL=https://oficina-beto-api.vercel.app` (sem barra final)
 
 ### Banner PWA "beforeinstallprompt"
 
