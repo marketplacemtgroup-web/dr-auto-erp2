@@ -34,6 +34,15 @@ export default function PortalAppLayout() {
     pageTitles[pathname] ??
     (pathname.startsWith(routes.profile) ? "Perfil / Suporte" : "Portal do Cliente");
 
+  if (isDetailQuote) {
+    return (
+      <>
+        <PortalPolling />
+        <Outlet />
+      </>
+    );
+  }
+
   return (
     <MotoBackground>
       <PortalPolling />

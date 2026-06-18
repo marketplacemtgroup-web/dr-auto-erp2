@@ -79,7 +79,7 @@ export default function PortalHomePage() {
   async function approve(id: string) {
     if (!session?.accessToken) return;
     const quote = quotes.find((q) => q.id === id);
-    const payload = buildApprovePayload(quote?.lines ?? [], {});
+    const payload = buildApprovePayload(quote?.lines ?? []);
     setActingId(id);
     try {
       await api.portalApprove(session.accessToken, id, payload);

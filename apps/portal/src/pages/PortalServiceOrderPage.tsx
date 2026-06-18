@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Loader2, MessageCircle } from "lucide-react";
-import QuoteDetailContent from "../components/portal/QuoteDetailContent";
+import { ArrowLeft, ChevronRight, Loader2, MessageCircle } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { ApiError, api, type PortalServiceOrderDetail } from "../lib/api";
 import { formatDateTime, formatMoney } from "../lib/format";
 import { resolveMediaUrl } from "../lib/mediaUrl";
 import { isImageMime, isVideoMime } from "../lib/mediaTypes";
-import { buildApprovePayload, initialLineChoices } from "../lib/quote-lines";
 import { routes } from "../lib/routes";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel } from "../lib/service-order-status";
 import { whatsappUrl, resolveOrganizationWhatsApp } from "../lib/whatsapp";
@@ -19,20 +17,12 @@ export default function PortalServiceOrderPage() {
   const session = usePortalStore((s) => s.session);
   const [data, setData] = useState<PortalServiceOrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [actingId, setActingId] = useState<string | null>(null);
-  const [lineChoicesByQuote, setLineChoicesByQuote] = useState<Record<string, Record<string, boolean>>>({});
 
   const load = useCallback(async () => {
     if (!session?.accessToken || !id) return;
     setError(null);
     try {
-      const next = await api.portalServiceOrder(session.accessToken, id);
-      setData(next);
-      const choices: Record<string, Record<string, boolean>> = {};
-      for (const quote of next.quotes) {
-        choices[quote.id] = initialLineChoices(quote.lines ?? []);
-      }
-      setLineChoicesByQuote(choices);
+      setData(await api.portalServiceOrder(session.accessToken, id));
     } catch (err) {
       setError(err instanceof ApiError ? String(err.message) : "Não foi possível carregar a OS");
     }
@@ -46,34 +36,6 @@ export default function PortalServiceOrderPage() {
   const whatsapp = resolveOrganizationWhatsApp(
     data?.organization.phone ?? dashboard?.organization.phone,
   );
-
-  async function approve(quoteId: string) {
-    if (!session?.accessToken) return;
-    const quote = data?.quotes.find((q) => q.id === quoteId);
-    const payload = buildApprovePayload(quote?.lines ?? [], lineChoicesByQuote[quoteId] ?? {});
-    setActingId(quoteId);
-    try {
-      await api.portalApprove(session.accessToken, quoteId, payload);
-      await load();
-    } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Erro ao aprovar");
-    } finally {
-      setActingId(null);
-    }
-  }
-
-  async function reject(quoteId: string) {
-    if (!session?.accessToken || !confirm("Recusar este orçamento?")) return;
-    setActingId(quoteId);
-    try {
-      await api.portalReject(session.accessToken, quoteId);
-      await load();
-    } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Erro ao recusar");
-    } finally {
-      setActingId(null);
-    }
-  }
 
   const pendingQuotes = data?.quotes.filter((q) => q.status === "PENDING" || q.canRespond) ?? [];
   const otherQuotes = data?.quotes.filter((q) => q.status !== "PENDING" && !q.canRespond) ?? [];
@@ -133,30 +95,39 @@ export default function PortalServiceOrderPage() {
             ) : null}
           </section>
 
-          {pendingQuotes.map((quote) => (
-            <section key={quote.id} className="space-y-3">
-              <QuoteDetailContent
-                quote={quote}
-                lineChoices={lineChoicesByQuote[quote.id] ?? {}}
-                onLineChoiceChange={(lineId, approved) =>
-                  setLineChoicesByQuote((current) => ({
-                    ...current,
-                    [quote.id]: { ...current[quote.id], [lineId]: approved },
-                  }))
-                }
-                busy={actingId === quote.id}
-                onApprove={() => void approve(quote.id)}
-                onReject={() => void reject(quote.id)}
-              />
-              <button
-                type="button"
-                onClick={() => navigate(routes.quote(quote.id))}
-                className="portal-card w-full p-3 text-sm font-medium portal-accent"
-              >
-                Abrir orçamento em tela cheia
-              </button>
+          {pendingQuotes.length > 0 ? (
+            <section className="portal-card overflow-hidden">
+              <h2 className="px-4 py-3 text-sm font-semibold portal-text border-b" style={{ borderColor: "var(--portal-border)" }}>
+                Orçamento aguardando aprovação
+              </h2>
+              <ul className="divide-y" style={{ borderColor: "var(--portal-border)" }}>
+                {pendingQuotes.map((quote) => (
+                  <li key={quote.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(routes.quote(quote.id))}
+                      className="w-full px-4 py-3 text-left flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium portal-text">
+                          Orçamento {quote.number ? `#${quote.number}` : ""}
+                        </p>
+                        <p className="text-xs portal-text-muted mt-1">
+                          {quoteStatusLabel(quote.status)} — toque para ver peças e serviços
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <p className="font-bold" style={{ color: "var(--portal-primary)" }}>
+                          {formatMoney(quote.amount)}
+                        </p>
+                        <ChevronRight className="portal-text-muted" size={18} />
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </section>
-          ))}
+          ) : null}
 
           {otherQuotes.length > 0 ? (
             <section className="portal-card overflow-hidden">

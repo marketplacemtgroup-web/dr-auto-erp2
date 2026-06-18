@@ -571,7 +571,7 @@ export class PortalService {
           unitPrice: Number(item.unitPrice),
         })),
       },
-      canRespond: q.status === 'PENDING' && pendingLines.length > 0,
+      canRespond: q.status === 'PENDING',
     };
   }
 

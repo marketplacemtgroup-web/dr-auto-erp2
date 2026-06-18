@@ -48,24 +48,15 @@ export function isSupplementQuote(lines: QuoteLineRow[]) {
   return approvedQuoteLines(lines).length > 0 && pendingQuoteLines(lines).length > 0;
 }
 
-export function buildApprovePayload(lines: QuoteLineRow[], choices: Record<string, boolean>) {
+/** Aprova todas as linhas pendentes (ou todas, se não houver pendência explícita). */
+export function buildApprovePayload(lines: QuoteLineRow[]) {
   const pending = pendingQuoteLines(lines);
   const target = pending.length > 0 ? pending : lines;
   if (target.length === 0) return undefined;
   return {
     lines: target.map((line) => ({
       lineId: line.id,
-      approved: choices[line.id] ?? true,
+      approved: true,
     })),
   };
-}
-
-export function initialLineChoices(lines: QuoteLineRow[]) {
-  const choices: Record<string, boolean> = {};
-  const pending = pendingQuoteLines(lines);
-  const target = pending.length > 0 ? pending : lines;
-  for (const line of target) {
-    choices[line.id] = true;
-  }
-  return choices;
 }

@@ -139,6 +139,10 @@
   .safe-area-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+
+  .quote-sheet__card {
+    @apply bg-white rounded-xl border border-[#E2E8F0] shadow-sm;
+  }
 }
 
 /* Scrollbar styling */
@@ -188,12 +192,15 @@
     padding: 0;
   }
 
-  .public-quote-page {
+  .public-quote-page,
+  .quote-sheet {
     background: #fff !important;
   }
 
   .public-quote-page main,
-  .public-quote-page .bg-white {
+  .public-quote-page .bg-white,
+  .quote-sheet main,
+  .quote-sheet__card {
     box-shadow: none !important;
     border-color: #e2e8f0 !important;
   }

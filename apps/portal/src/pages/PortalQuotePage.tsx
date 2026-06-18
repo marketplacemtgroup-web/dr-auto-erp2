@@ -1,29 +1,30 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Printer } from "lucide-react";
 import QuoteDetailContent from "../components/portal/QuoteDetailContent";
+import QuoteSheetLayout from "../components/portal/QuoteSheetLayout";
 import { ApiError, api, type PortalQuoteRow } from "../lib/api";
-import { buildApprovePayload, initialLineChoices } from "../lib/quote-lines";
+import { buildApprovePayload } from "../lib/quote-lines";
 import { routes } from "../lib/routes";
 import { usePortalStore } from "../stores/portalStore";
+import { useBrandingStore } from "../stores/brandingStore";
 
 export default function PortalQuotePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const session = usePortalStore((s) => s.session);
+  const dashboard = usePortalStore((s) => s.dashboard);
   const refresh = usePortalStore((s) => s.refresh);
+  const organizationName = useBrandingStore((s) => s.appName);
   const [quote, setQuote] = useState<PortalQuoteRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
-  const [lineChoices, setLineChoices] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     if (!session?.accessToken || !id) return;
     setError(null);
     try {
-      const data = await api.portalQuote(session.accessToken, id);
-      setQuote(data);
-      setLineChoices(initialLineChoices(data.lines ?? []));
+      setQuote(await api.portalQuote(session.accessToken, id));
     } catch (err) {
       setError(err instanceof ApiError ? String(err.message) : "Não foi possível carregar o orçamento");
     }
@@ -35,8 +36,7 @@ export default function PortalQuotePage() {
 
   async function approve() {
     if (!session?.accessToken || !quote) return;
-    const lines = quote.lines ?? [];
-    const payload = buildApprovePayload(lines, lineChoices);
+    const payload = buildApprovePayload(quote.lines ?? []);
     setActing(true);
     try {
       await api.portalApprove(session.accessToken, quote.id, payload);
@@ -64,40 +64,68 @@ export default function PortalQuotePage() {
     }
   }
 
+  if (error) {
+    return (
+      <QuoteSheetLayout
+        organizationName={organizationName}
+        customerName={session?.customerName}
+        vehiclePlate={session?.plate}
+        backLink={
+          <Link to={routes.home} className="inline-flex items-center gap-1 text-sm text-white/90">
+            <ArrowLeft size={16} />
+            Voltar
+          </Link>
+        }
+      >
+        <div className="quote-sheet__card p-4 text-sm text-red-600">{error}</div>
+      </QuoteSheetLayout>
+    );
+  }
+
+  if (!quote) {
+    return (
+      <QuoteSheetLayout
+        organizationName={organizationName}
+        customerName={session?.customerName}
+        vehiclePlate={session?.plate}
+      >
+        <div className="flex justify-center py-10 text-[#64748B]">
+          <Loader2 className="animate-spin" size={24} />
+        </div>
+      </QuoteSheetLayout>
+    );
+  }
+
   return (
-    <div className="space-y-4 -mt-2">
-      <div className="flex items-center gap-2">
-        <Link to={routes.home} className="inline-flex items-center gap-1 text-sm portal-accent">
+    <QuoteSheetLayout
+      organizationName={dashboard?.organization.name ?? organizationName}
+      customerName={dashboard?.customer.name ?? session?.customerName}
+      vehiclePlate={dashboard?.vehicle.plate ?? session?.plate}
+      backLink={
+        <Link to={routes.home} className="inline-flex items-center gap-1 text-sm text-white/90">
           <ArrowLeft size={16} />
           Voltar
         </Link>
-        <h1 className="portal-text text-xl font-black flex-1">Orçamento</h1>
-      </div>
-
-      {error ? (
-        <div className="portal-card p-4 text-sm text-red-600">{error}</div>
-      ) : null}
-
-      {!quote && !error ? (
-        <div className="flex justify-center py-10 portal-text-muted">
-          <Loader2 className="animate-spin" size={24} />
-        </div>
-      ) : null}
-
-      {quote ? (
-        <QuoteDetailContent
-          quote={quote}
-          lineChoices={lineChoices}
-          onLineChoiceChange={(lineId, approved) =>
-            setLineChoices((current) => ({ ...current, [lineId]: approved }))
-          }
-          busy={acting}
-          onApprove={() => void approve()}
-          onReject={() => void reject()}
-          showOsLink
-          onViewOs={() => navigate(routes.serviceOrder(quote.serviceOrder.id))}
-        />
-      ) : null}
-    </div>
+      }
+      headerAction={
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-sm"
+        >
+          <Printer size={16} />
+          PDF
+        </button>
+      }
+    >
+      <QuoteDetailContent
+        quote={quote}
+        busy={acting}
+        onApprove={() => void approve()}
+        onReject={() => void reject()}
+        showOsLink
+        onViewOs={() => navigate(routes.serviceOrder(quote.serviceOrder.id))}
+      />
+    </QuoteSheetLayout>
   );
 }
