@@ -102,6 +102,8 @@ export class DashboardService {
 
     const fromStr = this.toLocalIsoDate(monthStart);
     const toStr = this.toLocalIsoDate(today);
+    const todayStr = this.toLocalIsoDate(today);
+    const yesterdayStr = this.toLocalIsoDate(yesterday);
 
     const paidReceivable = {
       organizationId,
@@ -109,9 +111,11 @@ export class DashboardService {
       type: 'RECEIVABLE' as const,
     };
 
-    const [report, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
+    const [report, todayReport, yesterdayReport, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
       await Promise.all([
         this.reportsService.dashboardFinancial(organizationId, fromStr, toStr),
+        this.reportsService.dashboardFinancial(organizationId, todayStr, todayStr),
+        this.reportsService.dashboardFinancial(organizationId, yesterdayStr, yesterdayStr),
         this.prisma.financialEntry.aggregate({
           where: {
             ...paidReceivable,
@@ -138,6 +142,8 @@ export class DashboardService {
 
     const dailyAmount = roundMoney(Number(paidTodayAgg._sum.amount ?? 0));
     const yesterdayAmount = Number(paidYesterdayAgg._sum.amount ?? 0);
+    const dailyProfit = todayReport.financial.totalProfit;
+    const yesterdayProfit = yesterdayReport.financial.totalProfit;
 
     const ticketSum = deliveredOrdersMonth.reduce(
       (s, o) => s + Number(o.totalAmount),
@@ -160,6 +166,8 @@ export class DashboardService {
     return {
       dailyRevenue: dailyAmount,
       dailyRevenueTrend: this.percentTrend(dailyAmount, yesterdayAmount),
+      dailyProfit,
+      dailyProfitTrend: this.percentTrend(dailyProfit, yesterdayProfit),
       invoicesThisMonth: deliveredOrdersMonth.length,
       averageTicket,
       monthlyRevenue: report.financial.revenue,

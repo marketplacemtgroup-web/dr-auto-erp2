@@ -19,6 +19,8 @@ export function normalizeDashboardKpis(
     pendingQuotesTrend: num(raw.pendingQuotesTrend),
     dailyRevenue: num(raw.dailyRevenue),
     dailyRevenueTrend: num(raw.dailyRevenueTrend),
+    dailyProfit: num(raw.dailyProfit),
+    dailyProfitTrend: num(raw.dailyProfitTrend),
     lowStockParts: num(raw.lowStockParts),
     lowStockPartsTrend: num(raw.lowStockPartsTrend),
     delayedServices: num(raw.delayedServices),

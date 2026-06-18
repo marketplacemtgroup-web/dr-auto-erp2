@@ -92,41 +92,6 @@
     gap: 0.625rem;
   }
 
-  .brand-header-mark .brand-tagline {
-    margin-top: -0.75rem;
-    padding-top: 0.25rem;
-  }
-
-  .brand-header-mark--auth .brand-tagline {
-    margin-top: -1rem;
-  }
-
-  .brand-logo {
-    line-height: 0;
-  }
-
-  .brand-logo__img {
-    vertical-align: bottom;
-  }
-
-  .brand-logo--auth {
-    width: clamp(12.5rem, min(88vw, 22.5rem), 22.5rem);
-  }
-
-  @media (min-width: 640px) {
-    .brand-logo--auth {
-      width: clamp(16rem, 42vw, 22.5rem);
-    }
-  }
-
-  .brand-logo--dashboard {
-    width: clamp(10rem, 92%, 13rem);
-  }
-
-  .brand-logo--compact {
-    width: clamp(3rem, 14vw, 4rem);
-  }
-
   .portal-bg {
     background: var(--portal-bg);
   }

@@ -6,6 +6,7 @@ import {
   Package,
   Clock,
   Users,
+  TrendingUp,
 } from "lucide-react";
 import KPICard from "../components/KPICard";
 import SecondaryKPIs from "../components/SecondaryKPIs";
@@ -99,22 +100,33 @@ export default function DashboardPage() {
     },
   ];
 
-  const financialKpi = {
-    label: "Faturamento do Dia",
-    value: finLoading ? "—" : formatMoney(fin?.dailyRevenue ?? 0),
-    trend: fin?.dailyRevenueTrend ?? 0,
-    icon: <DollarSign size={20} strokeWidth={1.5} className="text-[#0E7490]" />,
-    iconBg: "#ECFEFF",
-    sparklineColor: "#0E7490",
-    sparklineData: sparkline(Math.round(fin?.dailyRevenue ?? 0)),
-  };
+  const financialKpis = [
+    {
+      label: "Faturamento do Dia",
+      value: finLoading ? "—" : formatMoney(fin?.dailyRevenue ?? 0),
+      trend: fin?.dailyRevenueTrend ?? 0,
+      icon: <DollarSign size={20} strokeWidth={1.5} className="text-[#0E7490]" />,
+      iconBg: "#ECFEFF",
+      sparklineColor: "#0E7490",
+      sparklineData: sparkline(Math.round(fin?.dailyRevenue ?? 0)),
+    },
+    {
+      label: "Lucro do Dia",
+      value: finLoading ? "—" : formatMoney(fin?.dailyProfit ?? 0),
+      trend: fin?.dailyProfitTrend ?? 0,
+      icon: <TrendingUp size={20} strokeWidth={1.5} className="text-[#10B981]" />,
+      iconBg: "#ECFDF5",
+      sparklineColor: "#10B981",
+      sparklineData: sparkline(Math.round(fin?.dailyProfit ?? 0)),
+    },
+  ];
 
   const kpiData = showFinancial
     ? [
         operationalKpis[0],
         operationalKpis[1],
         operationalKpis[2],
-        financialKpi,
+        ...financialKpis,
         operationalKpis[3],
       ]
     : operationalKpis;
@@ -222,7 +234,7 @@ export default function DashboardPage() {
 
       <div
         className={`grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 ${
-          showFinancial ? "lg:grid-cols-5" : "lg:grid-cols-3 xl:grid-cols-6"
+          showFinancial ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-3 xl:grid-cols-6"
         }`}
       >
         {kpiData.map((kpi) => (

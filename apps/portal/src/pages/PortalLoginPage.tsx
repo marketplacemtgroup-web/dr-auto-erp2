@@ -123,13 +123,15 @@ export default function PortalLoginPage() {
             </button>
           </form>
 
-          <p className="portal-text-muted text-sm mt-6 text-center max-w-sm mx-auto">
+          <p className="portal-card portal-text text-sm font-medium mt-6 text-center max-w-sm mx-auto px-4 py-3 leading-relaxed">
             Não encontrou sua OS? Entre em contato com a oficina pelo telefone ou WhatsApp que
             você recebeu.
           </p>
         </div>
 
-        <p className="portal-text-muted text-xs text-center mt-4">Precisa de ajuda? Fale com a oficina.</p>
+        <p className="portal-card portal-text text-xs font-medium text-center mt-4 mx-auto max-w-sm px-4 py-2.5 leading-relaxed">
+          Precisa de ajuda? Fale com a oficina.
+        </p>
       </div>
     </MotoBackground>
   );

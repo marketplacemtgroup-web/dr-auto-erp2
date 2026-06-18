@@ -59,6 +59,8 @@ export interface DashboardOperationalKpis {
 export interface DashboardFinancialKpis {
   dailyRevenue: number;
   dailyRevenueTrend: number;
+  dailyProfit: number;
+  dailyProfitTrend: number;
   invoicesThisMonth: number;
   averageTicket: number;
   monthlyRevenue: number;
