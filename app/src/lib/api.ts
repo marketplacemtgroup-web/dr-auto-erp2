@@ -322,6 +322,7 @@ export interface SupplierRow {
   supplierType: string;
   status: string;
   phone: string | null;
+  whatsapp?: string | null;
   email: string | null;
   city: string | null;
   state: string | null;
@@ -1265,38 +1266,46 @@ export const api = {
       showOnQuote: opts?.showOnQuote,
     };
 
-    try {
-      const storageInfo = await request<{ directUpload: boolean }>(
-        "/attachments/storage-info",
-        { method: "GET" },
+    const storageInfo = await request<{ directUpload: boolean }>(
+      "/attachments/storage-info",
+      { method: "GET" },
+      token,
+    );
+
+    if (storageInfo.directUpload) {
+      const prep = await request<{
+        uploadUrl: string;
+        storagePath: string;
+        token?: string;
+        headers: { "Content-Type": string };
+      }>(
+        `/attachments/service-order/${serviceOrderId}/prepare-upload`,
+        { method: "POST", body: JSON.stringify(payload) },
         token,
       );
-      if (storageInfo.directUpload) {
-        const prep = await request<{
-          uploadUrl: string;
-          storagePath: string;
-          headers: { "Content-Type": string };
-        }>(
-          `/attachments/service-order/${serviceOrderId}/prepare-upload`,
-          { method: "POST", body: JSON.stringify(payload) },
-          token,
-        );
-        const putRes = await fetch(prep.uploadUrl, {
-          method: "PUT",
-          headers: prep.headers,
-          body: file,
-        });
-        if (!putRes.ok) {
-          throw new ApiError("Falha ao enviar arquivo para o Supabase Storage", putRes.status);
-        }
-        return request<AttachmentRow>(
-          `/attachments/service-order/${serviceOrderId}/confirm-upload`,
-          { method: "POST", body: JSON.stringify({ ...payload, storagePath: prep.storagePath }) },
-          token,
+      const putHeaders: Record<string, string> = { ...prep.headers };
+      if (prep.token) {
+        putHeaders.Authorization = `Bearer ${prep.token}`;
+      }
+      const putRes = await fetch(prep.uploadUrl, {
+        method: "PUT",
+        headers: putHeaders,
+        body: file,
+      });
+      if (!putRes.ok) {
+        const detail = await putRes.text().catch(() => "");
+        throw new ApiError(
+          detail
+            ? `Falha ao enviar arquivo para o storage: ${detail.slice(0, 200)}`
+            : "Falha ao enviar arquivo para o Supabase Storage",
+          putRes.status,
         );
       }
-    } catch (err) {
-      if (err instanceof ApiError) throw err;
+      return request<AttachmentRow>(
+        `/attachments/service-order/${serviceOrderId}/confirm-upload`,
+        { method: "POST", body: JSON.stringify({ ...payload, storagePath: prep.storagePath }) },
+        token,
+      );
     }
 
     const form = new FormData();

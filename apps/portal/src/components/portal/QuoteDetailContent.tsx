@@ -8,6 +8,7 @@ import {
   isSupplementQuote,
   pendingQuoteLines,
   quoteLineTotal,
+  quoteNeedsResponse,
   sumQuoteLines,
 } from "../../lib/quote-lines";
 import { quoteStatusLabel, quoteStatusVariant } from "../../lib/service-order-status";
@@ -58,7 +59,7 @@ export default function QuoteDetailContent({
   const approvedLines = approvedQuoteLines(lines);
   const pendingLines = pendingQuoteLines(lines);
   const supplement = quote.isSupplement ?? isSupplementQuote(lines);
-  const canRespond = quote.canRespond ?? quote.status === "PENDING";
+  const canRespond = quoteNeedsResponse(quote);
   const approvedTotal = sumQuoteLines(approvedLines);
   const pendingTotal = sumQuoteLines(pendingLines);
   const displayTotal = canRespond && supplement && pendingLines.length > 0
@@ -103,9 +104,11 @@ export default function QuoteDetailContent({
 
       {supplement && approvedLines.length > 0 ? (
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] px-1">
-            Já aprovados
-          </p>
+          <div className="quote-sheet__card px-4 py-2.5">
+            <p className="text-xs font-bold uppercase tracking-wide text-[#0F172A]">
+              Já aprovados
+            </p>
+          </div>
           <LineList lines={approvedLines} />
         </div>
       ) : null}
@@ -113,9 +116,11 @@ export default function QuoteDetailContent({
       {pendingLines.length > 0 ? (
         <div className="space-y-3">
           {supplement ? (
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] px-1">
-              Novos itens — aguardando sua aprovação
-            </p>
+            <div className="quote-sheet__card px-4 py-3 border-2 border-amber-400 bg-amber-50">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-950 leading-snug">
+                Novos itens — aguardando sua aprovação
+              </p>
+            </div>
           ) : null}
           <LineList lines={pendingLines} />
         </div>

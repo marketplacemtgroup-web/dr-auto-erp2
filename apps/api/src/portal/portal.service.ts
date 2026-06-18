@@ -571,7 +571,7 @@ export class PortalService {
           unitPrice: Number(item.unitPrice),
         })),
       },
-      canRespond: q.status === 'PENDING',
+      canRespond: q.status === 'PENDING' && pendingLines.length > 0,
     };
   }
 
@@ -794,7 +794,7 @@ export class PortalService {
       if (soFull) {
         await this.notifyQuoteRejected(ctx.organizationId, soFull.vehicleId, updated, soFull);
       }
-      return updated;
+      return this.getQuoteForPortal(ctx, quote.id);
     }
 
     if (allRejected) {
@@ -875,7 +875,7 @@ export class PortalService {
       await this.notifyQuoteApproved(ctx, updated, soFull, finalApprovedAmount);
     }
 
-    return updated;
+    return this.getQuoteForPortal(ctx, quoteId);
   }
 
   async rejectQuote(
@@ -957,7 +957,7 @@ export class PortalService {
       if (soFull && ctx) {
         await this.notifyQuoteRejected(ctx.organizationId, soFull.vehicleId, updated, soFull);
       }
-      return updated;
+      return this.resolveQuotePortalResponse(quote.id, ctx);
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -992,7 +992,25 @@ export class PortalService {
       await this.notifyQuoteRejected(quote.organizationId, soFull.vehicleId, updated, soFull);
     }
 
-    return updated;
+    return this.resolveQuotePortalResponse(quote.id, ctx);
+  }
+
+  private async resolveQuotePortalResponse(
+    quoteId: string,
+    ctx: { organizationId: string; vehicleId: string } | null,
+  ) {
+    if (ctx) {
+      return this.getQuoteForPortal(ctx, quoteId);
+    }
+    const quote = await this.prisma.quote.findFirst({
+      where: { id: quoteId },
+      include: { serviceOrder: { select: { vehicleId: true } } },
+    });
+    if (!quote) throw new NotFoundException('Orçamento não encontrado');
+    return this.getQuoteForPortal(
+      { organizationId: quote.organizationId, vehicleId: quote.serviceOrder.vehicleId },
+      quoteId,
+    );
   }
 
   async getPublicQuote(token: string) {

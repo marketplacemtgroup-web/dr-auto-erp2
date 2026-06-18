@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MessageCircle } from "lucide-react";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
+import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import KpiStrip from "../../components/modules/KpiStrip";
 import { api, type SupplierProfile } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { routes } from "../../lib/routes";
+import { whatsappUrl } from "../../lib/whatsapp";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -26,10 +28,12 @@ export default function SupplierDetailPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"dados" | "historico">("dados");
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [form, setForm] = useState({
     legalName: "",
     tradeName: "",
     phone: "",
+    whatsapp: "",
     email: "",
     notes: "",
   });
@@ -48,18 +52,28 @@ export default function SupplierDetailPage() {
     },
   });
 
+  const remove = useMutation({
+    mutationFn: () => api.deleteSupplier(token!, id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      navigate(routes.fornecedores);
+    },
+  });
+
   if (isLoading || !profile) {
     return <div className="p-6 text-[#64748B]">Carregando fornecedor...</div>;
   }
 
   const { supplier, stats, recentPurchases } = profile;
   const displayName = supplier.tradeName || supplier.legalName;
+  const contactPhone = supplier.whatsapp ?? supplier.phone;
 
   function openEdit() {
     setForm({
       legalName: supplier.legalName,
       tradeName: supplier.tradeName ?? "",
       phone: supplier.phone ?? "",
+      whatsapp: supplier.whatsapp ?? "",
       email: supplier.email ?? "",
       notes: supplier.notes ?? "",
     });
@@ -77,12 +91,42 @@ export default function SupplierDetailPage() {
         Voltar para fornecedores
       </button>
 
-      <div>
-        <h1 className="text-xl font-bold text-[#0F3D4C]">{displayName}</h1>
-        <p className="text-[13px] text-[#64748B] mt-1">
-          {supplier.document ?? "Sem documento"} · {supplier.city ?? "—"}
-          {supplier.state ? `/${supplier.state}` : ""}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-[#0F3D4C]">{displayName}</h1>
+          <p className="text-[13px] text-[#64748B] mt-1">
+            {supplier.document ?? "Sem documento"} · {supplier.city ?? "—"}
+            {supplier.state ? `/${supplier.state}` : ""}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {contactPhone ? (
+            <a
+              href={whatsappUrl(contactPhone, `Olá, ${displayName}!`)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#25D366] text-white text-[13px] font-medium hover:bg-[#1da851]"
+            >
+              <MessageCircle size={16} />
+              Falar no WhatsApp
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={openEdit}
+            className="h-9 px-4 rounded-lg border border-[#0E7490] text-[13px] text-[#0E7490] font-medium hover:bg-[#ECFEFF]"
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="h-9 px-4 rounded-lg border border-red-200 text-[13px] text-red-600 font-medium hover:bg-red-50"
+          >
+            Excluir
+          </button>
+        </div>
       </div>
 
       <KpiStrip
@@ -112,13 +156,6 @@ export default function SupplierDetailPage() {
             {t === "dados" ? "Dados" : "Histórico"}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={openEdit}
-          className="ml-auto text-[13px] text-[#0E7490] font-medium"
-        >
-          Editar
-        </button>
       </div>
 
       {tab === "dados" ? (
@@ -133,7 +170,23 @@ export default function SupplierDetailPage() {
           </div>
           <div>
             <p className="text-[#94A3B8] text-[11px] uppercase">Telefone</p>
-            <p>{supplier.phone ?? supplier.whatsapp ?? "—"}</p>
+            <p>{supplier.phone ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-[#94A3B8] text-[11px] uppercase">WhatsApp</p>
+            {supplier.whatsapp ? (
+              <a
+                href={whatsappUrl(supplier.whatsapp, `Olá, ${displayName}!`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[#25D366] font-medium hover:text-[#1da851]"
+              >
+                <MessageCircle size={14} />
+                {supplier.whatsapp}
+              </a>
+            ) : (
+              <p>—</p>
+            )}
           </div>
           <div>
             <p className="text-[#94A3B8] text-[11px] uppercase">E-mail</p>
@@ -210,6 +263,14 @@ export default function SupplierDetailPage() {
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
           />
         </FormField>
+        <FormField label="WhatsApp">
+          <input
+            className={inputClass}
+            value={form.whatsapp}
+            onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
+            placeholder="Usado no botão de contato"
+          />
+        </FormField>
         <FormField label="E-mail">
           <input
             className={inputClass}
@@ -225,6 +286,15 @@ export default function SupplierDetailPage() {
           />
         </FormField>
       </FormDrawer>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Excluir fornecedor"
+        message={`Excluir ${displayName}? O fornecedor será inativado e sairá da lista de ativos.`}
+        loading={remove.isPending}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={() => remove.mutate()}
+      />
     </div>
   );
 }

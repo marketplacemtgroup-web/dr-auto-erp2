@@ -35,8 +35,8 @@ export default function PublicQuotePage() {
     setActing(true);
     try {
       const payload = buildApprovePayload(data.quote.lines ?? []);
-      await api.publicApproveQuote(token, payload);
-      await load();
+      const updated = await api.publicApproveQuote(token, payload);
+      setData({ ...data, quote: updated });
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Erro ao aprovar");
     } finally {
@@ -49,8 +49,8 @@ export default function PublicQuotePage() {
     if (!confirm("Recusar este orçamento?")) return;
     setActing(true);
     try {
-      await api.publicRejectQuote(token);
-      await load();
+      const updated = await api.publicRejectQuote(token);
+      setData((prev) => (prev ? { ...prev, quote: updated } : prev));
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Erro ao recusar");
     } finally {

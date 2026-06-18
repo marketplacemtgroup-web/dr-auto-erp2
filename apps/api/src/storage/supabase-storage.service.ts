@@ -62,6 +62,11 @@ export class SupabaseStorageService {
         .upload(path, buffer, { contentType, upsert });
       if (error) {
         this.logger.error(`Upload falhou: ${error.message}`);
+        if (error.message?.includes('does not exist') || (error as { statusCode?: string }).statusCode === '404') {
+          throw new Error(
+            `Bucket "${bucket}" não existe no Supabase Storage. Rode: node scripts/ensure-supabase-buckets.mjs`,
+          );
+        }
         throw new Error('Falha ao enviar arquivo para o storage');
       }
       return;
@@ -95,6 +100,11 @@ export class SupabaseStorageService {
     const { data, error } = await this.getClient().storage.from(bucket).createSignedUploadUrl(path);
     if (error || !data?.signedUrl) {
       this.logger.error(`Signed upload URL falhou: ${error?.message}`);
+      if (error?.message?.includes('does not exist') || error?.statusCode === '404') {
+        throw new Error(
+          `Bucket "${bucket}" não existe no Supabase Storage. Rode: node scripts/ensure-supabase-buckets.mjs`,
+        );
+      }
       throw new Error('Não foi possível preparar upload no storage');
     }
     return { signedUrl: data.signedUrl, path: data.path, token: data.token };

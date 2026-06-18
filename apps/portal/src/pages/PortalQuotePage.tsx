@@ -39,9 +39,9 @@ export default function PortalQuotePage() {
     const payload = buildApprovePayload(quote.lines ?? []);
     setActing(true);
     try {
-      await api.portalApprove(session.accessToken, quote.id, payload);
+      const updated = await api.portalApprove(session.accessToken, quote.id, payload);
+      setQuote(updated);
       await refresh();
-      await load();
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Erro ao aprovar");
     } finally {
@@ -54,9 +54,9 @@ export default function PortalQuotePage() {
     if (!confirm("Recusar este orçamento? A oficina será notificada.")) return;
     setActing(true);
     try {
-      await api.portalReject(session.accessToken, quote.id);
+      const updated = await api.portalReject(session.accessToken, quote.id);
+      setQuote(updated);
       await refresh();
-      await load();
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Erro ao recusar");
     } finally {

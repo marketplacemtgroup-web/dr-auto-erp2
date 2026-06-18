@@ -8,6 +8,7 @@ import { resolveMediaUrl } from "../lib/mediaUrl";
 import { isImageMime, isVideoMime } from "../lib/mediaTypes";
 import { routes } from "../lib/routes";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel } from "../lib/service-order-status";
+import { quoteNeedsResponse } from "../lib/quote-lines";
 import { whatsappUrl, resolveOrganizationWhatsApp } from "../lib/whatsapp";
 import { usePortalStore } from "../stores/portalStore";
 
@@ -37,8 +38,8 @@ export default function PortalServiceOrderPage() {
     data?.organization.phone ?? dashboard?.organization.phone,
   );
 
-  const pendingQuotes = data?.quotes.filter((q) => q.status === "PENDING" || q.canRespond) ?? [];
-  const otherQuotes = data?.quotes.filter((q) => q.status !== "PENDING" && !q.canRespond) ?? [];
+  const pendingQuotes = data?.quotes.filter((q) => quoteNeedsResponse(q)) ?? [];
+  const otherQuotes = data?.quotes.filter((q) => !quoteNeedsResponse(q)) ?? [];
 
   return (
     <div className="space-y-4 -mt-2">

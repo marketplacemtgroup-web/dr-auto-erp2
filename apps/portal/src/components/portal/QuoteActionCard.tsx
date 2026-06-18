@@ -1,7 +1,7 @@
 import { Check, ChevronRight, Loader2, X } from "lucide-react";
 import type { PortalQuoteRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
-import { pendingQuoteLines } from "../../lib/quote-lines";
+import { pendingQuoteLines, quoteNeedsResponse } from "../../lib/quote-lines";
 
 export default function QuoteActionCard({
   quote,
@@ -18,6 +18,7 @@ export default function QuoteActionCard({
 }) {
   const supplement = quote.isSupplement ?? false;
   const pendingCount = quote.pendingLineCount ?? pendingQuoteLines(quote.lines ?? []).length;
+  const canRespond = quoteNeedsResponse(quote);
 
   return (
     <article
@@ -50,26 +51,28 @@ export default function QuoteActionCard({
           <ChevronRight className="portal-text-muted shrink-0 mt-1" size={22} />
         </div>
       </button>
-      <div className="px-4 pb-4 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onApprove}
-          className="h-11 rounded-xl bg-green-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-          {supplement ? "Aprovar novos" : "Aprovar tudo"}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onReject}
-          className="h-11 rounded-xl border-2 border-red-600 text-red-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          <X size={18} />
-          Recusar
-        </button>
-      </div>
+      {canRespond ? (
+        <div className="px-4 pb-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onApprove}
+            className="h-11 rounded-xl bg-green-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            {supplement ? "Aprovar novos" : "Aprovar tudo"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onReject}
+            className="h-11 rounded-xl border-2 border-red-600 text-red-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            <X size={18} />
+            Recusar
+          </button>
+        </div>
+      ) : null}
     </article>
   );
 }

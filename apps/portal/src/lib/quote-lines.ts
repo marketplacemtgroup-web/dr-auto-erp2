@@ -48,6 +48,20 @@ export function isSupplementQuote(lines: QuoteLineRow[]) {
   return approvedQuoteLines(lines).length > 0 && pendingQuoteLines(lines).length > 0;
 }
 
+/** Orçamento ainda exige resposta do cliente (linhas pendentes + status aberto). */
+export function quoteNeedsResponse(quote: {
+  status: string;
+  canRespond?: boolean;
+  lines?: QuoteLineRow[];
+}) {
+  if (quote.status === "APPROVED" || quote.status === "REJECTED" || quote.status === "DRAFT") {
+    return false;
+  }
+  const pending = pendingQuoteLines(quote.lines ?? []);
+  if (pending.length === 0) return false;
+  return quote.canRespond ?? quote.status === "PENDING";
+}
+
 /** Aprova todas as linhas pendentes (ou todas, se não houver pendência explícita). */
 export function buildApprovePayload(lines: QuoteLineRow[]) {
   const pending = pendingQuoteLines(lines);

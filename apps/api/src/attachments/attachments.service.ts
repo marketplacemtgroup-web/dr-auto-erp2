@@ -93,7 +93,10 @@ export class AttachmentsService {
       bucket,
       token: signed.token,
       method: 'PUT' as const,
-      headers: { 'Content-Type': dto.mimeType },
+      headers: {
+        'Content-Type': dto.mimeType,
+        ...(signed.token ? { Authorization: `Bearer ${signed.token}` } : {}),
+      },
     };
   }
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -98,11 +99,14 @@ export class AttachmentsController {
   upload(
     @CurrentUser() user: { organizationId: string; userId: string },
     @Param('serviceOrderId') serviceOrderId: string,
-    @UploadedFile() file: { buffer: Buffer; originalname: string; mimetype: string },
+    @UploadedFile() file: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
     @Query('category') category?: string,
     @Query('visibleToCustomer') visibleToCustomer?: string,
     @Query('showOnQuote') showOnQuote?: string,
   ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Nenhum arquivo recebido no upload');
+    }
     return this.attachmentsService.uploadForServiceOrder(
       user.organizationId,
       serviceOrderId,

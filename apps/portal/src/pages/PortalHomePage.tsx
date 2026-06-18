@@ -13,7 +13,7 @@ import QuoteActionCard from "../components/portal/QuoteActionCard";
 import QuickServiceGrid from "../components/portal/QuickServiceGrid";
 import VehicleCard from "../components/portal/VehicleCard";
 import { ApiError, api, type PortalQuoteRow } from "../lib/api";
-import { buildApprovePayload } from "../lib/quote-lines";
+import { buildApprovePayload, quoteNeedsResponse } from "../lib/quote-lines";
 import { formatMoney } from "../lib/format";
 import {
   hasPendingQuote,
@@ -38,7 +38,7 @@ export default function PortalHomePage() {
 
   const quotes = (dashboard?.quotes ?? []) as PortalQuote[];
   const pending = useMemo(
-    () => quotes.filter((q) => q.status === "PENDING" || q.canRespond),
+    () => quotes.filter((q) => quoteNeedsResponse(q)),
     [quotes],
   );
 
@@ -116,8 +116,7 @@ export default function PortalHomePage() {
       activeOs
         ? quotes.find(
             (q) =>
-              q.serviceOrder.id === activeOs.id &&
-              (q.status === "PENDING" || q.canRespond),
+              q.serviceOrder.id === activeOs.id && quoteNeedsResponse(q),
           )
         : null,
     [activeOs, quotes],

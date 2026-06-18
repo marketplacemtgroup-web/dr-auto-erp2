@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { MessageCircle } from "lucide-react";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
+import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import { api, type SupplierRow } from "../../lib/api";
 import { routes } from "../../lib/routes";
+import { whatsappUrl } from "../../lib/whatsapp";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 
 const SUPPLIER_TYPES: Record<string, string> = {
@@ -42,6 +45,7 @@ export default function SuppliersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SupplierRow | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const { data, isLoading, error } = useApiQuery(
@@ -70,6 +74,14 @@ export default function SuppliersPage() {
       setDrawerOpen(false);
       setForm(emptyForm);
       navigate(routes.fornecedorDetalhe(saved.id));
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api.deleteSupplier(token!, deleteTarget!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      setDeleteTarget(null);
     },
   });
 
@@ -103,10 +115,33 @@ export default function SuppliersPage() {
               render: (r) => SUPPLIER_TYPES[r.supplierType] ?? r.supplierType,
             },
             { key: "city", header: "Cidade", render: (r) => r.city ?? "—" },
+            {
+              key: "whatsapp",
+              header: "WhatsApp",
+              render: (r) => {
+                const phone = r.whatsapp ?? r.phone;
+                if (!phone) return "—";
+                const name = r.tradeName || r.legalName;
+                return (
+                  <a
+                    href={whatsappUrl(phone, `Olá, ${name}!`)}
+                    onClick={(e) => e.stopPropagation()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#25D366] text-white text-xs font-medium hover:bg-[#1da851]"
+                    title="Falar no WhatsApp"
+                  >
+                    <MessageCircle size={14} />
+                    WhatsApp
+                  </a>
+                );
+              },
+            },
             { key: "phone", header: "Telefone", render: (r) => r.phone ?? r.email ?? "—" },
           ]}
           rows={data ?? []}
           onRowClick={(r) => navigate(routes.fornecedorDetalhe(r.id))}
+          onDelete={setDeleteTarget}
         />
       </ModulePageShell>
 
@@ -221,6 +256,15 @@ export default function SuppliersPage() {
           />
         </FormField>
       </FormDrawer>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Excluir fornecedor"
+        message={`Excluir ${deleteTarget?.tradeName || deleteTarget?.legalName}? O fornecedor será inativado e sairá da lista de ativos.`}
+        loading={remove.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => remove.mutate()}
+      />
     </>
   );
 }
