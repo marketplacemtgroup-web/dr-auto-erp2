@@ -5,6 +5,7 @@ Documentação operacional para equipe da oficina. Cada arquivo pode ser exporta
 | Documento | Conteúdo |
 |-----------|----------|
 | [FLUXO-ATENDIMENTO.md](./FLUXO-ATENDIMENTO.md) | Da chegada do veículo até a entrega, portal do cliente e orçamentos |
+| [FLUXO-COMPLEMENTO-ORCAMENTO.md](./FLUXO-COMPLEMENTO-ORCAMENTO.md) | Adicionar itens a OS em andamento sem nova OS — complemento de orçamento |
 | [FLUXO-CADASTRO-CLIENTE-VEICULO.md](./FLUXO-CADASTRO-CLIENTE-VEICULO.md) | Cadastro de clientes, veículos e vínculos |
 | [FLUXO-CADASTRO-PRODUTO.md](./FLUXO-CADASTRO-PRODUTO.md) | Estoque, peças, movimentações e uso na OS |
 | [FLUXO-FINANCEIRO.md](./FLUXO-FINANCEIRO.md) | Contas a pagar/receber, caixa e faturamento da OS |
