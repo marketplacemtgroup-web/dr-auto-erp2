@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { QuotesModule } from '../quotes/quotes.module';
@@ -9,7 +9,13 @@ import { PortalService } from './portal.service';
 import { PortalJwtStrategy } from './portal.strategy';
 
 @Module({
-  imports: [AuthModule, AttachmentsModule, QuotesModule, EventsModule, PushModule],
+  imports: [
+    AuthModule,
+    AttachmentsModule,
+    forwardRef(() => QuotesModule),
+    EventsModule,
+    PushModule,
+  ],
   controllers: [PortalController],
   providers: [PortalService, PortalJwtStrategy],
   exports: [PortalService],
