@@ -13,14 +13,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,28 +34,48 @@ fun OrdersScreen(
     viewModel: OrdersViewModel,
     preselectedFilter: String = "Todas",
     onNavigateToOrderDetails: (String) -> Unit,
+    onScreenVisible: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val orders by viewModel.orders.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val currentFilter by viewModel.currentFilter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-
     val lastApiError by viewModel.lastApiError.collectAsState()
+    val actionError by viewModel.actionError.collectAsState()
 
-    // Filter categories requested
-    val filtersList = listOf("Todas", "Checklist", "Em análise", "Aguardando aprovação", "Em execução", "Finalizadas")
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val filtersList = listOf(
+        "Todas",
+        "OS aberta",
+        "Checklist",
+        "Aguardando aprovação",
+        "Em atraso",
+        "Em execução",
+        "Finalizadas hoje",
+    )
 
     LaunchedEffect(preselectedFilter) {
         if (preselectedFilter != "Todas") {
             viewModel.updateFilter(preselectedFilter)
-        } else {
-            viewModel.loadOrders()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        onScreenVisible()
+    }
+
+    LaunchedEffect(actionError) {
+        actionError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearActionError()
         }
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -73,15 +93,14 @@ fun OrdersScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = Color.Transparent
+        containerColor = androidx.compose.ui.graphics.Color.Transparent
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            // Simulated Warning Banner
-            AnimatedVisibility(visible = lastApiError != null) {
+            AnimatedVisibility(visible = lastApiError != null || actionError != null) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -93,26 +112,24 @@ fun OrdersScreen(
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(imageVector = Icons.Default.FilterList, contentDescription = "Active Filter", tint = PremiumGold)
+                        Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = PremiumGold)
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "MODO OFFLINE COOPERAÇÃO",
+                                text = lastApiError ?: actionError ?: "Erro ao carregar",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
                             )
-                            Text(
-                                text = "Buscando dados no cache local do dispositivo.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = LightSilver)
-                            )
+                        }
+                        IconButton(onClick = { viewModel.loadOrders() }) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = "Tentar novamente", tint = LightSilver)
                         }
                         IconButton(onClick = { viewModel.clearLastError() }) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = LightSilver)
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = LightSilver)
                         }
                     }
                 }
             }
 
-            // Search Bar Input
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -128,7 +145,6 @@ fun OrdersScreen(
                 )
             }
 
-            // Scrollable filter tabs
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -165,7 +181,6 @@ fun OrdersScreen(
                 }
             }
 
-            // Orders list
             if (isLoading) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = CrimsonRed)

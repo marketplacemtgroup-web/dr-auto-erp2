@@ -32,7 +32,7 @@ export class ProductsController {
   }
 
   @Get()
-  @RequirePermissions('inventory.manage', 'dashboard.view')
+  @RequirePermissions('inventory.manage', 'dashboard.view', 'service_orders.manage')
   list(
     @CurrentUser() user: { organizationId: string },
     @Query('search') search?: string,

@@ -95,26 +95,20 @@ object WorkshopRepository {
         },
     ) {
         val kpis = api.dashboardKpis()
-        val orders = api.listServiceOrders()
-        cachedOrders = orders.map { ApiMappers.toOrder(it) }
+        refreshOrdersCache()
         ApiMappers.dashboardMetrics(kpis, cachedOrders)
+    }
+
+    private suspend fun refreshOrdersCache(search: String? = null) {
+        val rows = api.listServiceOrders(search = search?.ifBlank { null })
+        cachedOrders = rows.map { ApiMappers.toOrder(it) }
     }
 
     suspend fun getOrders(query: String = "", statusFilter: String = "Todas"): List<Order> = apiCall(
         fallback = { filterLocal(cachedOrders, query, statusFilter) },
     ) {
-        val status = ApiMappers.filterStatusParam(statusFilter)
-        val rows = api.listServiceOrders(
-            search = query.ifBlank { null },
-            status = status,
-        )
-        val orders = rows.map { ApiMappers.toOrder(it) }
-        cachedOrders = orders
-        if (statusFilter == "Todas" && query.isBlank()) {
-            orders
-        } else {
-            filterLocal(orders, query, statusFilter)
-        }
+        refreshOrdersCache(search = query.ifBlank { null })
+        filterLocal(cachedOrders, query, statusFilter)
     }
 
     private fun filterLocal(orders: List<Order>, query: String, statusFilter: String): List<Order> =
@@ -124,16 +118,7 @@ object WorkshopRepository {
                 order.vehicleName.contains(query, ignoreCase = true) ||
                 order.vehiclePlate.contains(query, ignoreCase = true) ||
                 order.displayNumber.contains(query)
-            val matchesStatus = when (statusFilter) {
-                "Todas" -> true
-                "Checklist" -> order.status == OrderStatus.RECEIVED
-                "Em análise" -> order.status == OrderStatus.DIAGNOSIS
-                "Aguardando aprovação" -> order.status == OrderStatus.AWAITING_APPROVAL
-                "Em execução" -> order.status == OrderStatus.IN_PROGRESS
-                "Finalizadas" -> order.status == OrderStatus.FINISHED
-                else -> order.status.label.equals(statusFilter, ignoreCase = true)
-            }
-            matchesQuery && matchesStatus
+            matchesQuery && ApiMappers.matchesStatusFilter(order, statusFilter)
         }
 
     suspend fun getOrderById(id: String): Order = apiCall {
@@ -300,6 +285,7 @@ object WorkshopRepository {
                 fileName = fileName,
                 mimeType = "image/jpeg",
                 category = category,
+                visibleToCustomer = true,
             ),
         )
     }
@@ -364,6 +350,24 @@ object WorkshopRepository {
     val products: List<Product> get() = cachedProducts
     val serviceCatalog: List<ServiceCatalog> get() = cachedServices
 
+    suspend fun searchProducts(query: String): List<Product> = apiCall(
+        fallback = {
+            val q = query.trim()
+            if (q.isBlank()) cachedProducts
+            else cachedProducts.filter {
+                it.name.contains(q, ignoreCase = true) || it.code.contains(q, ignoreCase = true)
+            }
+        },
+    ) {
+        val rows = api.listProducts(search = query.trim().ifBlank { null })
+        val results = rows.map { ApiMappers.toProduct(it) }
+        if (query.isBlank()) {
+            cachedProducts = results
+            _productsFlow.value = results
+        }
+        results
+    }
+
     suspend fun saveBudget(orderId: String, budget: Budget): Boolean = apiCall {
         val detail = api.getServiceOrder(orderId)
         var quoteId = budget.quoteId ?: ApiMappers.toBudget(detail).quoteId
@@ -417,6 +421,8 @@ object WorkshopRepository {
         }
         true
     }
+
+    suspend fun reloadBudget(orderId: String): Budget = getBudget(orderId)
 
     suspend fun sendBudgetToClient(orderId: String): Boolean = apiCall {
         val detail = api.getServiceOrder(orderId)

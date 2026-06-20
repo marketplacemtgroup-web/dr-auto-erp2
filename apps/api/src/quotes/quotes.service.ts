@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { Prisma, ServiceOrderStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,6 +9,7 @@ import { QuotesSyncService } from './quotes-sync.service';
 import { EventsService } from '../events/events.service';
 import { notDeleted } from '../common/soft-delete';
 import { CAR_CHECKLIST_TEMPLATE } from '../service-orders/checklist-template';
+import { ServiceOrdersService } from '../service-orders/service-orders.service';
 
 const quoteInclude = {
   serviceOrder: {
@@ -27,6 +28,8 @@ export class QuotesService {
     private readonly prisma: PrismaService,
     private readonly quotesSync: QuotesSyncService,
     private readonly events: EventsService,
+    @Inject(forwardRef(() => ServiceOrdersService))
+    private readonly serviceOrders: ServiceOrdersService,
   ) {}
 
   private async nextServiceOrderNumber(organizationId: string) {
@@ -371,6 +374,11 @@ export class QuotesService {
         },
       }),
     ]);
+
+    await this.serviceOrders.deductPartsStockForExecution(
+      organizationId,
+      quote.serviceOrderId,
+    );
 
     await this.events.emitOffice(organizationId, {
       type: 'quote.approved',

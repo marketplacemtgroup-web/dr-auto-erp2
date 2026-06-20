@@ -9,8 +9,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 object ApiMappers {
-    private val isoParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale("pt", "BR"))
-    private val displayFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR"))
+    private val isoParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.forLanguageTag("pt-BR"))
+    private val displayFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.forLanguageTag("pt-BR"))
 
     fun toUser(session: AuthSessionDto): User = User(
         id = session.user.id,
@@ -42,6 +42,8 @@ object ApiMappers {
             openTime = relativeTime(row.updatedAt),
             clientComplaint = "",
             vehicleId = row.vehicle.id,
+            updatedAtIso = row.updatedAt,
+            estimatedAtIso = row.estimatedAt,
         )
     }
 
@@ -160,13 +162,17 @@ object ApiMappers {
         role = row.jobTitle?.name ?: row.accessProfile ?: "Técnico",
     )
 
-    fun toProduct(row: ProductRowDto): Product = Product(
-        id = row.id,
-        code = row.sku ?: row.id.take(8),
-        name = row.name,
-        price = toDouble(row.salePrice),
-        stockQty = row.stock,
-    )
+    fun toProduct(row: ProductRowDto): Product {
+        val available = (row.stock - row.reservedStock).coerceAtLeast(0)
+        return Product(
+            id = row.id,
+            code = row.sku ?: row.id.take(8),
+            name = row.name,
+            price = toDouble(row.salePrice),
+            stockQty = row.stock,
+            availableQty = available,
+        )
+    }
 
     fun toServiceCatalog(row: ServiceCatalogRowDto): ServiceCatalog = ServiceCatalog(
         id = row.id,
@@ -176,21 +182,73 @@ object ApiMappers {
     )
 
     fun dashboardMetrics(kpis: DashboardKpisDto, orders: List<Order>): Map<String, Int> {
-        val received = orders.count { it.status == OrderStatus.RECEIVED }
-        val diagnosis = orders.count { it.status == OrderStatus.DIAGNOSIS }
         val awaitingApproval = orders.count { it.status == OrderStatus.AWAITING_APPROVAL }
         return mapOf(
-            "os_aguardando_checklist" to received,
-            "em_analise" to diagnosis,
+            "os_aberta" to kpis.openServiceOrders,
             "aguardando_aprovacao" to maxOf(kpis.pendingQuotes, awaitingApproval),
-            "finalizadas_hoje" to orders.count { it.status == OrderStatus.FINISHED },
-            "open_service_orders" to kpis.openServiceOrders,
-            "vehicles_in_shop" to kpis.vehiclesInShop,
+            "os_em_atraso" to kpis.delayedServices,
+            "finalizadas_hoje" to orders.count { isFinishedToday(it) },
         )
     }
 
+    fun matchesStatusFilter(order: Order, statusFilter: String): Boolean = when (statusFilter) {
+        "Todas" -> true
+        "Checklist" -> order.status == OrderStatus.RECEIVED
+        "Em análise" -> order.status == OrderStatus.DIAGNOSIS
+        "Aguardando aprovação" -> order.status == OrderStatus.AWAITING_APPROVAL
+        "Em execução" -> order.status == OrderStatus.IN_PROGRESS
+        "Finalizadas" -> order.status == OrderStatus.FINISHED
+        "OS aberta" -> order.status in Order.OPEN_STATUSES
+        "Em atraso" -> isDelayed(order)
+        "Finalizadas hoje" -> isFinishedToday(order)
+        else -> order.status.label.equals(statusFilter, ignoreCase = true)
+    }
+
+    fun isDelayed(order: Order): Boolean {
+        if (order.status != OrderStatus.IN_PROGRESS && order.status != OrderStatus.AWAITING_PART) {
+            return false
+        }
+        val estimated = parseIso(order.estimatedAtIso) ?: return false
+        return estimated.before(Date())
+    }
+
+    fun isFinishedToday(order: Order): Boolean {
+        if (order.status != OrderStatus.FINISHED) return false
+        val updated = parseIso(order.updatedAtIso) ?: return false
+        val todayStart = startOfToday()
+        val todayEnd = endOfToday()
+        return !updated.before(todayStart) && !updated.after(todayEnd)
+    }
+
+    private fun parseIso(raw: String?): Date? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            isoParser.parse(raw.take(19))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun startOfToday(): Date {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        return cal.time
+    }
+
+    private fun endOfToday(): Date {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
+        cal.set(java.util.Calendar.MINUTE, 59)
+        cal.set(java.util.Calendar.SECOND, 59)
+        cal.set(java.util.Calendar.MILLISECOND, 999)
+        return cal.time
+    }
+
     fun filterStatusParam(filter: String): String? = when (filter) {
-        "Todas" -> null
+        "Todas", "OS aberta", "Em atraso", "Finalizadas hoje" -> null
         "Checklist", "Recebido" -> OrderStatus.RECEIVED.apiCode
         "Em análise", "Em diagnóstico" -> OrderStatus.DIAGNOSIS.apiCode
         "Aguardando aprovação" -> OrderStatus.AWAITING_APPROVAL.apiCode

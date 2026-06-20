@@ -26,6 +26,7 @@ import { EventsModule } from './events/events.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { StorageModule } from './storage/storage.module';
 import { TeamModule } from './team/team.module';
+import { CronModule } from './cron/cron.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { TeamModule } from './team/team.module';
     SearchModule,
     NotificationsModule,
     TeamModule,
+    CronModule,
   ],
 })
 export class AppModule {}

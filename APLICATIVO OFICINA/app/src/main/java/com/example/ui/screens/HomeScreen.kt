@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -186,18 +188,18 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             DashboardMetricCard(
-                                count = metrics["os_aguardando_checklist"] ?: 0,
-                                label = "Aguardando Checklist",
-                                icon = { Icon(Icons.Default.CameraAlt, "Checklist", tint = AccentRed, modifier = Modifier.size(24.dp)) },
-                                onClick = { onNavigateToOrdersList("Checklist") },
+                                count = metrics["os_aberta"] ?: 0,
+                                label = "OS Aberta",
+                                icon = { Icon(Icons.AutoMirrored.Filled.Assignment, "OS Aberta", tint = CrimsonRed, modifier = Modifier.size(24.dp)) },
+                                onClick = { onNavigateToOrdersList("OS aberta") },
                                 borderColor = CrimsonRed,
                                 modifier = Modifier.weight(1f)
                             )
                             DashboardMetricCard(
-                                count = metrics["em_analise"] ?: 0,
-                                label = "Em Análise Técnica",
-                                icon = { Icon(Icons.Default.Engineering, "Analysis", tint = WarningAmber, modifier = Modifier.size(24.dp)) },
-                                onClick = { onNavigateToOrdersList("Em análise") },
+                                count = metrics["aguardando_aprovacao"] ?: 0,
+                                label = "Aguardando Aprovação",
+                                icon = { Icon(Icons.Default.HourglassEmpty, "Approval", tint = PremiumGold, modifier = Modifier.size(24.dp)) },
+                                onClick = { onNavigateToOrdersList("Aguardando aprovação") },
                                 borderColor = PremiumGold,
                                 modifier = Modifier.weight(1f)
                             )
@@ -207,18 +209,18 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             DashboardMetricCard(
-                                count = metrics["aguardando_aprovacao"] ?: 0,
-                                label = "Aguardando Aprovação",
-                                icon = { Icon(Icons.Default.HourglassEmpty, "Approval", tint = PremiumGold, modifier = Modifier.size(24.dp)) },
-                                onClick = { onNavigateToOrdersList("Aguardando aprovação") },
-                                borderColor = PremiumGold,
+                                count = metrics["os_em_atraso"] ?: 0,
+                                label = "OS em Atraso",
+                                icon = { Icon(Icons.Default.Warning, "Atraso", tint = WarningAmber, modifier = Modifier.size(24.dp)) },
+                                onClick = { onNavigateToOrdersList("Em atraso") },
+                                borderColor = WarningAmber,
                                 modifier = Modifier.weight(1f)
                             )
                             DashboardMetricCard(
                                 count = metrics["finalizadas_hoje"] ?: 0,
                                 label = "Finalizadas Hoje",
                                 icon = { Icon(Icons.Default.CheckCircle, "Completed", tint = SuccessGreen, modifier = Modifier.size(24.dp)) },
-                                onClick = { onNavigateToOrdersList("Finalizadas") },
+                                onClick = { onNavigateToOrdersList("Finalizadas hoje") },
                                 borderColor = SuccessGreen,
                                 modifier = Modifier.weight(1f)
                             )
@@ -252,7 +254,7 @@ fun HomeScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
-                                Icon(Icons.Default.ListAlt, contentDescription = "OS", tint = CrimsonRed)
+                                Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = "OS", tint = CrimsonRed)
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text("Ver todas OS", fontSize = 11.sp, color = FrostWhite, fontWeight = FontWeight.Bold)
                             }

@@ -31,8 +31,23 @@ data class Order(
     val technicalDiagnostic: String = "",
     val history: List<TimelineEvent> = emptyList(),
     val vehicleId: String? = null,
+    /** ISO timestamp bruto da API para filtros de data. */
+    val updatedAtIso: String? = null,
+    val estimatedAtIso: String? = null,
 ) {
     val displayNumber: String get() = number.toString()
+
+    companion object {
+        val OPEN_STATUSES = setOf(
+            OrderStatus.RECEIVED,
+            OrderStatus.DIAGNOSIS,
+            OrderStatus.AWAITING_QUOTE,
+            OrderStatus.AWAITING_APPROVAL,
+            OrderStatus.APPROVED,
+            OrderStatus.IN_PROGRESS,
+            OrderStatus.AWAITING_PART,
+        )
+    }
 }
 
 /** Status alinhados ao Prisma / API NestJS. */
@@ -138,6 +153,7 @@ data class Product(
     val name: String,
     val price: Double,
     val stockQty: Int,
+    val availableQty: Int = stockQty,
 )
 
 data class ServiceCatalog(

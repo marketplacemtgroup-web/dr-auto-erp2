@@ -624,6 +624,8 @@ model ServiceOrder {
   paymentAgreement     String?              @map("payment_agreement")
   estimatedAt          DateTime?            @map("estimated_at")
   totalAmount          Decimal              @default(0) @map("total_amount") @db.Decimal(12, 2)
+  attachmentsPurgeAt   DateTime?            @map("attachments_purge_at")
+  attachmentsPurgedAt  DateTime?            @map("attachments_purged_at")
   deletedAt            DateTime?            @map("deleted_at")
   createdAt            DateTime             @default(now()) @map("created_at")
   updatedAt            DateTime             @updatedAt @map("updated_at")

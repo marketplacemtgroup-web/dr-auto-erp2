@@ -91,6 +91,17 @@ export interface PortalChecklistItem {
   photoMimeType: string | null;
 }
 
+export interface PortalPhoto {
+  order: number;
+  label: string;
+  description: string | null;
+  result: "OK" | "ATTENTION" | "DAMAGED" | "NA" | null;
+  url: string;
+  mimeType: string;
+  source: "checklist" | "media";
+  createdAt: string;
+}
+
 export interface PortalServiceOrderDetail {
   id: string;
   number: number;
@@ -122,6 +133,7 @@ export interface PortalServiceOrderDetail {
     createdAt: string;
   }>;
   checklistItems: PortalChecklistItem[];
+  photos: PortalPhoto[];
   attachments: Array<{
     id: string;
     fileName: string;
@@ -186,6 +198,7 @@ export interface PortalQuoteRow {
   isSupplement?: boolean;
   pendingLineCount?: number;
   lines?: QuoteLineRow[];
+  photos?: PortalPhoto[];
   serviceOrder: {
     id: string;
     number: number;

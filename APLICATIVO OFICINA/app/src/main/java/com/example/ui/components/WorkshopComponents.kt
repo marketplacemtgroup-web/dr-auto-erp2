@@ -335,7 +335,7 @@ fun OrderCard(
                 }
             }
 
-            Divider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
+            HorizontalDivider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
 
             // Client and supervisor info
             Row(

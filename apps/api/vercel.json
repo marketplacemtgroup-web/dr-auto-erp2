@@ -12,6 +12,12 @@
       "destination": "/api/index"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/cron/purge-attachments",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,

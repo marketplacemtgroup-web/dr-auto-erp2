@@ -285,6 +285,7 @@ data class ProductRowDto(
     val name: String,
     val sku: String? = null,
     val stock: Int = 0,
+    val reservedStock: Int = 0,
     val salePrice: Any,
 )
 

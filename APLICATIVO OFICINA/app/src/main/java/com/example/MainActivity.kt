@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -103,10 +103,11 @@ fun MainAppLayout() {
                     )
 
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Assignment, contentDescription = "OS") },
+                        icon = { Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = "OS") },
                         label = { Text("OS") },
                         selected = currentRoute == Screen.Orders.route,
                         onClick = {
+                            ordersViewModel.resetToAll()
                             navController.navigate(Screen.Orders.route) {
                                 popUpTo(Screen.Orders.route) { inclusive = true }
                             }
@@ -151,6 +152,7 @@ fun MainAppLayout() {
                 LoginScreen(
                     viewModel = authViewModel,
                     onLoginSuccess = {
+                        ordersViewModel.loadOrders()
                         navController.navigate(Screen.Dashboard.route) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                         }
@@ -179,7 +181,8 @@ fun MainAppLayout() {
                     viewModel = ordersViewModel,
                     onNavigateToOrderDetails = { orderId ->
                         navController.navigate(Screen.OrderDetails.createRoute(orderId))
-                    }
+                    },
+                    onScreenVisible = { ordersViewModel.loadOrders() },
                 )
             }
 
@@ -234,7 +237,8 @@ fun MainAppLayout() {
                     onNavigateBack = { navController.popBackStack() },
                     onBudgetSubmitted = {
                         navController.popBackStack()
-                    }
+                    },
+                    onBudgetSaved = { /* permanece na tela de orçamento */ }
                 )
             }
 

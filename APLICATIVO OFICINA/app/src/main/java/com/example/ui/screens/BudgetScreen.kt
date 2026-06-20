@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,7 @@ import com.example.data.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.BudgetViewModel
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,6 +37,7 @@ fun BudgetScreen(
     viewModel: BudgetViewModel,
     onNavigateBack: () -> Unit,
     onBudgetSubmitted: () -> Unit,
+    onBudgetSaved: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val budget by viewModel.budget.collectAsState()
@@ -44,8 +47,12 @@ fun BudgetScreen(
     val error by viewModel.error.collectAsState()
     val actionError by viewModel.actionError.collectAsState()
     val products by viewModel.products.collectAsState()
+    val productSearchResults by viewModel.productSearchResults.collectAsState()
+    val isSearchingProducts by viewModel.isSearchingProducts.collectAsState()
     val serviceCatalog by viewModel.serviceCatalog.collectAsState()
     val employees by viewModel.employees.collectAsState()
+
+    var productSearchQuery by remember { mutableStateOf("") }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -81,6 +88,19 @@ fun BudgetScreen(
         }
     }
 
+    LaunchedEffect(showFormType, productSearchQuery) {
+        if (showFormType == BudgetItemType.PART) {
+            delay(300)
+            viewModel.searchProducts(productSearchQuery)
+        }
+    }
+
+    val displayedProducts = if (productSearchQuery.isBlank() && productSearchResults.isEmpty()) {
+        products
+    } else {
+        productSearchResults
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -100,7 +120,7 @@ fun BudgetScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar", tint = FrostWhite)
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = FrostWhite)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
@@ -162,7 +182,7 @@ fun BudgetScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                                Divider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
+                                HorizontalDivider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -268,7 +288,7 @@ fun BudgetScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    viewModel.saveBudgetDraft(orderId, onBudgetSubmitted)
+                                    viewModel.saveBudgetDraft(orderId, onSaved = onBudgetSaved)
                                 },
                                 modifier = Modifier.weight(1f),
                                 enabled = !isSaving,
@@ -302,7 +322,6 @@ fun BudgetScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 32.dp),
             ) {
@@ -323,49 +342,32 @@ fun BudgetScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (showFormType == BudgetItemType.PART) {
-                    Text("Selecione o item do estoque:", color = MetallicSilver, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Busque e toque na peça para adicionar ao orçamento:", color = MetallicSilver, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    if (products.isEmpty()) {
-                        EmptyState(
-                            title = "Nenhuma peça disponível",
-                            subtitle = "Cadastre produtos no sistema ou verifique sua conexão com a API.",
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { viewModel.refreshCatalogs() }) {
-                            Text("Tentar novamente", color = PremiumGold)
-                        }
-                    } else {
-                        products.forEach { prod ->
-                            val isCurrent = selectedProduct?.id == prod.id
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(if (isCurrent) CrimsonRed.copy(alpha = 0.15f) else Color.Transparent)
-                                    .border(1.dp, if (isCurrent) CrimsonRed else Graphite, RoundedCornerShape(4.dp))
-                                    .clickable { selectedProduct = prod }
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text(prod.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
-                                    Text("Cód: ${prod.code} • Estoque: ${prod.stockQty} un", color = MetallicSilver, fontSize = 11.sp)
-                                }
-                                Text(formatCurrency(prod.price), color = PremiumGold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
-                    }
+                    OutlinedTextField(
+                        value = productSearchQuery,
+                        onValueChange = { productSearchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Buscar por nome, código ou local...", color = MetallicSilver) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = CrimsonRed) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = FrostWhite,
+                            unfocusedTextColor = FrostWhite,
+                            focusedBorderColor = CrimsonRed,
+                            unfocusedBorderColor = Graphite,
+                        ),
+                    )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Quantidade desejada:", color = FrostWhite, fontWeight = FontWeight.SemiBold)
+                        Text("Quantidade por toque:", color = FrostWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { if (partQty > 1) partQty-- }) {
                                 Icon(Icons.Default.RemoveCircle, "Menos", tint = LightSilver)
@@ -377,29 +379,69 @@ fun BudgetScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (isSearchingProducts) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = CrimsonRed, modifier = Modifier.size(28.dp))
+                        }
+                    } else if (displayedProducts.isEmpty()) {
+                        EmptyState(
+                            title = "Nenhuma peça encontrada",
+                            subtitle = "Cadastre produtos no estoque ou ajuste a busca.",
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { viewModel.refreshCatalogs() }) {
+                            Text("Tentar novamente", color = PremiumGold)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            items(displayedProducts, key = { it.id }) { prod ->
+                                val isCurrent = selectedProduct?.id == prod.id
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (isCurrent) CrimsonRed.copy(alpha = 0.15f) else Color.Transparent)
+                                        .border(1.dp, if (isCurrent) CrimsonRed else Graphite, RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            selectedProduct = prod
+                                            viewModel.addPartToBudget(orderId, prod, partQty)
+                                        }
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(prod.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
+                                        Text(
+                                            "Cód: ${prod.code} • Disp.: ${prod.availableQty} un",
+                                            color = MetallicSilver,
+                                            fontSize = 11.sp,
+                                        )
+                                    }
+                                    Text(formatCurrency(prod.price), color = PremiumGold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     AppButton(
-                        text = "Adicionar Peça",
-                        onClick = {
-                            selectedProduct?.let { product ->
-                                viewModel.addItemToBudget(
-                                    orderId,
-                                    BudgetItem(
-                                        id = "item_${System.currentTimeMillis()}",
-                                        type = BudgetItemType.PART,
-                                        code = product.id,
-                                        name = product.name,
-                                        qty = partQty,
-                                        unitPrice = product.price
-                                    )
-                                )
-                                resetAddForm()
-                            }
-                        },
-                        enabled = selectedProduct != null
+                        text = "Concluir",
+                        onClick = { resetAddForm() },
                     )
                 } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                    ) {
                     Text("Selecione o serviço do catálogo:", color = MetallicSilver, fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(6.dp))
 
@@ -493,6 +535,7 @@ fun BudgetScreen(
                         },
                         enabled = selectedServiceCatalog != null && selectedExecutor != null
                     )
+                    }
                 }
             }
         }
@@ -568,5 +611,5 @@ fun BudgetItemCard(
 }
 
 fun formatCurrency(value: Double): String {
-    return String.format(Locale("pt", "BR"), "R$ %.2f", value)
+    return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f", value)
 }

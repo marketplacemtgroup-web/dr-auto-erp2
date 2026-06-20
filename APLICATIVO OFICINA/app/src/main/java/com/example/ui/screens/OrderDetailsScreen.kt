@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,7 +60,7 @@ fun OrderDetailsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar", tint = FrostWhite)
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = FrostWhite)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
@@ -133,7 +135,7 @@ fun OrderDetailsScreen(
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Message, contentDescription = "WhatsApp", tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "WhatsApp", tint = SuccessGreen, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text("WhatsApp", color = FrostWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
@@ -186,7 +188,7 @@ fun OrderDetailsScreen(
                                 )
 
                                 if (activeOrder.technicalDiagnostic.isNotEmpty()) {
-                                    Divider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
+                                    HorizontalDivider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
                                     Text(
                                         text = "DIAGNÓSTICO TÉCNICO",
                                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold)

@@ -16,6 +16,16 @@ import { EventsService } from '../events/events.service';
 import { FinancialService } from '../financial/financial.service';
 import { CommissionEngineService } from '../team/commission-engine.service';
 
+/** Fase de orçamento/análise — peças não baixam estoque físico. */
+const QUOTE_PHASE_STATUSES: ServiceOrderStatus[] = [
+  'RECEIVED',
+  'DIAGNOSIS',
+  'AWAITING_QUOTE',
+  'AWAITING_APPROVAL',
+];
+
+const EXECUTION_STATUSES: ServiceOrderStatus[] = ['IN_PROGRESS', 'APPROVED', 'AWAITING_PART'];
+
 const STATUS_PT: Record<string, string> = {
   RECEIVED: 'Recebido',
   DIAGNOSIS: 'Em diagnóstico',
@@ -226,6 +236,13 @@ export class ServiceOrdersService {
     if (!current) throw new NotFoundException('Ordem de serviço não encontrada');
 
     if (dto.status !== undefined && dto.status !== current.status) {
+      const enteringExecution =
+        EXECUTION_STATUSES.includes(dto.status as ServiceOrderStatus) &&
+        QUOTE_PHASE_STATUSES.includes(current.status as ServiceOrderStatus);
+      if (enteringExecution) {
+        await this.deductPartsStockForExecution(organizationId, id);
+      }
+
       await this.prisma.serviceOrderStatusHistory.create({
         data: {
           organizationId,
@@ -448,7 +465,10 @@ export class ServiceOrdersService {
       });
       if (!product) throw new NotFoundException('Produto não encontrado');
 
-      if (itemType === 'PART') {
+      const snapshotCost = Number(product.averageCost) || Number(product.costPrice) || 0;
+      const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
+
+      if (itemType === 'PART' && !inQuotePhase) {
         const available = this.stockMovement.availableStock(
           product.stock,
           product.reservedStock,
@@ -459,7 +479,6 @@ export class ServiceOrdersService {
           );
         }
         const nextStock = product.stock - qty;
-        const snapshotCost = Number(product.averageCost) || Number(product.costPrice) || 0;
         await this.prisma.product.update({
           where: { id: dto.productId },
           data: { stock: nextStock },
@@ -472,6 +491,9 @@ export class ServiceOrdersService {
           nextStock,
           { serviceOrderId: so.id, reason: `Saída OS #${so.number}` },
         );
+      }
+
+      if (itemType === 'PART') {
         await this.prisma.serviceOrderItem.create({
           data: {
             organizationId,
@@ -563,8 +585,10 @@ export class ServiceOrdersService {
 
     const so = (await this.findOne(organizationId, serviceOrderId))!;
     const totalBefore = Number(so.totalAmount);
+    const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
 
     if (
+      !inQuotePhase &&
       item.productId &&
       item.itemType === 'PART' &&
       dto.quantity !== undefined &&
@@ -676,25 +700,33 @@ export class ServiceOrdersService {
 
     const so = (await this.findOne(organizationId, serviceOrderId))!;
     const totalBefore = Number(so.totalAmount);
+    const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
 
-    if (item.productId && item.itemType === 'PART') {
-      const product = await this.prisma.product.findUnique({
-        where: { id: item.productId },
-      });
-      if (product) {
-        const nextStock = product.stock + item.quantity;
-        await this.prisma.product.update({
+    if (item.productId && item.itemType === 'PART' && !inQuotePhase) {
+      const alreadyDeducted = await this.hasStockDeductionForPart(
+        organizationId,
+        serviceOrderId,
+        item.productId,
+      );
+      if (alreadyDeducted) {
+        const product = await this.prisma.product.findUnique({
           where: { id: item.productId },
-          data: { stock: nextStock },
         });
-        await this.stockMovement.record(
-          organizationId,
-          item.productId,
-          'RETURN',
-          item.quantity,
-          nextStock,
-          { serviceOrderId, reason: 'Devolução — item removido da OS' },
-        );
+        if (product) {
+          const nextStock = product.stock + item.quantity;
+          await this.prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: nextStock },
+          });
+          await this.stockMovement.record(
+            organizationId,
+            item.productId,
+            'RETURN',
+            item.quantity,
+            nextStock,
+            { serviceOrderId, reason: 'Devolução — item removido da OS' },
+          );
+        }
       }
     }
 
@@ -716,6 +748,71 @@ export class ServiceOrdersService {
       });
     }
     return refreshed;
+  }
+
+  private async hasStockDeductionForPart(
+    organizationId: string,
+    serviceOrderId: string,
+    productId: string,
+  ) {
+    const movement = await this.prisma.stockMovement.findFirst({
+      where: {
+        organizationId,
+        productId,
+        serviceOrderId,
+        type: 'OUT_OS',
+      },
+    });
+    return movement != null;
+  }
+
+  /** Baixa estoque das peças da OS ao entrar em execução (após fase de orçamento). */
+  async deductPartsStockForExecution(organizationId: string, serviceOrderId: string) {
+    const so = await this.findOne(organizationId, serviceOrderId);
+    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+
+    const partItems = so.items.filter(
+      (item) => item.itemType === 'PART' && item.productId,
+    );
+
+    for (const item of partItems) {
+      const productId = item.productId!;
+      const alreadyDeducted = await this.hasStockDeductionForPart(
+        organizationId,
+        serviceOrderId,
+        productId,
+      );
+      if (alreadyDeducted) continue;
+
+      const product = await this.prisma.product.findFirst({
+        where: { id: productId, organizationId, ...notDeleted },
+      });
+      if (!product) continue;
+
+      const available = this.stockMovement.availableStock(
+        product.stock,
+        product.reservedStock,
+      );
+      if (available < item.quantity) {
+        throw new BadRequestException(
+          `Estoque insuficiente para "${item.description}". Disponível: ${available}, necessário: ${item.quantity}`,
+        );
+      }
+
+      const nextStock = product.stock - item.quantity;
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: { stock: nextStock },
+      });
+      await this.stockMovement.record(
+        organizationId,
+        productId,
+        'OUT_OS',
+        item.quantity,
+        nextStock,
+        { serviceOrderId: so.id, reason: `Saída OS #${so.number} — início da execução` },
+      );
+    }
   }
 
   private async recalculateTotal(serviceOrderId: string) {

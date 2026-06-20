@@ -11,7 +11,8 @@ import { ServiceOrdersService } from './service-orders.service';
 @Module({
   imports: [
     AttachmentsModule,
-    QuotesModule,
+    ServiceOrdersModule,
+    forwardRef(() => QuotesModule),
     ProductsModule,
     PortalModule,
     FinancialModule,

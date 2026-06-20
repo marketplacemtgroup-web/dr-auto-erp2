@@ -96,6 +96,92 @@ export class PortalService {
     return `checklist-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
   }
 
+  private async buildPortalPhotoGallery(
+    checklistItems: Array<{
+      label: string;
+      sortOrder: number;
+      result: string | null;
+      notes: string | null;
+    }>,
+    attachments: Array<{
+      id: string;
+      fileName: string;
+      mimeType: string;
+      entityType: AttachmentEntityType;
+      storagePath: string;
+      category?: string | null;
+      createdAt?: Date;
+    }>,
+  ) {
+    const mappedAttachments = await this.mapPortalAttachments(attachments);
+    const photoByCategory = new Map<
+      string,
+      (typeof mappedAttachments)[number]
+    >();
+    for (const attachment of mappedAttachments) {
+      if (attachment.category?.startsWith('checklist-') && attachment.url) {
+        photoByCategory.set(attachment.category, attachment);
+      }
+    }
+
+    const usedAttachmentIds = new Set<string>();
+    const gallery: Array<{
+      order: number;
+      label: string;
+      description: string | null;
+      result: string | null;
+      url: string;
+      mimeType: string;
+      source: 'checklist' | 'media';
+      createdAt: string;
+    }> = [];
+
+    let order = 1;
+    for (const item of [...checklistItems].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      const slug = this.checklistCategorySlug(item.label);
+      const photo = photoByCategory.get(slug);
+      if (!photo?.url) continue;
+      usedAttachmentIds.add(photo.id);
+      gallery.push({
+        order: order++,
+        label: item.label,
+        description: item.notes ?? photo.fileName ?? null,
+        result: item.result,
+        url: photo.url,
+        mimeType: photo.mimeType,
+        source: 'checklist',
+        createdAt: (photo.createdAt ?? new Date()).toISOString(),
+      });
+    }
+
+    const mediaAttachments = mappedAttachments
+      .filter(
+        (attachment) =>
+          !attachment.category?.startsWith('checklist-') &&
+          !usedAttachmentIds.has(attachment.id) &&
+          attachment.url,
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime(),
+      );
+
+    for (const attachment of mediaAttachments) {
+      gallery.push({
+        order: order++,
+        label: attachment.fileName,
+        description: null,
+        result: null,
+        url: attachment.url,
+        mimeType: attachment.mimeType,
+        source: 'media',
+        createdAt: (attachment.createdAt ?? new Date()).toISOString(),
+      });
+    }
+
+    return gallery;
+  }
+
   async login(cpf: string, plate: string) {
     const cpfDigits = normalizeDigits(cpf);
     const plateNorm = normalizePlate(plate);
@@ -415,6 +501,8 @@ export class PortalService {
       };
     });
 
+    const photos = await this.buildPortalPhotoGallery(so.checklistItems, so.attachments);
+
     return {
       id: so.id,
       number: so.number,
@@ -431,6 +519,7 @@ export class PortalService {
       items: normalizedItems,
       timeline,
       checklistItems,
+      photos,
       attachments: mappedAttachments,
       quotes: so.quotes.map((q) =>
         this.mapQuoteResponse({
@@ -669,12 +758,26 @@ export class PortalService {
         serviceOrder: {
           include: {
             items: { orderBy: { createdAt: 'asc' } },
+            checklistItems: { orderBy: { sortOrder: 'asc' } },
+            attachments: {
+              where: {
+                OR: [
+                  { visibleToCustomer: true },
+                  { category: { startsWith: 'checklist-' } },
+                ],
+              },
+              orderBy: { createdAt: 'desc' },
+            },
           },
         },
       },
     });
     if (!row) throw new NotFoundException('Orçamento não encontrado');
-    return this.mapQuoteResponse(row);
+    const photos = await this.buildPortalPhotoGallery(
+      row.serviceOrder.checklistItems,
+      row.serviceOrder.attachments,
+    );
+    return { ...this.mapQuoteResponse(row), photos };
   }
 
   private lineTotal(line: {

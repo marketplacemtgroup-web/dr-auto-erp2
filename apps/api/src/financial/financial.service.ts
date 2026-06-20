@@ -523,6 +523,19 @@ export class FinancialService {
               amount: { increment: new Prisma.Decimal(netDue) },
             },
           });
+
+          const serviceOrder = await tx.serviceOrder.findFirst({
+            where: { id: entry.serviceOrderId, organizationId },
+            select: { attachmentsPurgeAt: true },
+          });
+          if (serviceOrder && !serviceOrder.attachmentsPurgeAt) {
+            const attachmentsPurgeAt = new Date(paidAt);
+            attachmentsPurgeAt.setDate(attachmentsPurgeAt.getDate() + 7);
+            await tx.serviceOrder.update({
+              where: { id: entry.serviceOrderId },
+              data: { attachmentsPurgeAt },
+            });
+          }
         }
       }
 

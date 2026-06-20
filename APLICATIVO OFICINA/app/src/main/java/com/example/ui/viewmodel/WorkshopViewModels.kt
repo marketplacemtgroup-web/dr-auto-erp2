@@ -131,19 +131,21 @@ class OrdersViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
 
-    init {
-        loadOrders()
-    }
-
     fun loadOrders() {
+        if (!SessionManager.isLoggedIn) return
         _isLoading.value = true
+        _actionError.value = null
         viewModelScope.launch {
             try {
                 _orders.value = repository.getOrders(_searchQuery.value, _currentFilter.value)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                _actionError.value = e.message ?: "Falha ao carregar ordens de serviço"
             } finally {
                 _isLoading.value = false
             }
@@ -158,6 +160,16 @@ class OrdersViewModel : ViewModel() {
     fun updateFilter(filter: String) {
         _currentFilter.value = filter
         loadOrders()
+    }
+
+    fun resetToAll() {
+        _currentFilter.value = "Todas"
+        _searchQuery.value = ""
+        loadOrders()
+    }
+
+    fun clearActionError() {
+        _actionError.value = null
     }
 
     fun clearLastError() {
@@ -357,6 +369,12 @@ class BudgetViewModel : ViewModel() {
     val serviceCatalog: StateFlow<List<ServiceCatalog>> = repository.serviceCatalogFlow
     val employees: StateFlow<List<Employee>> = repository.employeesFlow
 
+    private val _productSearchResults = MutableStateFlow<List<Product>>(emptyList())
+    val productSearchResults: StateFlow<List<Product>> = _productSearchResults.asStateFlow()
+
+    private val _isSearchingProducts = MutableStateFlow(false)
+    val isSearchingProducts: StateFlow<Boolean> = _isSearchingProducts.asStateFlow()
+
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
 
@@ -369,6 +387,7 @@ class BudgetViewModel : ViewModel() {
                 val order = repository.getOrderById(orderId)
                 _orderNumber.value = order.displayNumber
                 _budget.value = repository.getBudget(orderId)
+                _productSearchResults.value = repository.products
                 if (catalogErrors.isNotEmpty()) {
                     _actionError.value = catalogErrors.joinToString("\n")
                 }
@@ -380,10 +399,39 @@ class BudgetViewModel : ViewModel() {
         }
     }
 
+    fun searchProducts(query: String) {
+        viewModelScope.launch {
+            _isSearchingProducts.value = true
+            try {
+                _productSearchResults.value = repository.searchProducts(query)
+            } catch (e: Exception) {
+                _actionError.value = e.message ?: "Falha ao buscar peças"
+            } finally {
+                _isSearchingProducts.value = false
+            }
+        }
+    }
+
+    fun addPartToBudget(orderId: String, product: Product, qty: Int = 1) {
+        addItemToBudget(
+            orderId,
+            BudgetItem(
+                id = "item_${System.currentTimeMillis()}",
+                type = BudgetItemType.PART,
+                code = product.id,
+                name = product.name,
+                qty = qty,
+                unitPrice = product.price,
+            ),
+        )
+        _actionError.value = "Peça adicionada: ${product.name}"
+    }
+
     fun refreshCatalogs() {
         viewModelScope.launch {
             try {
                 val catalogErrors = repository.ensureCatalogs(force = true)
+                _productSearchResults.value = repository.products
                 if (catalogErrors.isNotEmpty()) {
                     _actionError.value = catalogErrors.joinToString("\n")
                 }
@@ -426,7 +474,7 @@ class BudgetViewModel : ViewModel() {
         )
     }
 
-    fun saveBudgetDraft(orderId: String, onDone: () -> Unit) {
+    fun saveBudgetDraft(orderId: String, onSaved: () -> Unit = {}) {
         val currentBudget = _budget.value ?: Budget(orderId = orderId)
         if (currentBudget.items.isEmpty()) {
             _actionError.value = "Adicione ao menos uma peça ou serviço antes de salvar."
@@ -436,7 +484,9 @@ class BudgetViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 if (repository.saveBudget(orderId, currentBudget)) {
-                    onDone()
+                    _budget.value = repository.reloadBudget(orderId)
+                    _actionError.value = "Orçamento salvo com sucesso."
+                    onSaved()
                 } else {
                     _actionError.value = "Falha ao salvar rascunho"
                 }
