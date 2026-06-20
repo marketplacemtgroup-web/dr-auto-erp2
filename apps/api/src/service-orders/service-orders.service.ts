@@ -760,7 +760,7 @@ export class ServiceOrdersService {
         organizationId,
         productId,
         serviceOrderId,
-        type: 'OUT_OS',
+        movementType: 'OUT_OS',
       },
     });
     return movement != null;
