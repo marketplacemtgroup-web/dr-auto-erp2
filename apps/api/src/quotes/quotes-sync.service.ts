@@ -141,13 +141,6 @@ export class QuotesSyncService {
       return null;
     }
 
-    const pendingNullCount = await this.prisma.quoteLine.count({
-      where: { quoteId, approved: null },
-    });
-    if (pendingNullCount === 0) {
-      return null;
-    }
-
     const pendingQuote = await this.prisma.quote.findFirst({
       where: {
         organizationId,

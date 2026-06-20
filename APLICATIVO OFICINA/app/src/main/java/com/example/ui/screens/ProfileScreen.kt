@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.service.SessionManager
 import com.example.ui.components.AppButton
 import com.example.ui.components.BetoLogo
+import com.example.ui.components.BrandLogoSize
+import com.example.ui.components.DevicePermissionsCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.AuthViewModel
 
@@ -53,7 +55,7 @@ fun ProfileScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -71,15 +73,11 @@ fun ProfileScreen(
                         .size(100.dp)
                         .clip(CircleShape)
                         .background(DarkSurface)
-                        .border(1.5.dp, PremiumGold, CircleShape),
+                        .border(1.5.dp, PremiumGold, CircleShape)
+                        .padding(10.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Engineering,
-                        contentDescription = "Avatar",
-                        tint = CrimsonRed,
-                        modifier = Modifier.size(54.dp)
-                    )
+                    BetoLogo(size = BrandLogoSize.Header)
                 }
             }
 
@@ -134,6 +132,11 @@ fun ProfileScreen(
                 }
             }
 
+            // Permissões do aparelho (câmera / galeria)
+            item {
+                DevicePermissionsCard()
+            }
+
             // Permissions block
             item {
                 Card(
@@ -184,13 +187,18 @@ fun ProfileScreen(
 
             // App info credits
             item {
-                BetoLogo(modifier = Modifier.size(60.dp), titleSize = 10f, subtitleSize = 6f)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Consolação Mobile v1.0.4 - Beto Mecânica Software",
-                    style = MaterialTheme.typography.bodySmall.copy(color = Graphite, fontSize = 10.sp),
-                    textAlign = TextAlign.Center
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    BetoLogo(size = BrandLogoSize.Compact)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "OFICINA DO BETO — App v1.0",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Graphite, fontSize = 10.sp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
 
             // Logout action trigger button

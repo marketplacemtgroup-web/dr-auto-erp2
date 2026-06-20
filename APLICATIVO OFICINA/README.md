@@ -1,21 +1,58 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# APLICATIVO OFICINA — OFICINA DO BETO
 
-# Run and deploy your AI Studio app
+App Android nativo (Kotlin + Jetpack Compose) para a equipe da oficina: dashboard, OS, checklist fotográfico e orçamento.
 
-This contains everything you need to run your app locally.
+## Pré-requisitos
 
-View your app in AI Studio: https://ai.studio/apps/e948e398-8f63-49cc-a5f6-d79ff95334c6
+- [Android Studio](https://developer.android.com/studio) (Ladybug ou mais recente)
+- API do monorepo rodando (`npm run dev` na raiz) **ou** URL de produção na Vercel
 
-## Run Locally
+## Configuração
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+1. Abra a pasta `APLICATIVO OFICINA` no Android Studio.
+2. Copie `.env.example` para `.env` e ajuste:
 
+```env
+API_BASE_URL=https://oficina-beto-api.vercel.app/api/
+USE_MOCK_DATA=false
+```
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+**Emulador + API local:**
+
+```env
+API_BASE_URL=http://10.0.2.2:3001/api/
+```
+
+**Dispositivo físico na mesma rede:**
+
+```env
+API_BASE_URL=http://SEU_IP_LOCAL:3001/api/
+```
+
+3. Sync Gradle e execute no emulador ou celular.
+
+## Login
+
+Use o mesmo e-mail e senha do ERP (`app/`). Perfis recomendados: `mecanico`, `recepcao`, `gerente`.
+
+## Integração com a API
+
+O app consome os mesmos endpoints do ERP:
+
+- `POST /api/auth/login`
+- `GET /api/service-orders`
+- `PATCH /api/service-orders/:id/checklist`
+- `POST /api/quotes` + `POST /api/quotes/:id/share-link`
+- Upload de fotos via `attachments/service-order/:id/prepare-upload`
+
+Documentação completa: `docs/APLICATIVO-OFICINA.md`  
+**Debug e build APK:** `docs/APLICATIVO-OFICINA-DEBUG.md`
+
+## Build APK debug
+
+```bash
+cd "APLICATIVO OFICINA"
+./gradlew assembleDebug
+```
+
+APK em `app/build/outputs/apk/debug/`.

@@ -65,6 +65,7 @@ export class PortalService {
       mimeType: string;
       entityType: AttachmentEntityType;
       storagePath: string;
+      category?: string | null;
       createdAt?: Date;
     }>,
   ) {
@@ -83,10 +84,16 @@ export class PortalService {
           fileName: a.fileName,
           mimeType: a.mimeType,
           url,
+          category: a.category ?? null,
           createdAt: a.createdAt,
         };
       }),
     );
+  }
+
+  /** Mesmo slug usado no app Android (ApiMappers.checklistCategorySlug). */
+  private checklistCategorySlug(label: string): string {
+    return `checklist-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
   }
 
   async login(cpf: string, plate: string) {
@@ -334,9 +341,15 @@ export class PortalService {
           include: { user: { select: { name: true } } },
         },
         attachments: {
-          where: { visibleToCustomer: true },
+          where: {
+            OR: [
+              { visibleToCustomer: true },
+              { category: { startsWith: 'checklist-' } },
+            ],
+          },
           orderBy: { createdAt: 'desc' },
         },
+        checklistItems: { orderBy: { sortOrder: 'asc' } },
         quotes: {
           where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
@@ -377,6 +390,31 @@ export class PortalService {
             },
           ];
 
+    const mappedAttachments = await this.mapPortalAttachments(so.attachments);
+    const photoByCategory = new Map<
+      string,
+      { url: string; mimeType: string }
+    >();
+    for (const a of mappedAttachments) {
+      if (a.category?.startsWith('checklist-') && a.url) {
+        photoByCategory.set(a.category, { url: a.url, mimeType: a.mimeType });
+      }
+    }
+
+    const checklistItems = so.checklistItems.map((item) => {
+      const slug = this.checklistCategorySlug(item.label);
+      const photo = photoByCategory.get(slug);
+      return {
+        id: item.id,
+        category: item.category,
+        label: item.label,
+        result: item.result,
+        notes: item.notes,
+        photoUrl: photo?.url ?? null,
+        photoMimeType: photo?.mimeType ?? null,
+      };
+    });
+
     return {
       id: so.id,
       number: so.number,
@@ -392,7 +430,8 @@ export class PortalService {
       updatedAt: so.updatedAt,
       items: normalizedItems,
       timeline,
-      attachments: await this.mapPortalAttachments(so.attachments),
+      checklistItems,
+      attachments: mappedAttachments,
       quotes: so.quotes.map((q) =>
         this.mapQuoteResponse({
           ...q,

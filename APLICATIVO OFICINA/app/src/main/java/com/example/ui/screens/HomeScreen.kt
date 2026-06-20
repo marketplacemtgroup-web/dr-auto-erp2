@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -25,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.OrderStatus
 import com.example.data.service.SessionManager
 import com.example.ui.components.*
-import com.example.ui.config.Branding
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.DashboardViewModel
 
@@ -37,8 +35,8 @@ fun HomeScreen(
     onNavigateToOrdersList: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val userName = SessionManager.currentUser?.name ?: "Beto Souza"
-    val userRole = SessionManager.currentUser?.role ?: "Administrador"
+    val userName = SessionManager.currentUser?.name ?: "Equipe"
+    val userRole = SessionManager.currentUser?.role ?: "—"
 
     val metrics by viewModel.metrics.collectAsState()
     val priorityOrders by viewModel.priorityOrders.collectAsState()
@@ -53,7 +51,7 @@ fun HomeScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -77,59 +75,8 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Logo group
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Rotate-45 red square styled box
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .rotate(45f)
-                                    .background(CrimsonRed, RoundedCornerShape(8.dp))
-                                    .border(2.dp, PremiumGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "B",
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Black,
-                                    modifier = Modifier.rotate(-45f)
-                                )
-                            }
-                            
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "BETO ",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = FrostWhite,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                    )
-                                    Text(
-                                        text = "MECÂNICA",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = CrimsonRed,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                    )
-                                }
-                                Text(
-                                    text = "GESTÃO OPERACIONAL INTERNA",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = MetallicSilver,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    )
-                                )
-                            }
-                        }
+                        // Logo oficial + título
+                        BrandHeaderLogo(modifier = Modifier.weight(1f, fill = false))
                         
                         // Online/offline status controller
                         Row(
@@ -204,11 +151,11 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "MODO RECONEXÃO LOCAL",
+                                text = "FALHA NA API",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
                             )
                             Text(
-                                text = "Gravando modificações internamente. Prontidão para sincronizar com Supabase Backend ERP.",
+                                text = lastApiError ?: "Usando cache local quando disponível.",
                                 style = MaterialTheme.typography.bodySmall.copy(color = LightSilver)
                             )
                         }

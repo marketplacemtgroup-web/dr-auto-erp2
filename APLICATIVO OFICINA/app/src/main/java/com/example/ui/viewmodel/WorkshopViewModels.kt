@@ -1,5 +1,7 @@
 package com.example.ui.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
@@ -9,22 +11,31 @@ import com.example.data.service.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-// 1. Auth View Model
 class AuthViewModel : ViewModel() {
     private val authService = AuthService()
 
     private val _loginState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val loginState: StateFlow<LoginUiState> = _loginState.asStateFlow()
 
+    private val _sessionChecked = MutableStateFlow(false)
+    val sessionChecked: StateFlow<Boolean> = _sessionChecked.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            if (SessionManager.isLoggedIn) {
+                runCatching { authService.restoreSession() }
+            }
+            _sessionChecked.value = true
+        }
+    }
+
     fun login(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
             _loginState.value = LoginUiState.Error("Preencha todos os campos.")
             return
         }
-
         _loginState.value = LoginUiState.Loading
         viewModelScope.launch {
             try {
@@ -57,7 +68,6 @@ sealed interface LoginUiState {
     data class Error(val message: String) : LoginUiState
 }
 
-// 2. Dashboard View Model
 class DashboardViewModel : ViewModel() {
     private val repository = WorkshopRepository
 
@@ -82,15 +92,14 @@ class DashboardViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _metrics.value = repository.getMetrics()
-                // Fetch priority/active orders (Aguardando checklist or Em execução)
                 val allOrders = repository.getOrders()
-                _priorityOrders.value = allOrders.filter { 
-                    it.status == OrderStatus.AGUARDANDO_CHECKLIST || 
-                    it.status == OrderStatus.EM_EXECUCAO || 
-                    it.status == OrderStatus.EM_ANALISE
+                _priorityOrders.value = allOrders.filter {
+                    it.status == OrderStatus.RECEIVED ||
+                        it.status == OrderStatus.IN_PROGRESS ||
+                        it.status == OrderStatus.DIAGNOSIS ||
+                        it.status == OrderStatus.AWAITING_APPROVAL
                 }
-            } catch (e: Exception) {
-                // Caught inside repository or handled here
+            } catch (_: Exception) {
             } finally {
                 _isRefreshing.value = false
             }
@@ -107,7 +116,6 @@ class DashboardViewModel : ViewModel() {
     }
 }
 
-// 3. Orders View Model
 class OrdersViewModel : ViewModel() {
     private val repository = WorkshopRepository
 
@@ -135,8 +143,7 @@ class OrdersViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _orders.value = repository.getOrders(_searchQuery.value, _currentFilter.value)
-            } catch (e: Exception) {
-                // Handled in repository
+            } catch (_: Exception) {
             } finally {
                 _isLoading.value = false
             }
@@ -158,7 +165,6 @@ class OrdersViewModel : ViewModel() {
     }
 }
 
-// 4. Order Details View Model
 class OrderDetailsViewModel : ViewModel() {
     private val repository = WorkshopRepository
 
@@ -188,7 +194,13 @@ class OrderDetailsViewModel : ViewModel() {
         }
     }
 
-    fun transitionStatus(orderId: String, newStatus: OrderStatus, technicalNotes: String, notifyClient: Boolean, onDone: () -> Unit) {
+    fun transitionStatus(
+        orderId: String,
+        newStatus: OrderStatus,
+        technicalNotes: String,
+        notifyClient: Boolean,
+        onDone: () -> Unit,
+    ) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -212,18 +224,26 @@ class OrderDetailsViewModel : ViewModel() {
     }
 }
 
-// 5. Checklist View Model
 class ChecklistViewModel : ViewModel() {
     private val repository = WorkshopRepository
 
     private val _photosList = MutableStateFlow<List<ChecklistPhoto>>(emptyList())
     val photosList: StateFlow<List<ChecklistPhoto>> = _photosList.asStateFlow()
 
+    private val _orderNumber = MutableStateFlow("")
+    val orderNumber: StateFlow<String> = _orderNumber.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
@@ -233,6 +253,8 @@ class ChecklistViewModel : ViewModel() {
         _error.value = null
         viewModelScope.launch {
             try {
+                val order = repository.getOrderById(orderId)
+                _orderNumber.value = order.displayNumber
                 _photosList.value = repository.getChecklistPhotos(orderId)
             } catch (e: Exception) {
                 _error.value = e.message ?: "Falha ao carregar checklist"
@@ -247,16 +269,39 @@ class ChecklistViewModel : ViewModel() {
         photoId: String,
         status: PhotoChecklistStatus,
         observation: String,
-        photoUri: String? = null
+        photoUri: String? = null,
     ) {
         viewModelScope.launch {
             try {
                 val success = repository.updateChecklistItem(orderId, photoId, status, observation, photoUri)
-                if (success) {
-                    loadChecklist(orderId)
-                }
+                if (success) loadChecklist(orderId)
             } catch (e: Exception) {
-                _error.value = e.message
+                _actionError.value = e.message
+            }
+        }
+    }
+
+    fun uploadPhotoAndUpdate(
+        context: Context,
+        orderId: String,
+        item: ChecklistPhoto,
+        localUri: Uri,
+        status: PhotoChecklistStatus,
+        observation: String,
+        onDone: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            _isUploading.value = true
+            _actionError.value = null
+            try {
+                repository.uploadChecklistPhoto(context, orderId, item.id, item.label, localUri)
+                repository.updateChecklistItem(orderId, item.id, status, observation)
+                loadChecklist(orderId)
+                onDone()
+            } catch (e: Exception) {
+                _actionError.value = e.message ?: "Falha no upload da foto"
+            } finally {
+                _isUploading.value = false
             }
         }
     }
@@ -266,11 +311,7 @@ class ChecklistViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val success = repository.completeChecklist(orderId)
-                if (success) {
-                    onDone()
-                } else {
-                    _error.value = "Falha ao finalizar o checklist."
-                }
+                if (success) onDone() else _error.value = "Falha ao finalizar o checklist."
             } catch (e: Exception) {
                 _error.value = e.message ?: "Erro ao salvar"
             } finally {
@@ -279,28 +320,42 @@ class ChecklistViewModel : ViewModel() {
         }
     }
 
+    fun clearActionError() {
+        _actionError.value = null
+    }
+
     fun clearLastError() {
         repository.clearLastError()
     }
 }
 
-// 6. Budget View Model
 class BudgetViewModel : ViewModel() {
     private val repository = WorkshopRepository
 
     private val _budget = MutableStateFlow<Budget?>(null)
     val budget: StateFlow<Budget?> = _budget.asStateFlow()
 
+    private val _orderNumber = MutableStateFlow("")
+    val orderNumber: StateFlow<String> = _orderNumber.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    // Catalogs auto-fetched
-    val products = repository.products
-    val serviceCatalog = repository.serviceCatalog
-    val employees = repository.employees
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    private val _shareMessage = MutableStateFlow<String?>(null)
+    val shareMessage: StateFlow<String?> = _shareMessage.asStateFlow()
+
+    val products: StateFlow<List<Product>> = repository.productsFlow
+    val serviceCatalog: StateFlow<List<ServiceCatalog>> = repository.serviceCatalogFlow
+    val employees: StateFlow<List<Employee>> = repository.employeesFlow
 
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
@@ -310,11 +365,30 @@ class BudgetViewModel : ViewModel() {
         _error.value = null
         viewModelScope.launch {
             try {
+                val catalogErrors = repository.ensureCatalogs()
+                val order = repository.getOrderById(orderId)
+                _orderNumber.value = order.displayNumber
                 _budget.value = repository.getBudget(orderId)
+                if (catalogErrors.isNotEmpty()) {
+                    _actionError.value = catalogErrors.joinToString("\n")
+                }
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {
                 _isLoading.value = false
+            }
+        }
+    }
+
+    fun refreshCatalogs() {
+        viewModelScope.launch {
+            try {
+                val catalogErrors = repository.ensureCatalogs(force = true)
+                if (catalogErrors.isNotEmpty()) {
+                    _actionError.value = catalogErrors.joinToString("\n")
+                }
+            } catch (e: Exception) {
+                _actionError.value = e.message ?: "Falha ao atualizar catálogos"
             }
         }
     }
@@ -322,8 +396,6 @@ class BudgetViewModel : ViewModel() {
     fun addItemToBudget(orderId: String, item: BudgetItem) {
         val currentBudget = _budget.value ?: Budget(orderId = orderId)
         val updatedItems = currentBudget.items.toMutableList()
-        
-        // Check if item of same code already exists, increment qty
         val existingIndex = updatedItems.indexOfFirst { it.code == item.code && it.type == item.type }
         if (existingIndex != -1) {
             val existing = updatedItems[existingIndex]
@@ -331,70 +403,77 @@ class BudgetViewModel : ViewModel() {
         } else {
             updatedItems.add(item)
         }
-
-        recalculateBudget(orderId, updatedItems)
+        recalculateBudget(orderId, updatedItems, currentBudget.quoteId)
     }
 
     fun removeItemFromBudget(orderId: String, itemCode: String, type: BudgetItemType) {
         val currentBudget = _budget.value ?: return
         val updatedItems = currentBudget.items.filterNot { it.code == itemCode && it.type == type }
-        recalculateBudget(orderId, updatedItems)
+        recalculateBudget(orderId, updatedItems, currentBudget.quoteId)
     }
 
-    private fun recalculateBudget(orderId: String, items: List<BudgetItem>) {
+    private fun recalculateBudget(orderId: String, items: List<BudgetItem>, quoteId: String?) {
         val partsTotal = items.filter { it.type == BudgetItemType.PART }.sumOf { it.total }
         val servicesTotal = items.filter { it.type == BudgetItemType.SERVICE }.sumOf { it.total }
-        val grandTotal = partsTotal + servicesTotal
-        
         _budget.value = Budget(
             orderId = orderId,
+            quoteId = quoteId,
             items = items,
             totalParts = partsTotal,
             totalServices = servicesTotal,
-            grandTotal = grandTotal,
-            isDraft = true
+            grandTotal = partsTotal + servicesTotal,
+            isDraft = true,
         )
     }
 
     fun saveBudgetDraft(orderId: String, onDone: () -> Unit) {
-        val currentBudget = _budget.value ?: return
-        _isLoading.value = true
+        val currentBudget = _budget.value ?: Budget(orderId = orderId)
+        if (currentBudget.items.isEmpty()) {
+            _actionError.value = "Adicione ao menos uma peça ou serviço antes de salvar."
+            return
+        }
+        _isSaving.value = true
         viewModelScope.launch {
             try {
-                val success = repository.saveBudget(orderId, currentBudget)
-                if (success) {
+                if (repository.saveBudget(orderId, currentBudget)) {
                     onDone()
                 } else {
-                    _error.value = "Falha ao salvar rascunho"
+                    _actionError.value = "Falha ao salvar rascunho"
                 }
             } catch (e: Exception) {
-                _error.value = e.message
+                _actionError.value = e.message ?: "Erro ao salvar orçamento"
             } finally {
-                _isLoading.value = false
+                _isSaving.value = false
             }
         }
     }
 
     fun sendBudgetToClient(orderId: String, onDone: () -> Unit) {
-        val currentBudget = _budget.value ?: return
-        _isLoading.value = true
+        val currentBudget = _budget.value ?: Budget(orderId = orderId)
+        if (currentBudget.items.isEmpty()) {
+            _actionError.value = "Adicione ao menos uma peça ou serviço antes de enviar."
+            return
+        }
+        _isSaving.value = true
         viewModelScope.launch {
             try {
-                // Save first
                 repository.saveBudget(orderId, currentBudget.copy(isDraft = false))
-                // Send next
-                val success = repository.sendBudgetToClient(orderId)
-                if (success) {
+                if (repository.sendBudgetToClient(orderId)) {
+                    _shareMessage.value = WorkshopRepository.lastShareMessage
                     onDone()
                 } else {
-                    _error.value = "Falha ao notificar cliente via WhatsApp."
+                    _actionError.value = "Falha ao notificar cliente."
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Erro ao enviar"
+                _actionError.value = e.message ?: "Erro ao enviar"
             } finally {
-                _isLoading.value = false
+                _isSaving.value = false
             }
         }
+    }
+
+    fun clearActionError() {
+        _actionError.value = null
     }
 
     fun clearLastError() {

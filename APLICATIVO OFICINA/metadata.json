@@ -1,6 +1,6 @@
 {
-  "name": "Beto Mecânica Oficina",
-  "description": "App Interno para gerenciamento da oficina Beto Mecânica (Dashboard, OS, Checklist Fotográfico e Orçamento).",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "OFICINA DO BETO — App Oficina",
+  "description": "App Android interno: dashboard, OS, checklist fotográfico e orçamento integrado à API NestJS.",
+  "requestFramePermissions": ["CAMERA"],
+  "majorCapabilities": []
 }

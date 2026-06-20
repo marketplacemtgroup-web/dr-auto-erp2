@@ -64,10 +64,10 @@ export default function PortalLoginPage() {
         <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full">
           <BrandLogo context="auth" className="mb-4" />
 
-          <h1 className="portal-text text-2xl font-black text-center mb-2">
+          <h1 className="portal-card portal-text text-2xl font-black text-center mb-2 w-full max-w-sm mx-auto px-4 py-3 leading-tight">
             Acesse seu acompanhamento
           </h1>
-          <p className="portal-text-muted text-sm text-center mb-8 max-w-sm">
+          <p className="portal-card portal-text text-sm font-medium text-center mb-8 max-w-sm mx-auto px-4 py-3 leading-relaxed">
             Digite seu CPF e a placa do seu veículo para acompanhar sua ordem de serviço.
           </p>
 

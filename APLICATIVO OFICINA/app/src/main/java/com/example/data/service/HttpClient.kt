@@ -1,5 +1,8 @@
 package com.example.data.service
 
+import com.example.BuildConfig
+import com.example.data.api.WorkshopApi
+import com.example.data.model.User
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
@@ -8,62 +11,92 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
 
+class ApiException(val statusCode: Int, message: String) : Exception(message)
+
 object HttpClient {
-    private const val DEFAULT_BASE_URL = "https://api.betomecanica.example.com" // Placeholder for their real ERP/API URL
+    val apiBaseUrl: String
+        get() {
+            val fromBuild = BuildConfig.API_BASE_URL.trim()
+            if (fromBuild.isNotBlank()) {
+                return if (fromBuild.endsWith("/")) fromBuild else "$fromBuild/"
+            }
+            return "http://10.0.2.2:3001/api/"
+        }
+
+    val useMockData: Boolean
+        get() = BuildConfig.USE_MOCK_DATA.equals("true", ignoreCase = true)
 
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
         .build()
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.DEBUG) {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.BASIC
+        }
     }
 
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor(loggingInterceptor)
         .addInterceptor { chain ->
             val request = chain.request().newBuilder()
-                .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
-                // Add token dynamically if available in our SessionManager
                 .apply {
-                    SessionManager.token?.let {
-                        addHeader("Authorization", "Bearer $it")
-                    }
+                    SessionManager.token?.let { addHeader("Authorization", "Bearer $it") }
                 }
                 .build()
             chain.proceed(request)
         }
         .build()
 
-    private val retrofitBuilder = Retrofit.Builder()
-        .baseUrl(DEFAULT_BASE_URL)
+    val api: WorkshopApi = Retrofit.Builder()
+        .baseUrl(apiBaseUrl)
         .client(okHttpClient)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
+        .create(WorkshopApi::class.java)
 
-    fun <T> createService(serviceClass: Class<T>): T {
-        return retrofitBuilder.create(serviceClass)
-    }
+    val rawClient: OkHttpClient get() = okHttpClient
 }
 
-// Simple in-memory session manager for Auth Tokens matching SecureStore
 object SessionManager {
-    var token: String? = null
-    var currentUser: com.example.data.model.User? = null
+    private var sessionStore: com.example.data.local.SessionStore? = null
 
-    fun saveSession(user: com.example.data.model.User, authToken: String) {
-        currentUser = user
-        token = authToken
+    var token: String? = null
+        private set
+    var currentUser: User? = null
+        private set
+
+    fun init(store: com.example.data.local.SessionStore) {
+        sessionStore = store
+        val (savedToken, savedUser) = store.loadBlocking()
+        token = savedToken
+        currentUser = savedUser
     }
 
-    fun clearSession() {
+    suspend fun saveSession(user: User, authToken: String) {
+        token = authToken
+        currentUser = user
+        sessionStore?.save(authToken, user)
+    }
+
+    suspend fun clearSession() {
         token = null
         currentUser = null
+        sessionStore?.clear()
     }
 
     val isLoggedIn: Boolean
-        get() = token != null
+        get() = !token.isNullOrBlank() && currentUser != null
+
+    fun hasPermission(vararg slugs: String): Boolean {
+        val perms = currentUser?.permissions.orEmpty()
+        if (perms.contains("admin")) return true
+        return slugs.any { perms.contains(it) }
+    }
 }

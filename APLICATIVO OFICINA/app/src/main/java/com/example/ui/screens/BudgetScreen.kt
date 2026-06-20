@@ -8,7 +8,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -36,8 +38,17 @@ fun BudgetScreen(
     modifier: Modifier = Modifier
 ) {
     val budget by viewModel.budget.collectAsState()
+    val orderNumber by viewModel.orderNumber.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isSaving by viewModel.isSaving.collectAsState()
     val error by viewModel.error.collectAsState()
+    val actionError by viewModel.actionError.collectAsState()
+    val products by viewModel.products.collectAsState()
+    val serviceCatalog by viewModel.serviceCatalog.collectAsState()
+    val employees by viewModel.employees.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Forms to add item
     var showFormType by remember { mutableStateOf<BudgetItemType?>(null) } // PART, SERVICE or null
@@ -50,12 +61,29 @@ fun BudgetScreen(
     var selectedServiceCatalog by remember { mutableStateOf<ServiceCatalog?>(null) }
     var selectedExecutor by remember { mutableStateOf<Employee?>(null) }
 
+    fun resetAddForm() {
+        showFormType = null
+        selectedProduct = null
+        selectedServiceCatalog = null
+        selectedExecutor = null
+        partQty = 1
+    }
+
     LaunchedEffect(orderId) {
+        resetAddForm()
         viewModel.loadBudget(orderId)
+    }
+
+    LaunchedEffect(actionError) {
+        actionError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearActionError()
+        }
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -65,7 +93,7 @@ fun BudgetScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
                         )
                         Text(
-                            text = "OS #${orderId} • Configuração de Preços",
+                            text = "OS #${orderNumber.ifBlank { orderId }} • Configuração de Preços",
                             style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver)
                         )
                     }
@@ -78,7 +106,7 @@ fun BudgetScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         if (isLoading) {
             LoadingScreen(modifier = Modifier.padding(innerPadding))
@@ -162,10 +190,10 @@ fun BudgetScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Button(
+                            OutlinedButton(
                                 onClick = { showFormType = BudgetItemType.PART },
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurface),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = FrostWhite),
                                 border = BorderStroke(1.dp, Graphite),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
@@ -174,10 +202,10 @@ fun BudgetScreen(
                                 Text("Inserir Peça", color = FrostWhite)
                             }
 
-                            Button(
+                            OutlinedButton(
                                 onClick = { showFormType = BudgetItemType.SERVICE },
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurface),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = FrostWhite),
                                 border = BorderStroke(1.dp, Graphite),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
@@ -231,7 +259,7 @@ fun BudgetScreen(
                             onClick = {
                                 viewModel.sendBudgetToClient(orderId, onBudgetSubmitted)
                             },
-                            enabled = loadedBudget.items.isNotEmpty(),
+                            enabled = loadedBudget.items.isNotEmpty() && !isSaving,
                             isSecondary = false
                         )
                         Row(
@@ -243,203 +271,228 @@ fun BudgetScreen(
                                     viewModel.saveBudgetDraft(orderId, onBudgetSubmitted)
                                 },
                                 modifier = Modifier.weight(1f),
+                                enabled = !isSaving,
                                 colors = ButtonDefaults.buttonColors(containerColor = Graphite),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("SALVAR RASCUNHO", color = FrostWhite, fontWeight = FontWeight.Bold)
+                                if (isSaving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = FrostWhite,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text("SALVAR RASCUNHO", color = FrostWhite, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
 
-                // DYNAMIC ADD PART/SERVICE SHEET FORM DIALOG
-                if (showFormType != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.85f))
-                            .clickable { /* no op */ }
-                            .padding(20.dp),
-                        contentAlignment = Alignment.Center
+    if (showFormType != null) {
+        ModalBottomSheet(
+            onDismissRequest = { resetAddForm() },
+            sheetState = sheetState,
+            containerColor = DarkSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = MetallicSilver) },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (showFormType == BudgetItemType.PART) "Lançar Peça no Orçamento" else "Lançar Mão de Obra",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
+                    )
+                    IconButton(onClick = { resetAddForm() }) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = FrostWhite)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (showFormType == BudgetItemType.PART) {
+                    Text("Selecione o item do estoque:", color = MetallicSilver, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (products.isEmpty()) {
+                        EmptyState(
+                            title = "Nenhuma peça disponível",
+                            subtitle = "Cadastre produtos no sistema ou verifique sua conexão com a API.",
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { viewModel.refreshCatalogs() }) {
+                            Text("Tentar novamente", color = PremiumGold)
+                        }
+                    } else {
+                        products.forEach { prod ->
+                            val isCurrent = selectedProduct?.id == prod.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isCurrent) CrimsonRed.copy(alpha = 0.15f) else Color.Transparent)
+                                    .border(1.dp, if (isCurrent) CrimsonRed else Graphite, RoundedCornerShape(4.dp))
+                                    .clickable { selectedProduct = prod }
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(prod.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
+                                    Text("Cód: ${prod.code} • Estoque: ${prod.stockQty} un", color = MetallicSilver, fontSize = 11.sp)
+                                }
+                                Text(formatCurrency(prod.price), color = PremiumGold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                            border = BorderStroke(1.dp, Graphite)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = if (showFormType == BudgetItemType.PART) "Lançar Peça no Orçamento" else "Lançar Mão de Obra",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
-                                    )
-                                    IconButton(onClick = {
-                                        showFormType = null
-                                        selectedProduct = null
-                                        selectedServiceCatalog = null
-                                        selectedExecutor = null
-                                        partQty = 1
-                                    }) {
-                                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = FrostWhite)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                if (showFormType == BudgetItemType.PART) {
-                                    // PART FORM
-                                    Text("Selecione o Item da autopeças:", color = MetallicSilver, fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    viewModel.products.forEach { prod ->
-                                        val isCurrent = selectedProduct?.id == prod.id
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(if (isCurrent) CrimsonRed.copy(alpha = 0.15f) else Color.Transparent)
-                                                .border(1.dp, if (isCurrent) CrimsonRed else Graphite, RoundedCornerShape(4.dp))
-                                                .clickable { selectedProduct = prod }
-                                                .padding(10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column {
-                                                Text(prod.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
-                                                Text("Cód: ${prod.code} • Estoque: ${prod.stockQty} un", color = MetallicSilver, fontSize = 11.sp)
-                                            }
-                                            Text(formatCurrency(prod.price), color = PremiumGold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        }
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                    }
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    // Quantity selector
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("Quantidade desejada:", color = FrostWhite, fontWeight = FontWeight.SemiBold)
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            IconButton(onClick = { if (partQty > 1) partQty-- }) {
-                                                Icon(Icons.Default.RemoveCircle, "Menos", tint = LightSilver)
-                                            }
-                                            Text(partQty.toString(), color = FrostWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
-                                            IconButton(onClick = { partQty++ }) {
-                                                Icon(Icons.Default.AddCircle, "Mais", tint = CrimsonRed)
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-
-                                    AppButton(
-                                        text = "Adicionar Peça",
-                                        onClick = {
-                                            selectedProduct?.let { product ->
-                                                viewModel.addItemToBudget(
-                                                    orderId,
-                                                    BudgetItem(
-                                                        id = "item_${System.currentTimeMillis()}",
-                                                        type = BudgetItemType.PART,
-                                                        code = product.code,
-                                                        name = product.name,
-                                                        qty = partQty,
-                                                        unitPrice = product.price
-                                                    )
-                                                )
-                                                showFormType = null
-                                                selectedProduct = null
-                                                partQty = 1
-                                            }
-                                        },
-                                        enabled = selectedProduct != null
-                                    )
-
-                                } else {
-                                    // SERVICE FORM
-                                    Text("Selecione o Serviço do catálogo:", color = MetallicSilver, fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    viewModel.serviceCatalog.forEach { serv ->
-                                        val isCurrent = selectedServiceCatalog?.id == serv.id
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(if (isCurrent) PremiumGold.copy(alpha = 0.15f) else Color.Transparent)
-                                                .border(1.dp, if (isCurrent) PremiumGold else Graphite, RoundedCornerShape(4.dp))
-                                                .clickable { selectedServiceCatalog = serv }
-                                                .padding(10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column {
-                                                Text(serv.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
-                                                Text("Mão de Obra Ref: ${serv.code}", color = MetallicSilver, fontSize = 11.sp)
-                                            }
-                                            Text(formatCurrency(serv.price), color = PremiumGold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        }
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                    }
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    Text("Selecione o Mecânico executor:", color = MetallicSilver, fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    viewModel.employees.forEach { worker ->
-                                        val isCurrent = selectedExecutor?.id == worker.id
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(if (isCurrent) CrimsonRed.copy(alpha = 0.15f) else Color.Transparent)
-                                                .border(1.dp, if (isCurrent) CrimsonRed else Graphite, RoundedCornerShape(4.dp))
-                                                .clickable { selectedExecutor = worker }
-                                                .padding(10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(worker.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
-                                            Text(worker.role, color = MetallicSilver, fontSize = 11.sp)
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    AppButton(
-                                        text = "Adicionar Mão de Obra",
-                                        onClick = {
-                                            selectedServiceCatalog?.let { serv ->
-                                                viewModel.addItemToBudget(
-                                                    orderId,
-                                                    BudgetItem(
-                                                        id = "item_${System.currentTimeMillis()}",
-                                                        type = BudgetItemType.SERVICE,
-                                                        code = serv.code,
-                                                        name = serv.name,
-                                                        qty = 1,
-                                                        unitPrice = serv.price,
-                                                        executorId = selectedExecutor?.id,
-                                                        executorName = selectedExecutor?.name
-                                                    )
-                                                )
-                                                showFormType = null
-                                                selectedServiceCatalog = null
-                                                selectedExecutor = null
-                                            }
-                                        },
-                                        enabled = selectedServiceCatalog != null && selectedExecutor != null
-                                    )
-                                }
+                        Text("Quantidade desejada:", color = FrostWhite, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { if (partQty > 1) partQty-- }) {
+                                Icon(Icons.Default.RemoveCircle, "Menos", tint = LightSilver)
+                            }
+                            Text(partQty.toString(), color = FrostWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
+                            IconButton(onClick = { partQty++ }) {
+                                Icon(Icons.Default.AddCircle, "Mais", tint = CrimsonRed)
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    AppButton(
+                        text = "Adicionar Peça",
+                        onClick = {
+                            selectedProduct?.let { product ->
+                                viewModel.addItemToBudget(
+                                    orderId,
+                                    BudgetItem(
+                                        id = "item_${System.currentTimeMillis()}",
+                                        type = BudgetItemType.PART,
+                                        code = product.id,
+                                        name = product.name,
+                                        qty = partQty,
+                                        unitPrice = product.price
+                                    )
+                                )
+                                resetAddForm()
+                            }
+                        },
+                        enabled = selectedProduct != null
+                    )
+                } else {
+                    Text("Selecione o serviço do catálogo:", color = MetallicSilver, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (serviceCatalog.isEmpty()) {
+                        EmptyState(
+                            title = "Nenhum serviço disponível",
+                            subtitle = "Cadastre serviços no catálogo ou verifique sua conexão com a API.",
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { viewModel.refreshCatalogs() }) {
+                            Text("Tentar novamente", color = PremiumGold)
+                        }
+                    } else {
+                        serviceCatalog.forEach { serv ->
+                            val isCurrent = selectedServiceCatalog?.id == serv.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isCurrent) PremiumGold.copy(alpha = 0.15f) else Color.Transparent)
+                                    .border(1.dp, if (isCurrent) PremiumGold else Graphite, RoundedCornerShape(4.dp))
+                                    .clickable { selectedServiceCatalog = serv }
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(serv.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
+                                    Text("Mão de Obra Ref: ${serv.code}", color = MetallicSilver, fontSize = 11.sp)
+                                }
+                                Text(formatCurrency(serv.price), color = PremiumGold, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text("Selecione o mecânico executor:", color = MetallicSilver, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (employees.isEmpty()) {
+                        EmptyState(
+                            title = "Nenhum mecânico disponível",
+                            subtitle = "Cadastre técnicos na equipe ou verifique sua conexão com a API.",
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { viewModel.refreshCatalogs() }) {
+                            Text("Tentar novamente", color = PremiumGold)
+                        }
+                    } else {
+                        employees.forEach { worker ->
+                            val isCurrent = selectedExecutor?.id == worker.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isCurrent) CrimsonRed.copy(alpha = 0.15f) else Color.Transparent)
+                                    .border(1.dp, if (isCurrent) CrimsonRed else Graphite, RoundedCornerShape(4.dp))
+                                    .clickable { selectedExecutor = worker }
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(worker.name, fontWeight = FontWeight.Bold, color = FrostWhite, fontSize = 13.sp)
+                                Text(worker.role, color = MetallicSilver, fontSize = 11.sp)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    AppButton(
+                        text = "Adicionar Mão de Obra",
+                        onClick = {
+                            selectedServiceCatalog?.let { serv ->
+                                viewModel.addItemToBudget(
+                                    orderId,
+                                    BudgetItem(
+                                        id = "item_${System.currentTimeMillis()}",
+                                        type = BudgetItemType.SERVICE,
+                                        code = serv.id,
+                                        name = serv.name,
+                                        qty = 1,
+                                        unitPrice = serv.price,
+                                        executorId = selectedExecutor?.id,
+                                        executorName = selectedExecutor?.name
+                                    )
+                                )
+                                resetAddForm()
+                            }
+                        },
+                        enabled = selectedServiceCatalog != null && selectedExecutor != null
+                    )
                 }
             }
         }

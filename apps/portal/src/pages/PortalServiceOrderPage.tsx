@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft, ChevronRight, Loader2, MessageCircle } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import PortalChecklistSection from "../components/portal/PortalChecklistSection";
 import { ApiError, api, type PortalServiceOrderDetail } from "../lib/api";
 import { formatDateTime, formatMoney } from "../lib/format";
 import { resolveMediaUrl } from "../lib/mediaUrl";
@@ -40,6 +41,8 @@ export default function PortalServiceOrderPage() {
 
   const pendingQuotes = data?.quotes.filter((q) => quoteNeedsResponse(q)) ?? [];
   const otherQuotes = data?.quotes.filter((q) => !quoteNeedsResponse(q)) ?? [];
+  const generalMedia =
+    data?.attachments.filter((a) => !a.category?.startsWith("checklist-")) ?? [];
 
   return (
     <div className="space-y-4 -mt-2">
@@ -178,11 +181,18 @@ export default function PortalServiceOrderPage() {
             </section>
           ) : null}
 
-          {data.attachments.length > 0 ? (
+          {data.checklistItems.length > 0 ? (
+            <PortalChecklistSection items={data.checklistItems} />
+          ) : null}
+
+          {generalMedia.length > 0 ? (
             <section className="portal-card p-4">
-              <h2 className="text-sm font-semibold portal-text mb-3">Fotos, vídeos e documentos</h2>
+              <h2 className="text-sm font-semibold portal-text mb-1">Fotos e vídeos da oficina</h2>
+              <p className="text-xs portal-text-muted mb-3">
+                Registros enviados pela equipe durante o serviço. Toque para ampliar.
+              </p>
               <div className="grid grid-cols-2 gap-2">
-                {data.attachments.map((a) => {
+                {generalMedia.map((a) => {
                   const src = resolveMediaUrl(a.url);
                   const isImage = isImageMime(a.mimeType);
                   const isVideo = isVideoMime(a.mimeType);

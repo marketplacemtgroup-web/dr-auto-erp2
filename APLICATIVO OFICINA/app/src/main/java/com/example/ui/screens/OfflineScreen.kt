@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SignalCellularConnectedNoInternet4Bar
@@ -17,28 +16,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AppButton
 import com.example.ui.components.BetoLogo
+import com.example.ui.components.BrandLogoSize
 import com.example.ui.theme.CrimsonRed
-import com.example.ui.theme.DarkBg
-import com.example.ui.theme.LightSilver
+import com.example.ui.theme.FrostWhite
 import com.example.ui.theme.MetallicSilver
 
 @Composable
 fun OfflineScreen(
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBg)
             .padding(24.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            BetoLogo(modifier = Modifier.size(100.dp))
+            BetoLogo(size = BrandLogoSize.Small)
 
             Spacer(modifier = Modifier.height(48.dp))
 
@@ -46,7 +41,7 @@ fun OfflineScreen(
                 imageVector = Icons.Default.SignalCellularConnectedNoInternet4Bar,
                 contentDescription = "Desconectado",
                 tint = CrimsonRed,
-                modifier = Modifier.size(72.dp)
+                modifier = Modifier.size(72.dp),
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -55,31 +50,32 @@ fun OfflineScreen(
                 text = "SEM CONEXÃO COM A INTERNET",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color.White,
+                    color = FrostWhite,
                     letterSpacing = 1.2.sp,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
                 ),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Verifique sua conexão para continuar usando o app da Beto Mecânica.",
+                text = "Verifique sua conexão para continuar usando o app da oficina.",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = MetallicSilver,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 ),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
             AppButton(
-                text = "TENTAR RECONECTAR DA RAMPA",
+                text = "TENTAR RECONECTAR",
                 onClick = onRetry,
-                isSecondary = false
+                isSecondary = false,
             )
-        }
     }
 }

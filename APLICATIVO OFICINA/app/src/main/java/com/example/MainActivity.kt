@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.navigation.Screen
 import com.example.data.service.SessionManager
+import com.example.ui.components.*
 import com.example.ui.screens.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.*
@@ -45,23 +46,37 @@ fun MainAppLayout() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Central viewmodel state instantiation
     val authViewModel: AuthViewModel = viewModel()
+    val sessionChecked by authViewModel.sessionChecked.collectAsState()
     val dashboardViewModel: DashboardViewModel = viewModel()
     val ordersViewModel: OrdersViewModel = viewModel()
     val orderDetailsViewModel: OrderDetailsViewModel = viewModel()
     val checklistViewModel: ChecklistViewModel = viewModel()
     val budgetViewModel: BudgetViewModel = viewModel()
 
-    // Determine if bottom navigation bar should be visible
-    val showBottomBar = currentRoute != null && 
-        currentRoute != Screen.Login.route && 
-        !currentRoute.startsWith("photo_checklist") && 
-        !currentRoute.startsWith("budget") && 
+    val startDestination = when {
+        !sessionChecked -> null
+        SessionManager.isLoggedIn -> Screen.Dashboard.route
+        else -> Screen.Login.route
+    }
+
+    if (startDestination == null) {
+        WorkshopBackground(scrimAlpha = 0.55f) {
+            LoadingScreen()
+        }
+        return
+    }
+
+    val showBottomBar = currentRoute != null &&
+        currentRoute != Screen.Login.route &&
+        !currentRoute.startsWith("photo_checklist") &&
+        !currentRoute.startsWith("budget") &&
         !currentRoute.startsWith("update_order")
 
+    WorkshopBackground(scrimAlpha = 0.55f) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
@@ -128,7 +143,7 @@ fun MainAppLayout() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Login.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
             // 1. Auth Stack Screen
@@ -251,5 +266,6 @@ fun MainAppLayout() {
                 )
             }
         }
+    }
     }
 }

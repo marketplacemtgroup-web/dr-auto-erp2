@@ -21,8 +21,18 @@ function validateDbEnv(): string[] {
 
 let cachedHandler: ((req: VercelRequest, res: VercelResponse) => void) | null = null;
 
+function normalizeApiRequestUrl(req: VercelRequest): void {
+  const raw = req.url ?? '';
+  const [path, query = ''] = raw.split('?');
+  if (path.startsWith('/apps/api/') || path === '/apps/api') {
+    const stripped = path.replace(/^\/apps/, '');
+    req.url = query ? `${stripped}?${query}` : stripped;
+  }
+}
+
 export default async function vercelHandler(req: VercelRequest, res: VercelResponse) {
   normalizeDatabaseEnv();
+  normalizeApiRequestUrl(req);
   if (applyEdgeCors(req, res)) return;
 
   const path = (req.url ?? '').split('?')[0] ?? '';

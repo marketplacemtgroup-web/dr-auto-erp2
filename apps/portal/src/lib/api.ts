@@ -81,6 +81,16 @@ export interface PortalDashboard {
   }>;
 }
 
+export interface PortalChecklistItem {
+  id: string;
+  category: string;
+  label: string;
+  result: "OK" | "ATTENTION" | "DAMAGED" | "NA" | null;
+  notes: string | null;
+  photoUrl: string | null;
+  photoMimeType: string | null;
+}
+
 export interface PortalServiceOrderDetail {
   id: string;
   number: number;
@@ -111,11 +121,13 @@ export interface PortalServiceOrderDetail {
     userName: string | null;
     createdAt: string;
   }>;
+  checklistItems: PortalChecklistItem[];
   attachments: Array<{
     id: string;
     fileName: string;
     mimeType: string;
     url: string;
+    category: string | null;
     createdAt: string;
   }>;
   quotes: PortalQuoteRow[];
@@ -303,13 +315,13 @@ export const api = {
     accessToken: string,
     data?: { lines?: Array<{ lineId: string; approved: boolean }>; comment?: string },
   ) =>
-    request(`/portal/public/quote/${accessToken}/approve`, {
+    request<PortalQuoteRow>(`/portal/public/quote/${accessToken}/approve`, {
       method: "PATCH",
       body: JSON.stringify(data ?? {}),
     }),
 
   publicRejectQuote: (accessToken: string, comment?: string) =>
-    request(`/portal/public/quote/${accessToken}/reject`, {
+    request<PortalQuoteRow>(`/portal/public/quote/${accessToken}/reject`, {
       method: "PATCH",
       body: JSON.stringify({ comment }),
     }),

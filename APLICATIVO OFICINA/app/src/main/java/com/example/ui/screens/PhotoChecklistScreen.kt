@@ -1,8 +1,11 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,16 +22,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ChecklistViewModel
+import com.example.util.AppPermissions
+import com.example.util.PhotoCapture
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun PhotoChecklistScreen(
     orderId: String,
@@ -37,26 +48,84 @@ fun PhotoChecklistScreen(
     onChecklistCompleted: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val photosList by viewModel.photosList.collectAsState()
+    val orderNumber by viewModel.orderNumber.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val actionError by viewModel.actionError.collectAsState()
+    val isUploading by viewModel.isUploading.collectAsState()
 
-    // Manage a camera emulator view
+    val snackbarHostState = remember { SnackbarHostState() }
+
     var activeCameraItem by remember { mutableStateOf<ChecklistPhoto?>(null) }
-    var mockObservingText by remember { mutableStateOf("") }
-    var mockPhotoUri by remember { mutableStateOf<String?>(null) }
+    var observationText by remember { mutableStateOf("") }
+    var capturedUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingGalleryOpen by remember { mutableStateOf(false) }
+
+    val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
+    val galleryPermissionName = AppPermissions.galleryPermission()
+    val galleryPermission = galleryPermissionName?.let { rememberPermissionState(it) }
+
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        if (success) {
+            capturedUri = pendingCameraUri
+        }
+        pendingCameraUri = null
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        pendingGalleryOpen = false
+        if (uri != null) capturedUri = uri
+    }
+
+    fun openCamera() {
+        if (!cameraPermission.status.isGranted) return
+        val (uri, _) = PhotoCapture.createTempImageUri(context)
+        pendingCameraUri = uri
+        takePictureLauncher.launch(uri)
+    }
+
+    fun openGallery() {
+        val needsGalleryPerm = galleryPermissionName != null && galleryPermission != null
+        if (needsGalleryPerm && !galleryPermission!!.status.isGranted) {
+            pendingGalleryOpen = true
+            galleryPermission.launchPermissionRequest()
+            return
+        }
+        galleryLauncher.launch("image/*")
+    }
+
+    LaunchedEffect(galleryPermission?.status?.isGranted, pendingGalleryOpen) {
+        if (pendingGalleryOpen && (galleryPermission == null || galleryPermission.status.isGranted)) {
+            pendingGalleryOpen = false
+            galleryLauncher.launch("image/*")
+        }
+    }
 
     LaunchedEffect(orderId) {
         viewModel.loadChecklist(orderId)
     }
 
-    // Progress math
+    LaunchedEffect(actionError) {
+        actionError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearActionError()
+        }
+    }
+
     val completedCount = photosList.count { it.status != PhotoChecklistStatus.PENDING }
     val totalCount = photosList.size
     val progressPercent = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0.0f
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -66,7 +135,7 @@ fun PhotoChecklistScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
                         )
                         Text(
-                            text = "OS #${orderId} • Proteção Jurídica Digital",
+                            text = "OS #${orderNumber.ifBlank { orderId }} • Proteção Jurídica Digital",
                             style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver)
                         )
                     }
@@ -79,7 +148,7 @@ fun PhotoChecklistScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         if (isLoading) {
             LoadingScreen(modifier = Modifier.padding(innerPadding))
@@ -142,8 +211,8 @@ fun PhotoChecklistScreen(
                                 item = item,
                                 onCameraClick = {
                                     activeCameraItem = item
-                                    mockObservingText = item.observation
-                                    mockPhotoUri = item.photoUri
+                                    observationText = item.observation
+                                    capturedUri = item.photoUri?.let { Uri.parse(it) }
                                 },
                                 onStatusChange = { newStatus ->
                                     viewModel.updatePhotoItem(orderId, item.id, newStatus, item.observation, item.photoUri)
@@ -177,14 +246,13 @@ fun PhotoChecklistScreen(
                     }
                 }
 
-                // CAMERA EMULATOR DIALOG OVERLAY (Immersive photo trigger simulation)
                 if (activeCameraItem != null) {
                     val targetItem = activeCameraItem!!
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = 0.95f))
-                            .clickable { /* prevent bubble clicks */ }
+                            .clickable { }
                             .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -203,10 +271,14 @@ fun PhotoChecklistScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "CÂMERA INTERNA [ OS #${orderId} ]",
+                                        text = "FOTO — OS #${orderNumber.ifBlank { orderId }}",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
                                     )
-                                    IconButton(onClick = { activeCameraItem = null }) {
+                                    IconButton(onClick = {
+                                        activeCameraItem = null
+                                        capturedUri = null
+                                        observationText = ""
+                                    }) {
                                         Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = FrostWhite)
                                     }
                                 }
@@ -214,17 +286,22 @@ fun PhotoChecklistScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 Text(
-                                    text = "Ângulo Solicitado: ${targetItem.label.uppercase()}",
+                                    text = targetItem.label.uppercase(),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
-                                )
-                                Text(
-                                    text = "Centralize o item e evite trepidações.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver)
                                 )
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // Camera viewfinder simulator
+                                if (!cameraPermission.status.isGranted) {
+                                    PermissionRequestCard(
+                                        title = "Permissão da câmera necessária",
+                                        description = "Para fotografar o veículo no checklist, permita o acesso à câmera. Você também pode alterar isso depois em Perfil → Permissões do aparelho.",
+                                        permissionState = cameraPermission,
+                                        settingsHint = "Celular → Apps → Oficina do Beto → Permissões → Câmera",
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -232,93 +309,89 @@ fun PhotoChecklistScreen(
                                         .background(Color.Black, RoundedCornerShape(8.dp))
                                         .border(2.dp, CrimsonRed, RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
-                                   ) {
-                                    if (mockPhotoUri != null) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = "Sucesso",
-                                            tint = SuccessGreen,
-                                            modifier = Modifier.size(64.dp)
+                                ) {
+                                    if (capturedUri != null) {
+                                        AsyncImage(
+                                            model = capturedUri,
+                                            contentDescription = "Foto capturada",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop,
                                         )
                                     } else {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(
-                                                imageVector = Icons.Default.Camera,
-                                                contentDescription = "Lente",
-                                                tint = Graphite,
-                                                modifier = Modifier.size(64.dp)
-                                            )
-                                            Text(
-                                                text = "Aguardando disparo da foto...",
-                                                color = MetallicSilver,
-                                                fontSize = 12.sp
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.Camera,
+                                            contentDescription = "Câmera",
+                                            tint = Graphite,
+                                            modifier = Modifier.size(64.dp)
+                                        )
                                     }
                                 }
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // Shoot controls
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Button(
-                                        onClick = {
-                                            // Click trigger simulates actual uploading photo path
-                                            mockPhotoUri = "file://beto_mecanica/os_${orderId}_${targetItem.label.lowercase()}.png"
-                                        },
+                                        onClick = { openCamera() },
+                                        enabled = cameraPermission.status.isGranted,
                                         colors = ButtonDefaults.buttonColors(containerColor = CrimsonRed),
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(imageVector = Icons.Default.PhotoCamera, contentDescription = "Capturar", tint = FrostWhite)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("DISPARAR", color = FrostWhite, fontWeight = FontWeight.Bold)
-                                        }
+                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = FrostWhite)
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("CÂMERA", color = FrostWhite, fontWeight = FontWeight.Bold)
                                     }
-
                                     Button(
-                                        onClick = {
-                                            mockPhotoUri = "file://gallery/os_${orderId}.png"
-                                        },
+                                        onClick = { openGallery() },
                                         colors = ButtonDefaults.buttonColors(containerColor = Graphite),
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = "Galeria", tint = LightSilver)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("GALERIA", color = FrostWhite, fontWeight = FontWeight.Bold)
-                                        }
+                                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = LightSilver)
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("GALERIA", color = FrostWhite, fontWeight = FontWeight.Bold)
                                     }
                                 }
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // Observation note input
                                 InputField(
-                                    value = mockObservingText,
-                                    onValueChange = { mockObservingText = it },
-                                    label = "Observação desta irregularidade (opcional)"
+                                    value = observationText,
+                                    onValueChange = { observationText = it },
+                                    label = "Observação (opcional)"
                                 )
 
                                 Spacer(modifier = Modifier.height(20.dp))
 
                                 AppButton(
-                                    text = "Confirmar Item do Checklist",
+                                    text = if (isUploading) "Enviando foto..." else "Salvar item",
                                     onClick = {
-                                        viewModel.updatePhotoItem(
-                                            orderId,
-                                            targetItem.id,
-                                            if (mockPhotoUri != null) PhotoChecklistStatus.OK else PhotoChecklistStatus.PENDING,
-                                            mockObservingText,
-                                            mockPhotoUri
-                                        )
-                                        activeCameraItem = null
+                                        val uri = capturedUri
+                                        if (uri != null) {
+                                            viewModel.uploadPhotoAndUpdate(
+                                                context = context,
+                                                orderId = orderId,
+                                                item = targetItem,
+                                                localUri = uri,
+                                                status = PhotoChecklistStatus.OK,
+                                                observation = observationText,
+                                            ) {
+                                                activeCameraItem = null
+                                                capturedUri = null
+                                                observationText = ""
+                                            }
+                                        } else {
+                                            viewModel.updatePhotoItem(
+                                                orderId,
+                                                targetItem.id,
+                                                PhotoChecklistStatus.ATTENTION,
+                                                observationText,
+                                            )
+                                            activeCameraItem = null
+                                        }
                                     },
-                                    enabled = mockPhotoUri != null,
-                                    isSecondary = false
+                                    enabled = !isUploading && (capturedUri != null || observationText.isNotBlank())
                                 )
                             }
                         }

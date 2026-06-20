@@ -6,6 +6,10 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/index"
+    },
+    {
+      "source": "/apps/api/(.*)",
+      "destination": "/api/index"
     }
   ],
   "functions": {

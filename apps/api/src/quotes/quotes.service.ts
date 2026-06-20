@@ -266,7 +266,22 @@ export class QuotesService {
       userId,
     );
     if (!reopenedId) {
-      throw new BadRequestException('Não foi possível reabrir o orçamento para complemento');
+      if (quote.serviceOrder.status === 'FINISHED' || quote.serviceOrder.status === 'DELIVERED' || quote.serviceOrder.status === 'CANCELLED') {
+        throw new BadRequestException(
+          'Complemento não permitido: a ordem de serviço já foi finalizada, entregue ou cancelada.',
+        );
+      }
+      const otherPending = await this.prisma.quote.findFirst({
+        where: { organizationId, serviceOrderId: quote.serviceOrderId, status: 'PENDING', id: { not: quoteId } },
+      });
+      if (otherPending) {
+        throw new BadRequestException(
+          'Já existe um orçamento pendente nesta OS. Use o orçamento aberto ou conclua a aprovação antes.',
+        );
+      }
+      throw new BadRequestException(
+        'Não foi possível reabrir o orçamento. Confira se ele está aprovado e a OS em andamento.',
+      );
     }
 
     await this.quotesSync.syncQuoteLines(

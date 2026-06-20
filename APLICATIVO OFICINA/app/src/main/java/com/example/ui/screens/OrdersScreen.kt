@@ -73,7 +73,7 @@ fun OrdersScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
             modifier = Modifier

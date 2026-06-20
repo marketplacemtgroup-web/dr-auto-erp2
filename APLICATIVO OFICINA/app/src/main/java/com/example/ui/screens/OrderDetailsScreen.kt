@@ -52,7 +52,7 @@ fun OrderDetailsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "OS #${orderId}",
+                        text = "OS #${order?.displayNumber ?: orderId}",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
                     )
                 },
@@ -64,7 +64,7 @@ fun OrderDetailsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         if (isLoading) {
             LoadingScreen(modifier = Modifier.padding(innerPadding))

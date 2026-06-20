@@ -4,7 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,133 +21,77 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.*
 import com.example.ui.theme.*
 
-// 1. DYNAMIC VECTOR BRANDING LOGO (drawn via Compose Canvas)
+/** Tamanhos padronizados do logo em telas do app. */
+enum class BrandLogoSize(val width: Dp) {
+    /** Login — destaque principal */
+    Login(240.dp),
+    /** Cabeçalho da home */
+    Header(56.dp),
+    /** Perfil / rodapé */
+    Compact(96.dp),
+    /** Telas auxiliares (offline, etc.) */
+    Small(72.dp),
+}
+
 @Composable
-fun BetoLogo(modifier: Modifier = Modifier, titleSize: Float = 22f, subtitleSize: Float = 11f) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+fun BetoLogo(
+    modifier: Modifier = Modifier,
+    size: BrandLogoSize = BrandLogoSize.Login,
+    contentDescription: String = "Beto Mecânica — Qualidade, Confiança, Desempenho",
+) {
+    Image(
+        painter = painterResource(id = R.drawable.logo_oficina_beto),
+        contentDescription = contentDescription,
+        modifier = modifier
+            .width(size.width)
+            .aspectRatio(1f),
+        contentScale = ContentScale.Fit,
+    )
+}
+
+/** Logo + nome da oficina para o cabeçalho operacional. */
+@Composable
+fun BrandHeaderLogo(
+    modifier: Modifier = Modifier,
+    subtitle: String = "GESTÃO OPERACIONAL INTERNA",
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(90.dp)
-                .background(Color.Transparent),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val center = size / 2.0f
-                val radius = size.minDimension / 2.0f - 8.0f
-
-                // Draw solid background circle for contrast
-                drawCircle(
-                    color = Color(0xFF070708),
-                    radius = radius + 8f
-                )
-
-                // 1. Draw outer Red Ring representing power / shield
-                drawCircle(
-                    color = CrimsonRed,
-                    radius = radius,
-                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                // 2. Draw outer gear teeth elements around ring (8 segments)
-                val teethCount = 8
-                val toothRingRadius = radius + 2.dp.toPx()
-                for (i in 0 until teethCount) {
-                    val angle = (i * 360f / teethCount) * (Math.PI / 180f).toFloat()
-                    val x = center.width + toothRingRadius * kotlin.math.cos(angle)
-                    val y = center.height + toothRingRadius * kotlin.math.sin(angle)
-                    drawCircle(
-                        color = CrimsonRed,
-                        radius = 5.dp.toPx(),
-                        center = androidx.compose.ui.geometry.Offset(x, y)
-                    )
-                }
-
-                // 3. Draw inner premium Gold hexagon representation
-                val hexPath = Path().apply {
-                    val side = radius - 8.dp.toPx()
-                    for (i in 0 until 6) {
-                        val angle = (i * 60f - 30f) * (Math.PI / 180f).toFloat()
-                        val x = center.width + side * kotlin.math.cos(angle)
-                        val y = center.height + side * kotlin.math.sin(angle)
-                        if (i == 0) moveTo(x, y) else lineTo(x, y)
-                    }
-                    close()
-                }
-                drawPath(
-                    path = hexPath,
-                    color = PremiumGold,
-                    style = Stroke(width = 1.5.dp.toPx())
-                )
-
-                // 4. Draw Crossed Wrenches / Pistons representing Beto Mechanics (Simplified high-impact emblem)
-                // Left-to-right slash wrench stem
-                drawLine(
-                    color = LightSilver,
-                    start = androidx.compose.ui.geometry.Offset(center.width - 20.dp.toPx(), center.height + 20.dp.toPx()),
-                    end = androidx.compose.ui.geometry.Offset(center.width + 20.dp.toPx(), center.height - 20.dp.toPx()),
-                    strokeWidth = 5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                // Right-to-left slash wrench stem
-                drawLine(
-                    color = LightSilver,
-                    start = androidx.compose.ui.geometry.Offset(center.width + 20.dp.toPx(), center.height + 20.dp.toPx()),
-                    end = androidx.compose.ui.geometry.Offset(center.width - 20.dp.toPx(), center.height - 20.dp.toPx()),
-                    strokeWidth = 5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-
-                // Central red engine piston head representation
-                drawRect(
-                    color = CrimsonRed,
-                    topLeft = androidx.compose.ui.geometry.Offset(center.width - 12.dp.toPx(), center.height - 18.dp.toPx()),
-                    size = androidx.compose.ui.geometry.Size(24.dp.toPx(), 20.dp.toPx()),
-                    style = Stroke(width = 3.dp.toPx())
-                )
-                drawLine(
-                    color = CrimsonRed,
-                    start = androidx.compose.ui.geometry.Offset(center.width, center.height - 8.dp.toPx()),
-                    end = androidx.compose.ui.geometry.Offset(center.width, center.height + 15.dp.toPx()),
-                    strokeWidth = 4.dp.toPx()
-                )
-            }
+        BetoLogo(size = BrandLogoSize.Header)
+        Column {
+            Text(
+                text = "OFICINA DO BETO",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = FrostWhite,
+                    letterSpacing = 0.5.sp,
+                ),
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MetallicSilver,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                ),
+            )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "BETO MECÂNICA",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = FontFamily.SansSerif,
-                letterSpacing = 1.5.sp,
-                fontSize = titleSize.sp,
-                color = FrostWhite
-            )
-        )
-        Text(
-            text = "QUALIDADE • CONFIANÇA • DESEMPENHO",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 2.sp,
-                fontSize = subtitleSize.sp,
-                color = PremiumGold
-            )
-        )
     }
 }
 
@@ -229,9 +173,12 @@ fun InputField(
             unfocusedBorderColor = Graphite,
             errorBorderColor = AccentRed,
             focusedTextColor = FrostWhite,
-            unfocusedTextColor = LightSilver,
-            focusedContainerColor = DarkSurface,
-            unfocusedContainerColor = DarkSurface
+            unfocusedTextColor = FrostWhite,
+            focusedLabelColor = PremiumGold,
+            unfocusedLabelColor = MetallicSilver,
+            focusedContainerColor = Color(0xE8101012),
+            unfocusedContainerColor = Color(0xD8101012),
+            cursorColor = CrimsonRed,
         ),
         shape = RoundedCornerShape(8.dp)
     )
@@ -241,19 +188,20 @@ fun InputField(
 @Composable
 fun StatusBadge(status: OrderStatus, modifier: Modifier = Modifier) {
     val (backgroundColor, textColor) = when (status) {
-        OrderStatus.ABERTA, OrderStatus.AGUARDANDO_CHECKLIST, OrderStatus.CHECKLIST_PENDENTE -> 
+        OrderStatus.RECEIVED ->
             Pair(Graphite, MetallicSilver)
-        OrderStatus.EM_ANALISE, OrderStatus.AGUARDANDO_ORCAMENTO -> 
+        OrderStatus.DIAGNOSIS, OrderStatus.AWAITING_QUOTE ->
             Pair(WarningAmber.copy(alpha = 0.15f), WarningAmber)
-        OrderStatus.ORCAMENTO_ENVIADO, OrderStatus.AGUARDANDO_APROVACAO -> 
+        OrderStatus.AWAITING_APPROVAL ->
             Pair(PremiumGold.copy(alpha = 0.15f), PremiumGold)
-        OrderStatus.APROVADA, OrderStatus.EM_EXECUCAO -> 
+        OrderStatus.APPROVED, OrderStatus.IN_PROGRESS, OrderStatus.AWAITING_PART, OrderStatus.PAUSED ->
             Pair(CrimsonRed.copy(alpha = 0.15f), AccentRed)
-        OrderStatus.FINALIZADA, OrderStatus.PRONTA_PARA_RETIRADA, OrderStatus.ENTREGUE -> 
+        OrderStatus.AWAITING_PAYMENT ->
+            Pair(PremiumGold.copy(alpha = 0.15f), PremiumGold)
+        OrderStatus.FINISHED, OrderStatus.DELIVERED ->
             Pair(SuccessGreen.copy(alpha = 0.15f), SuccessGreen)
-        OrderStatus.CANCELADA -> 
+        OrderStatus.CANCELLED ->
             Pair(Color.DarkGray, Color.LightGray)
-        else -> Pair(Graphite, LightSilver)
     }
 
     Box(
@@ -315,7 +263,7 @@ fun OrderCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "OS #${order.id}",
+                        text = "OS #${order.displayNumber}",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = FrostWhite
@@ -492,15 +440,15 @@ fun DashboardMetricCard(
 @Composable
 fun LoadingScreen(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(DarkBg),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            BetoLogo(size = BrandLogoSize.Small)
+            Spacer(modifier = Modifier.height(20.dp))
             CircularProgressIndicator(color = CrimsonRed, strokeWidth = 3.dp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(

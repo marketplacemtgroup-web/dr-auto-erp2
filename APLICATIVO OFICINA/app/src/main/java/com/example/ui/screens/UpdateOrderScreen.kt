@@ -42,7 +42,7 @@ fun UpdateOrderScreen(
     val order by viewModel.order.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    var selectedStatus by remember { mutableStateOf<OrderStatus>(OrderStatus.ABERTA) }
+    var selectedStatus by remember { mutableStateOf(OrderStatus.RECEIVED) }
     var technicalNotes by remember { mutableStateOf("") }
     var notifyClient by remember { mutableStateOf(false) }
 
@@ -63,7 +63,7 @@ fun UpdateOrderScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "STATUS DA OS #${orderId}",
+                        text = "STATUS DA OS #${order?.displayNumber ?: orderId}",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
                     )
                 },
@@ -75,7 +75,7 @@ fun UpdateOrderScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
-        containerColor = DarkBg
+        containerColor = Color.Transparent
     ) { innerPadding ->
         if (isLoading) {
             LoadingScreen(modifier = Modifier.padding(innerPadding))
