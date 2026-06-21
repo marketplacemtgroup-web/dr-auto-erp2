@@ -310,7 +310,7 @@ fun VehicleCard(vehicle: Vehicle, modifier: Modifier = Modifier) {
 @Composable
 fun OrderCard(
     order: ServiceOrder,
-    vehicle: Vehicle,
+    vehicle: Vehicle? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -346,11 +346,13 @@ fun OrderCard(
             Divider(color = BrandPalette.BorderGray)
             Spacer(modifier = Modifier.height(12.dp))
             
-            Text(
-                text = "${vehicle.brand} ${vehicle.model} (${vehicle.color})",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-                color = BrandPalette.SlateGray
-            )
+            if (vehicle != null) {
+                Text(
+                    text = "${vehicle.brand} ${vehicle.model} (${vehicle.color ?: ""})",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                    color = BrandPalette.SlateGray
+                )
+            }
             
             if (!order.complaint.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))

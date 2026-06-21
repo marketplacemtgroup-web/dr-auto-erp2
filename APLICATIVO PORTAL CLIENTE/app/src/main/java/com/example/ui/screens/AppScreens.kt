@@ -104,23 +104,7 @@ fun LoginScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0C1938)) // Premium Deep Night Blue
-    ) {
-        // Decorative background layers
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.45f)
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color(0xFF1E3A8A), Color(0xFF0C1938))
-                    )
-                )
-        )
-
+    PortalBackground {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -129,41 +113,31 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Header Branding Icon
-            Box(
+            PortalBrandLogo(
                 modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Build,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+                    .height(72.dp)
+                    .padding(bottom = 8.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Portal do Cliente",
-                color = Color.White,
-                style = MaterialTheme.typography.headlineLarge.copy(
+                text = "Acesse seu acompanhamento",
+                color = BrandPalette.SlateGray,
+                style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = FontWeight.Black,
-                    letterSpacing = (-1).sp
-                )
+                ),
+                textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Acompanhe o serviço do seu veículo em tempo real",
-                color = Color.White.copy(alpha = 0.7f),
+                text = "Digite seu CPF e a placa do veículo para acompanhar sua ordem de serviço.",
+                color = Color(0xFF64748B),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             // Login card
             Card(
@@ -234,7 +208,7 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     AppButton(
-                        text = if (isLoading) "Autenticando..." else "Acessar Meu Portal",
+                        text = if (isLoading) "Entrando..." else "Acessar portal",
                         onClick = {
                             viewModel.login(cpf, plate, onLoginSuccess)
                         },
@@ -1390,17 +1364,12 @@ fun SupportScreen(
             ) {
                 if (!org.logoUrl.isNullOrEmpty()) {
                     AsyncImage(
-                        model = org.logoUrl,
+                        model = com.example.lib.PortalBranding.resolveLogoUrl(org.logoUrl),
                         contentDescription = "Logo",
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.HomeRepairService,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
+                    PortalBrandLogo(modifier = Modifier.fillMaxSize(0.85f))
                 }
             }
 

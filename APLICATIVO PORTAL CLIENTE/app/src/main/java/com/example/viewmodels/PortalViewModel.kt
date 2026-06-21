@@ -246,7 +246,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val dashboardData = api.getDashboard()
                 _dashboard.value = dashboardData
-                updateBrandColors(dashboardData.organization)
+                updateBrandColors(dashboardData.organization, null)
                 sessionManager.cacheDashboard(dashboardAdapter.toJson(dashboardData))
 
                 val notifs = api.getNotifications()
@@ -273,7 +273,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val dashboardData = api.getDashboard()
                 _dashboard.value = dashboardData
-                updateBrandColors(dashboardData.organization)
+                updateBrandColors(dashboardData.organization, null)
                 sessionManager.cacheDashboard(dashboardAdapter.toJson(dashboardData))
 
                 val notifs = api.getNotifications()
@@ -293,7 +293,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             if (!cachedJson.isNullOrEmpty()) {
                 val cachedData = dashboardAdapter.fromJson(cachedJson)
                 _dashboard.value = cachedData
-                cachedData?.organization?.let { updateBrandColors(it) }
+                cachedData?.organization?.let { updateBrandColors(it, null) }
             }
 
             val cachedNotifsJson = sessionManager.getCachedNotifications()

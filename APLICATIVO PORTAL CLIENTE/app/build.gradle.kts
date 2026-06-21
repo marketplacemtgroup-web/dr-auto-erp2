@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -10,7 +12,7 @@ android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
-  defaultConfig {
+    defaultConfig {
     applicationId = "com.aistudio.portalcliente.wypbzx"
     minSdk = 24
     targetSdk = 36
@@ -19,11 +21,8 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    // Host do portal web (PWA) — usado nos App Links /acesso e /orcamento
-    manifestPlaceholders["portalDeepLinkHost"] = readEnvProperty(
-      key = "PORTAL_DEEP_LINK_HOST",
-      defaultValue = "oficina-beto-portal.vercel.app",
-    )
+    val deepLinkHost = readEnvProperty("PORTAL_DEEP_LINK_HOST", "oficina-beto-portal.vercel.app")
+    manifestPlaceholders["portalDeepLinkHost"] = deepLinkHost
   }
 
   signingConfigs {
@@ -50,7 +49,7 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      // Assinatura debug padrão do Android
     }
   }
   compileOptions {
@@ -129,7 +128,7 @@ dependencies {
 }
 
 fun readEnvProperty(key: String, defaultValue: String): String {
-  val props = java.util.Properties()
+  val props = Properties()
   val envFile = rootProject.file(".env")
   val exampleFile = rootProject.file(".env.example")
   when {

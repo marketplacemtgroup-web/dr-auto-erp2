@@ -51,22 +51,13 @@ fun SplashScreen(viewModel: PortalViewModel) {
         if (isLoggedIn) viewModel.loadAllData(showLoading = false)
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BrandPalette.MetallicSilver),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(BrandPalette.DeepBlue),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Build, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
-            }
+    PortalBackground {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            PortalBrandLogo(modifier = Modifier.height(80.dp))
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Portal do Cliente",
@@ -76,7 +67,7 @@ fun SplashScreen(viewModel: PortalViewModel) {
             Spacer(modifier = Modifier.height(24.dp))
             CircularProgressIndicator(color = BrandPalette.SparkBlue)
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = splashMessages[msgIndex], color = Color.Gray, fontSize = 14.sp)
+            Text(text = splashMessages[msgIndex], color = Color(0xFF64748B), fontSize = 14.sp)
         }
     }
 }
@@ -104,25 +95,27 @@ fun AccessLinkScreen(
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(BrandPalette.MetallicSilver),
-        contentAlignment = Alignment.Center
-    ) {
-        if (errorMessage != null) {
-            AppCard(modifier = Modifier.padding(24.dp)) {
-                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = errorMessage ?: "", color = BrandPalette.StatusErrorText, textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TextButton(onClick = onGoToLogin) {
-                        Text("Entrar com CPF e placa", color = BrandPalette.SparkBlue)
+    PortalBackground {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (errorMessage != null) {
+                AppCard(modifier = Modifier.padding(24.dp)) {
+                    Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = errorMessage ?: "", color = BrandPalette.StatusErrorText, textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        TextButton(onClick = onGoToLogin) {
+                            Text("Entrar com CPF e placa", color = BrandPalette.SparkBlue)
+                        }
                     }
                 }
-            }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(color = BrandPalette.SparkBlue, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(if (isLoading) "Abrindo portal..." else "Conectando...", color = Color.Gray)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = BrandPalette.SparkBlue, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(if (isLoading) "Abrindo portal..." else "Conectando...", color = Color(0xFF64748B))
+                }
             }
         }
     }
