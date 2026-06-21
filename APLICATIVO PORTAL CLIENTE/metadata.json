@@ -1,0 +1,6 @@
+{
+  "name": "Portal do Cliente",
+  "description": "Aplicativo para clientes acompanharem ordens de serviço, orçamentos, veículos e histórico em tempo real na oficina.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

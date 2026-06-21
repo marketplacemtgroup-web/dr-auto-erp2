@@ -27,16 +27,19 @@ export function mapOsStatusToApp(status: ServiceOrderStatus): string {
     case 'IN_PROGRESS':
     case 'APPROVED':
     case 'AWAITING_PART':
+    case 'PAUSED':
       return 'em_execucao';
     case 'FINISHED':
     case 'DELIVERED':
       return 'finalizada';
     case 'RECEIVED':
+    case 'DIAGNOSIS':
+    case 'AWAITING_QUOTE':
+    case 'AWAITING_APPROVAL':
+    case 'AWAITING_PAYMENT':
       return 'aguardando_aprovacao';
     case 'CANCELLED':
       return 'cancelada';
-    default:
-      return status.toLowerCase();
   }
 }
 

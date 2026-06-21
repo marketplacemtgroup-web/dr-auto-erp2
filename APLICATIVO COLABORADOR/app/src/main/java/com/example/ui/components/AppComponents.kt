@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,39 +82,108 @@ fun BetoLogo(modifier: Modifier = Modifier, size: Dp = 120.dp) {
     )
 }
 
+fun normalizeAppStatus(status: String): String =
+    status.trim().lowercase().replace('-', '_')
+
+fun osStatusMatchesFilter(orderStatus: String, filterTab: String): Boolean {
+    val status = normalizeAppStatus(orderStatus)
+    return when (filterTab) {
+        "Todas" -> true
+        "Em execução" -> status in setOf(
+            "em_execucao", "in_progress", "approved", "awaiting_part", "paused",
+        )
+        "Finalizadas" -> status in setOf("finalizada", "finished", "delivered")
+        "Aguardando aprovação" -> status in setOf(
+            "aguardando_aprovacao",
+            "awaiting_approval",
+            "awaiting_quote",
+            "diagnosis",
+            "received",
+            "awaiting_payment",
+        )
+        else -> true
+    }
+}
+
+private data class StatusPresentation(
+    val label: String,
+    val background: Color,
+    val foreground: Color,
+)
+
+private fun resolveStatusPresentation(status: String): StatusPresentation {
+    return when (normalizeAppStatus(status)) {
+        "em_execucao", "in_progress", "approved", "awaiting_part", "paused" ->
+            StatusPresentation("Em execução", Color(0x33F59E0B), StatusWarning)
+        "finalizada", "finished", "delivered" ->
+            StatusPresentation("Finalizada", Color(0x3322C55E), StatusSuccess)
+        "aguardando_aprovacao", "awaiting_approval" ->
+            StatusPresentation("Aguard. aprovação", Color(0x333B82F6), StatusBlue)
+        "awaiting_quote" ->
+            StatusPresentation("Aguard. orçamento", Color(0x333B82F6), StatusBlue)
+        "diagnosis", "received" ->
+            StatusPresentation("Em diagnóstico", Color(0x333B82F6), StatusBlue)
+        "awaiting_payment" ->
+            StatusPresentation("Aguard. pagamento", Color(0x33F59E0B), StatusWarning)
+        "pendente", "prevista" ->
+            StatusPresentation(
+                if (normalizeAppStatus(status) == "prevista") "Prevista" else "Pendente",
+                Color(0x33F59E0B),
+                StatusWarning,
+            )
+        "aprovada", "confirmada" ->
+            StatusPresentation(
+                if (normalizeAppStatus(status) == "confirmada") "Confirmada" else "Aprovada",
+                Color(0x3322C55E),
+                StatusSuccess,
+            )
+        "paga" ->
+            StatusPresentation("Paga", Color(0x3310B981), StatusSuccess)
+        "valido" ->
+            StatusPresentation("Registrado", Color(0x3322C55E), StatusSuccess)
+        "em_analise" ->
+            StatusPresentation("Em análise", Color(0x333B82F6), StatusBlue)
+        "enviada" ->
+            StatusPresentation("Enviada", Color(0x333B82F6), StatusBlue)
+        "recusada" ->
+            StatusPresentation("Recusada", Color(0x33E11D2E), StatusDanger)
+        "cancelada", "cancelled" ->
+            StatusPresentation("Cancelada", Color(0x199CA3AF), TextSecondary)
+        "estornada" ->
+            StatusPresentation("Estornada", Color(0x199CA3AF), TextSecondary)
+        "trabalho" ->
+            StatusPresentation("Trabalho", Color(0x333B82F6), StatusBlue)
+        "folga" ->
+            StatusPresentation("Folga", Color(0x3322C55E), StatusSuccess)
+        else -> StatusPresentation(
+            status.replace('_', ' ').replaceFirstChar { it.uppercase() },
+            Color(0xFF2C2C32),
+            TextPrimary,
+        )
+    }
+}
+
 @Composable
 fun StatusBadge(status: String, modifier: Modifier = Modifier) {
-    val (text, bgColor, textColor) = when (status.lowercase()) {
-        "em_execucao", "pendente" -> Triple("Em execução", Color(0x33F59E0B), StatusWarning)
-        "finalizada", "aprovada", "confirmada", "valido" -> Triple(
-            if (status == "valido") "Registrado" else if (status == "confirmada") "Confirmada" else "Finalizada",
-            Color(0x3322C55E),
-            StatusSuccess
-        )
-        "aguardando_aprovacao", "em_analise", "enviada" -> Triple(
-            if (status == "em_analise") "Em análise" else if (status == "enviada") "Enviada" else "Aguardando aprovação",
-            Color(0x333B82F6),
-            StatusBlue
-        )
-        "paga" -> Triple("Paga", Color(0x3310B981), StatusSuccess)
-        "recusada" -> Triple("Recusada", Color(0x33E11D2E), StatusDanger)
-        "cancelada" -> Triple("Cancelada", Color(0x199CA3AF), TextSecondary)
-        "trabalho" -> Triple("Trabalho", Color(0x333B82F6), StatusBlue)
-        "folga" -> Triple("Folga", Color(0x3322C55E), StatusSuccess)
-        else -> Triple(status, Color(0xFF2C2C32), TextPrimary)
-    }
+    val presentation = resolveStatusPresentation(status)
 
     Box(
         modifier = modifier
-            .background(bgColor, shape = RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
+            .widthIn(min = 96.dp)
+            .wrapContentWidth()
+            .background(presentation.background, shape = RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = text,
-            color = textColor,
+            text = presentation.label,
+            color = presentation.foreground,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            lineHeight = 13.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

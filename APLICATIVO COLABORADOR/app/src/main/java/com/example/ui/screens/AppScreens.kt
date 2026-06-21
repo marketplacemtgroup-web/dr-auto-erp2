@@ -500,13 +500,7 @@ fun MyOrdersScreen(viewModel: AppViewModel, onNavigate: (String) -> Unit) {
                         order.placa.contains(searchParam, true) ||
                         order.cliente_nome.contains(searchParam, true)
                 
-                val matchesTab = when (selectedStatusTab) {
-                    "Todas" -> true
-                    "Em execução" -> order.status == "em_execucao"
-                    "Finalizadas" -> order.status == "finalizada"
-                    "Aguardando aprovação" -> order.status == "aguardando_aprovacao"
-                    else -> true
-                }
+                val matchesTab = osStatusMatchesFilter(order.status, selectedStatusTab)
                 matchesSearch && matchesTab
             }
 
@@ -517,20 +511,38 @@ fun MyOrdersScreen(viewModel: AppViewModel, onNavigate: (String) -> Unit) {
                 }) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Top
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp),
+                        ) {
                             Text(order.numero, color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             Text(order.veiculo_modelo, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("Placa: ${order.placa} • Cliente: ${order.cliente_nome}", color = TextSecondary, fontSize = 12.sp)
+                            Text(
+                                text = "Placa: ${order.placa} • Cliente: ${order.cliente_nome}",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Text("Serviços: ${order.servicos_executados_por_mim}", color = TextSecondary, fontSize = 12.sp)
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                                 Text("Comissão prevista: ", color = TextSecondary, fontSize = 12.sp)
-                                Text(df.format(order.comissao_prevista), color = StatusSuccess, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    df.format(order.comissao_prevista),
+                                    color = StatusSuccess,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                )
                             }
                         }
-                        StatusBadge(status = order.status)
+                        StatusBadge(
+                            status = order.status,
+                            modifier = Modifier.align(Alignment.Top),
+                        )
                     }
                 }
             }
@@ -616,16 +628,25 @@ fun OrderDetailsScreen(viewModel: AppViewModel, onNavigate: (String) -> Unit) {
                     AppCard(modifier = Modifier.padding(bottom = 10.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 12.dp),
+                            ) {
                                 Text(service.descricao, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 Text("Valor base: ${df.format(service.valor_base)}", color = TextSecondary, fontSize = 12.sp)
                                 Text("Regra: ${service.regra_comissao}", color = TextSecondary, fontSize = 12.sp)
                                 Row {
                                     Text("Previsão comissão: ", color = TextSecondary, fontSize = 12.sp)
-                                    Text(df.format(service.comissao_prevista), color = StatusSuccess, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        df.format(service.comissao_prevista),
+                                        color = StatusSuccess,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                    )
                                 }
                             }
                             StatusBadge(status = service.status_comissao)
@@ -733,17 +754,36 @@ fun CommissionsScreen(viewModel: AppViewModel, onNavigate: (String) -> Unit) {
                 }) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp),
+                        ) {
                             Text(com.os_numero, color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(com.descricao, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text(com.regra, color = TextSecondary, fontSize = 12.sp)
+                            Text(
+                                com.descricao,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(com.regra, color = TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(df.format(com.valor_comissao), color = StatusSuccess, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.wrapContentWidth(),
+                        ) {
+                            Text(
+                                df.format(com.valor_comissao),
+                                color = StatusSuccess,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
                             StatusBadge(status = com.status.name.lowercase())
                         }
                     }
@@ -761,10 +801,17 @@ fun CommissionSumChip(title: String, amount: String, borderCol: Color, modifier:
             .border(1.dp, borderCol.copy(alpha = 0.5f), shape = RoundedCornerShape(10.dp))
             .padding(12.dp)
     ) {
-        Column {
-            Text(title, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(title, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 2)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(amount, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            Text(
+                amount,
+                color = TextPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                lineHeight = 18.sp,
+            )
         }
     }
 }
@@ -797,14 +844,27 @@ fun CommissionDetailsScreen(viewModel: AppViewModel, onNavigate: (String) -> Uni
                 AppCard {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp),
+                        ) {
                             Text(item.os_numero, color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(item.descricao, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(
+                                item.descricao,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        StatusBadge(item.status.name)
+                        StatusBadge(
+                            status = item.status.name,
+                            modifier = Modifier.align(Alignment.Top),
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -833,11 +893,22 @@ fun CommissionDetailsScreen(viewModel: AppViewModel, onNavigate: (String) -> Uni
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Valor da comissão", color = RedButton, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(df.format(item.valor_comissao), color = RedButton, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                        Text(
+                            "Valor da comissão",
+                            color = RedButton,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            df.format(item.valor_comissao),
+                            color = RedButton,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                        )
                     }
 
                     val dateLines = listOf(
@@ -1198,10 +1269,13 @@ fun RequestsScreen(viewModel: AppViewModel, onNavigate: (String) -> Unit) {
                     AppCard {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Top
                         ) {
-                            Column {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 12.dp),
+                            ) {
                                 val dspl = when (r.tipo) {
                                     "folga" -> "Folga"
                                     "ajuste_ponto" -> "Ajuste de ponto"
