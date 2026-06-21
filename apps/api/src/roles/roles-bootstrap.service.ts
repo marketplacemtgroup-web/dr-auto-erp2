@@ -8,7 +8,11 @@ export class RolesBootstrapService implements OnModuleInit {
 
   constructor(private readonly roles: RolesService) {}
 
-  async onModuleInit() {
+  onModuleInit() {
+    void this.syncInBackground();
+  }
+
+  private async syncInBackground() {
     try {
       const result = await this.roles.syncAllDefaultRoles();
       this.logger.log(

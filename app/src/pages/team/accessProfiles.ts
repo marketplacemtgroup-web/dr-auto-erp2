@@ -13,3 +13,11 @@ export function accessProfileLabel(slug: string | null | undefined): string {
   if (!slug) return "—";
   return ACCESS_PROFILE_OPTIONS.find((o) => o.value === slug)?.label ?? slug;
 }
+
+/** Papel efetivo do login (JWT usa member.role, não só employee.accessProfile). */
+export function effectiveAccessProfile(emp: {
+  accessProfile?: string | null;
+  member?: { role?: { slug?: string } } | null;
+}): string | null {
+  return emp.member?.role?.slug ?? emp.accessProfile ?? null;
+}

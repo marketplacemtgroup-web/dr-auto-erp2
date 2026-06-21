@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Trash2, Upload } from "lucide-react";
@@ -8,7 +8,11 @@ import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import LoginUsernameField from "../../components/team/LoginUsernameField";
-import { ACCESS_PROFILE_OPTIONS, accessProfileLabel } from "./accessProfiles";
+import {
+  ACCESS_PROFILE_OPTIONS,
+  accessProfileLabel,
+  effectiveAccessProfile,
+} from "./accessProfiles";
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,7 +63,11 @@ export default function EmployeeDetailPage() {
   const updateAccess = useMutation({
     mutationFn: (payload: { accessProfile?: string; accessActive?: boolean }) =>
       api.updateEmployeeAccess(token!, id!, payload),
-    onSuccess: invalidate,
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["employee", id ?? "", token], updated);
+      setEditProfile(effectiveAccessProfile(updated) ?? "");
+      invalidate();
+    },
   });
 
   const resetPassword = useMutation({
@@ -79,6 +87,14 @@ export default function EmployeeDetailPage() {
     mutationFn: (docId: string) => api.deleteEmployeeDocument(token!, id!, docId),
     onSuccess: () => refetchDocuments(),
   });
+
+  const currentProfile = data ? effectiveAccessProfile(data as EmployeeRow) ?? "" : "";
+
+  useEffect(() => {
+    if (data?.member) {
+      setEditProfile(effectiveAccessProfile(data as EmployeeRow) ?? "");
+    }
+  }, [data]);
 
   if (isLoading) return <p className="p-6 text-sm text-[#6B7280]">Carregando...</p>;
   if (error || !data) return <p className="p-6 text-sm text-red-600">Funcionário não encontrado.</p>;
@@ -129,7 +145,7 @@ export default function EmployeeDetailPage() {
                 </p>
                 <p>
                   <span className="text-[#6B7280]">Perfil:</span>{" "}
-                  {accessProfileLabel(emp.accessProfile ?? emp.member!.role.slug)}
+                  {accessProfileLabel(currentProfile)}
                 </p>
                 <p>
                   <span className="text-[#6B7280]">Status:</span>{" "}
@@ -149,7 +165,7 @@ export default function EmployeeDetailPage() {
                 <FormField label="Alterar perfil">
                   <select
                     className={selectClass}
-                    value={editProfile || emp.accessProfile || emp.member!.role.slug}
+                    value={editProfile}
                     onChange={(e) => setEditProfile(e.target.value)}
                   >
                     {ACCESS_PROFILE_OPTIONS.map((o) => (
@@ -162,12 +178,12 @@ export default function EmployeeDetailPage() {
                 <button
                   type="button"
                   className="px-3 py-2 text-sm bg-[#0057D9] text-white rounded-lg disabled:opacity-50"
-                  disabled={updateAccess.isPending}
-                  onClick={() =>
-                    updateAccess.mutate({
-                      accessProfile: editProfile || emp.accessProfile || emp.member!.role.slug,
-                    })
+                  disabled={
+                    updateAccess.isPending ||
+                    !editProfile ||
+                    editProfile === currentProfile
                   }
+                  onClick={() => updateAccess.mutate({ accessProfile: editProfile })}
                 >
                   Salvar perfil
                 </button>
@@ -182,6 +198,11 @@ export default function EmployeeDetailPage() {
                   {loginActive ? "Bloquear acesso" : "Reativar acesso"}
                 </button>
               </div>
+              {(updateAccess.error as Error | null) && (
+                <p className="text-sm text-red-600">
+                  {(updateAccess.error as Error).message}
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-4 items-end border-t border-[#F3F4F6] pt-4">
                 <FormField label="Nova senha (mín. 6 caracteres)">

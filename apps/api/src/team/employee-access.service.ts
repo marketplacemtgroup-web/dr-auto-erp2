@@ -168,23 +168,34 @@ export class EmployeeAccessService {
       throw new BadRequestException('Funcionário não possui acesso ao sistema');
     }
 
-    if (dto.accessProfile !== undefined && !isAccessProfileSlug(dto.accessProfile)) {
-      throw new BadRequestException('Perfil de acesso inválido');
-    }
+    if (dto.accessProfile !== undefined) {
+      if (!isAccessProfileSlug(dto.accessProfile)) {
+        throw new BadRequestException('Perfil de acesso inválido');
+      }
 
-    if (dto.accessProfile) {
-      await ensureDefaultRoles(this.prisma, organizationId);
-      const role = await this.prisma.role.findFirst({
+      let role = await this.prisma.role.findFirst({
         where: { organizationId, slug: dto.accessProfile },
       });
+      if (!role) {
+        await ensureDefaultRoles(this.prisma, organizationId);
+        role = await this.prisma.role.findFirst({
+          where: { organizationId, slug: dto.accessProfile },
+        });
+      }
       if (!role) {
         throw new BadRequestException('Perfil de acesso não encontrado na organização');
       }
 
-      await this.prisma.organizationMember.update({
-        where: { id: employee.memberId },
-        data: { roleId: role.id },
-      });
+      await this.prisma.$transaction([
+        this.prisma.organizationMember.update({
+          where: { id: employee.memberId },
+          data: { roleId: role.id },
+        }),
+        this.prisma.employee.update({
+          where: { id: employeeId },
+          data: { accessProfile: dto.accessProfile },
+        }),
+      ]);
     }
 
     if (dto.accessActive !== undefined) {
@@ -198,11 +209,8 @@ export class EmployeeAccessService {
       });
     }
 
-    const row = await this.prisma.employee.update({
-      where: { id: employeeId },
-      data: {
-        ...(dto.accessProfile !== undefined ? { accessProfile: dto.accessProfile } : {}),
-      },
+    const row = await this.prisma.employee.findFirstOrThrow({
+      where: { id: employeeId, organizationId },
       include: employeeInclude,
     });
 

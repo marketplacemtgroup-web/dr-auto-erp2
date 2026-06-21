@@ -10,7 +10,11 @@ import { formatMoney } from "../../lib/format";
 import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import LoginUsernameField from "../../components/team/LoginUsernameField";
-import { ACCESS_PROFILE_OPTIONS, accessProfileLabel } from "./accessProfiles";
+import {
+  ACCESS_PROFILE_OPTIONS,
+  accessProfileLabel,
+  effectiveAccessProfile,
+} from "./accessProfiles";
 
 const PAYMENT_LABELS: Record<string, string> = {
   FIXO: "Salário fixo",
@@ -169,7 +173,7 @@ export default function EmployeesPage() {
               key: "profile",
               header: "Perfil",
               render: (r: EmployeeRow) =>
-                accessProfileLabel(r.accessProfile ?? r.member?.role?.slug),
+                accessProfileLabel(effectiveAccessProfile(r)),
             },
             {
               key: "login",
