@@ -92,6 +92,23 @@ fun OrdersScreen(
                         )
                     }
                 },
+                actions = {
+                    TextButton(onClick = onNavigateToCreateOrder) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            tint = PremiumGold,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "NOVA OS",
+                            color = PremiumGold,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
         },
@@ -104,6 +121,7 @@ fun OrdersScreen(
                 Icon(Icons.Default.Add, contentDescription = "Nova ordem de serviço")
             }
         },
+        floatingActionButtonPosition = FabPosition.End,
         containerColor = androidx.compose.ui.graphics.Color.Transparent
     ) { innerPadding ->
         Column(

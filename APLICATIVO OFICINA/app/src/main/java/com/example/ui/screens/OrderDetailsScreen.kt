@@ -48,13 +48,37 @@ fun OrderDetailsScreen(
     val order by viewModel.order.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val isSavingNotes by viewModel.isSavingNotes.collectAsState()
+    val notesMessage by viewModel.notesMessage.collectAsState()
+
+    var complaintText by remember { mutableStateOf("") }
+    var diagnosisText by remember { mutableStateOf("") }
+    var customerNotesText by remember { mutableStateOf("") }
+
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(orderId) {
         viewModel.loadOrder(orderId)
     }
 
+    LaunchedEffect(order) {
+        order?.let {
+            complaintText = it.clientComplaint
+            diagnosisText = it.technicalDiagnostic
+            customerNotesText = it.customerVisibleNotes
+        }
+    }
+
+    LaunchedEffect(notesMessage) {
+        notesMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearNotesMessage()
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -204,36 +228,87 @@ fun OrderDetailsScreen(
                         }
                     }
 
-                    // Complaint and diagnostics
+                    // Queixa, diagnóstico e observações ao cliente (editáveis)
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = DarkSurface),
                             border = BorderStroke(1.dp, Graphite)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
                                 Text(
-                                    text = "QUEIXA DO CLIENTE",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = CrimsonRed)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = activeOrder.clientComplaint,
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = FrostWhite)
+                                    text = "ATENDIMENTO E OBSERVAÇÕES",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MetallicSilver,
+                                    ),
                                 )
 
-                                if (activeOrder.technicalDiagnostic.isNotEmpty()) {
-                                    HorizontalDivider(color = Graphite, modifier = Modifier.padding(vertical = 12.dp))
-                                    Text(
-                                        text = "DIAGNÓSTICO TÉCNICO",
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = activeOrder.technicalDiagnostic,
-                                        style = MaterialTheme.typography.bodyMedium.copy(color = FrostWhite)
-                                    )
-                                }
+                                Text(
+                                    text = "QUEIXA DO CLIENTE",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = CrimsonRed,
+                                    ),
+                                )
+                                InputField(
+                                    value = complaintText,
+                                    onValueChange = { complaintText = it },
+                                    label = "Relato inicial do cliente",
+                                    singleLine = false,
+                                    minLines = 2,
+                                )
+
+                                Text(
+                                    text = "DIAGNÓSTICO TÉCNICO",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PremiumGold,
+                                    ),
+                                )
+                                InputField(
+                                    value = diagnosisText,
+                                    onValueChange = { diagnosisText = it },
+                                    label = "Diagnóstico interno da oficina",
+                                    singleLine = false,
+                                    minLines = 3,
+                                )
+
+                                Text(
+                                    text = "OBSERVAÇÕES PARA O CLIENTE",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = SuccessGreen,
+                                    ),
+                                )
+                                Text(
+                                    text = "Texto visível ao cliente no portal e comunicações.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver),
+                                )
+                                InputField(
+                                    value = customerNotesText,
+                                    onValueChange = { customerNotesText = it },
+                                    label = "O que o cliente pode ver",
+                                    singleLine = false,
+                                    minLines = 3,
+                                )
+
+                                AppButton(
+                                    text = if (isSavingNotes) "Salvando..." else "Salvar observações",
+                                    onClick = {
+                                        viewModel.saveOrderNotes(
+                                            orderId = activeOrder.id,
+                                            complaint = complaintText,
+                                            diagnosis = diagnosisText,
+                                            customerVisibleNotes = customerNotesText,
+                                        )
+                                    },
+                                    enabled = !isSavingNotes,
+                                    isSecondary = true,
+                                )
                             }
                         }
                     }

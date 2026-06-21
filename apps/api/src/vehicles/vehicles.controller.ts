@@ -31,7 +31,7 @@ export class VehiclesController {
   }
 
   @Get()
-  @RequirePermissions('vehicles.manage', 'dashboard.view')
+  @RequirePermissions('vehicles.manage', 'dashboard.view', 'service_orders.manage')
   list(
     @CurrentUser() user: { organizationId: string },
     @Query('search') search?: string,

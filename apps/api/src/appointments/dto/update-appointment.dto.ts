@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { AppointmentStatus } from '@prisma/client';
 
@@ -15,6 +16,7 @@ export class UpdateAppointmentDto {
   mechanicMemberId?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(15)
   durationMinutes?: number;

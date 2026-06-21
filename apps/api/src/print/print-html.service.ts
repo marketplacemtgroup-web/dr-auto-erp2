@@ -37,15 +37,17 @@ export class PrintHtmlService {
     const branding = resolvePrintBranding(org);
     const customer = os.vehicle.customer;
     const vehicle = os.vehicle;
-    const images = (os.attachments ?? []).filter((a) => a.mimeType.startsWith('image/'));
+    const images = (os.attachments ?? []).filter((a) =>
+      (a.mimeType ?? '').startsWith('image/'),
+    );
     const extraTerms = org.termsServiceOrder?.trim();
     const contactLine = [branding.phone, branding.email].filter(Boolean).join(' · ');
     const openedAt = os.enteredAt ?? os.createdAt;
 
     const itemsRows =
-      os.items.length === 0
+      (os.items ?? []).length === 0
         ? `<tr><td colspan="4" class="muted text-center" style="padding:12px 8px;">Nenhum item lancado.</td></tr>`
-        : os.items
+        : (os.items ?? [])
             .map((item) => {
               const total = Number(item.unitPrice) * item.quantity;
               return `<tr>
@@ -198,6 +200,7 @@ export class PrintHtmlService {
 
     const branding = resolvePrintBranding(org);
     const os = quote.serviceOrder;
+    if (!os) throw new NotFoundException('Ordem de servico do orcamento nao encontrada');
     const customer = os.vehicle.customer;
     const vehicle = os.vehicle;
     const extraTerms = (quote.terms?.trim() || org.termsQuote?.trim()) ?? '';
@@ -209,15 +212,15 @@ export class PrintHtmlService {
         : null;
 
     const lines =
-      quote.lines.length > 0
-        ? quote.lines.map((line) => ({
+      (quote.lines ?? []).length > 0
+        ? (quote.lines ?? []).map((line) => ({
             description: line.description,
             tipo: lineTypeLabel(line.lineType),
             quantity: line.quantity,
             unitPrice: Number(line.unitPrice),
             total: Number(line.unitPrice) * line.quantity - Number(line.discount ?? 0),
           }))
-        : os.items.map((item) => ({
+        : (os.items ?? []).map((item) => ({
             description: item.description,
             tipo: itemTypeLabel(item.itemType),
             quantity: item.quantity,

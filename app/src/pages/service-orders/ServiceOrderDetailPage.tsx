@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, Upload, X } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
+import DateTimeField from "../../components/modules/DateTimeField";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
+import { fromDatetimeLocalValue, isoDatesEqual, splitDatetimeLocal, toDatetimeLocalValue } from "../../lib/datetimeLocal";
 import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/share/ShareLinkDialog";
 import { api, type QuoteLineRow, type ServiceOrderItemRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
@@ -119,6 +121,9 @@ export default function ServiceOrderDetailPage() {
     appliedById: "",
   });
 
+  const [estimatedAtLocal, setEstimatedAtLocal] = useState("");
+  const estimatedSyncSkipRef = useRef(true);
+
   const { data: os, isLoading, error } = useApiQuery(
     ["service-order", id ?? ""],
     (t) => api.serviceOrder(t, id!),
@@ -130,6 +135,12 @@ export default function ServiceOrderDetailPage() {
   const { data: activeEmployees } = useApiQuery(["employees-active"], (t) => api.employees(t, { status: "ACTIVE" }));
   const { data: technicians } = useApiQuery(["employee-technicians"], (t) => api.employeeTechnicians(t));
   const org = useOrganizationBranding();
+
+  useEffect(() => {
+    if (!os) return;
+    estimatedSyncSkipRef.current = true;
+    setEstimatedAtLocal(toDatetimeLocalValue(os.estimatedAt));
+  }, [os?.id, os?.estimatedAt]);
 
   useEffect(() => {
     if (!os) return;
@@ -171,6 +182,37 @@ export default function ServiceOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["service-orders"] });
     },
   });
+
+  const osEstimatedRef = useRef<string | null>(null);
+  osEstimatedRef.current = os?.estimatedAt ?? null;
+
+  const commitEstimatedAt = useCallback(
+    (local: string) => {
+      const nextIso = local ? fromDatetimeLocalValue(local) : null;
+      if (!isoDatesEqual(nextIso, osEstimatedRef.current)) {
+        saveMeta.mutate({ estimatedAt: nextIso });
+      }
+    },
+    [saveMeta],
+  );
+
+  const estimatedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!os || !estimatedAtLocal) return;
+    if (estimatedSyncSkipRef.current) {
+      estimatedSyncSkipRef.current = false;
+      return;
+    }
+    const { date } = splitDatetimeLocal(estimatedAtLocal);
+    if (!date) return;
+    if (estimatedDebounceRef.current) clearTimeout(estimatedDebounceRef.current);
+    estimatedDebounceRef.current = setTimeout(() => {
+      commitEstimatedAt(estimatedAtLocal);
+    }, 600);
+    return () => {
+      if (estimatedDebounceRef.current) clearTimeout(estimatedDebounceRef.current);
+    };
+  }, [estimatedAtLocal, os?.id, commitEstimatedAt]);
 
   const resetItemForm = () => {
     setEditingItem(null);
@@ -577,20 +619,14 @@ export default function ServiceOrderDetailPage() {
               </select>
             </FormField>
             <FormField label="Previsao de entrega">
-              <input
-                type="datetime-local"
-                className={inputClass}
-                value={
-                  os.estimatedAt
-                    ? new Date(os.estimatedAt).toISOString().slice(0, 16)
-                    : ""
-                }
-                onChange={(e) =>
-                  saveMeta.mutate({
-                    estimatedAt: e.target.value ? new Date(e.target.value).toISOString() : null,
-                  })
-                }
+              <DateTimeField
+                value={estimatedAtLocal}
+                onChange={setEstimatedAtLocal}
+                onCommit={commitEstimatedAt}
               />
+              {saveMeta.isPending ? (
+                <p className="text-[11px] text-[#64748B] mt-1">Salvando previsão...</p>
+              ) : null}
             </FormField>
             <FormField label="Relato do cliente">
               <textarea

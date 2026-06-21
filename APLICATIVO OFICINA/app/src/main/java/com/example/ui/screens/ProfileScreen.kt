@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
 import com.example.data.service.SessionManager
 import com.example.ui.components.AppButton
 import com.example.ui.components.BetoLogo
@@ -194,7 +195,7 @@ fun ProfileScreen(
                     BetoLogo(size = BrandLogoSize.Compact)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "OFICINA DO BETO — App v1.0",
+                        text = "OFICINA DO BETO — App v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.bodySmall.copy(color = Graphite, fontSize = 10.sp),
                         textAlign = TextAlign.Center,
                     )

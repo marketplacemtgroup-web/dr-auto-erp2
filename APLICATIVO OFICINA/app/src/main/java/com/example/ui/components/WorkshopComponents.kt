@@ -157,6 +157,9 @@ fun InputField(
     testTag: String = "input_field",
     enableVoice: Boolean = true,
     voiceAppend: Boolean = true,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else 6,
 ) {
     val voiceHandler = if (enableVoice) rememberVoiceInputHandler() else null
     val resolvedTrailing: @Composable (() -> Unit)? = when {
@@ -186,7 +189,9 @@ fun InputField(
         trailingIcon = resolvedTrailing,
         isError = isError,
         visualTransformation = visualTransformation,
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = CrimsonRed,
             unfocusedBorderColor = Graphite,

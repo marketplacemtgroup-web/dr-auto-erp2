@@ -44,13 +44,13 @@ object HttpClient {
         .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor(loggingInterceptor)
         .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .addHeader("Accept", "application/json")
-                .apply {
-                    SessionManager.token?.let { addHeader("Authorization", "Bearer $it") }
-                }
-                .build()
-            chain.proceed(request)
+            val original = chain.request()
+            val builder = original.newBuilder()
+            if (original.header("Accept") == null) {
+                builder.addHeader("Accept", "application/json")
+            }
+            SessionManager.token?.let { builder.addHeader("Authorization", "Bearer $it") }
+            chain.proceed(builder.build())
         }
         .build()
 

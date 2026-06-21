@@ -129,19 +129,32 @@ object WorkshopRepository {
     suspend fun updateOrderStatus(
         id: String,
         status: OrderStatus,
-        technicalNotes: String = "",
-        notifyClient: Boolean = false,
+        diagnosis: String = "",
+        customerVisibleNotes: String = "",
     ): Boolean = apiCall {
         api.updateServiceOrder(
             id,
             UpdateServiceOrderRequest(
                 status = status.apiCode,
-                diagnosis = technicalNotes.ifBlank { null },
-                customerVisibleNotes = if (notifyClient && technicalNotes.isNotBlank()) {
-                    technicalNotes
-                } else {
-                    null
-                },
+                diagnosis = diagnosis.trim().ifBlank { null },
+                customerVisibleNotes = customerVisibleNotes.trim().ifBlank { null },
+            ),
+        )
+        true
+    }
+
+    suspend fun updateOrderNotes(
+        id: String,
+        complaint: String? = null,
+        diagnosis: String? = null,
+        customerVisibleNotes: String? = null,
+    ): Boolean = apiCall {
+        api.updateServiceOrder(
+            id,
+            UpdateServiceOrderRequest(
+                complaint = complaint?.trim()?.ifBlank { null },
+                diagnosis = diagnosis?.trim()?.ifBlank { null },
+                customerVisibleNotes = customerVisibleNotes?.trim()?.ifBlank { null },
             ),
         )
         true

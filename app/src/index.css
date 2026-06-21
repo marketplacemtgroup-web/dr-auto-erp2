@@ -45,6 +45,29 @@
     @apply bg-[#F1F5F9] text-foreground;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    color-scheme: light;
+  }
+
+  input[type="date"].datetime-field,
+  input[type="time"].datetime-field {
+    min-height: 2.5rem;
+    padding-right: 0.5rem;
+    cursor: pointer;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-left: 0.25rem;
+    opacity: 0.85;
+  }
 }
 
 @layer utilities {

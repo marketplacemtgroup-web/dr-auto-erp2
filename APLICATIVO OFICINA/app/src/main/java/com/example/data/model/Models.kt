@@ -29,6 +29,7 @@ data class Order(
     val openTime: String,
     val clientComplaint: String,
     val technicalDiagnostic: String = "",
+    val customerVisibleNotes: String = "",
     val history: List<TimelineEvent> = emptyList(),
     val vehicleId: String? = null,
     /** ISO timestamp bruto da API para filtros de data. */

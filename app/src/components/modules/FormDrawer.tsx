@@ -88,12 +88,12 @@ export default function FormDrawer({
         aria-hidden
       />
       <div
-        className={`relative w-full ${sizeClass[size]} max-h-[min(92vh,880px)] flex flex-col bg-white rounded-2xl shadow-2xl border border-[#E2E8F0] overflow-hidden`}
+        className={`relative w-full ${sizeClass[size]} max-h-[min(92vh,880px)] flex flex-col bg-white rounded-2xl shadow-2xl border border-[#E2E8F0]`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="form-drawer-title"
       >
-        <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[#E2E8F0] bg-[#F8FAFC] shrink-0">
+        <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[#E2E8F0] bg-[#F8FAFC] shrink-0 rounded-t-2xl">
           <div className="min-w-0">
             <h2 id="form-drawer-title" className="text-[16px] font-semibold text-[#1E293B]">
               {title}
@@ -112,8 +112,8 @@ export default function FormDrawer({
           </button>
         </div>
         <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-5 py-3.5 space-y-3">{children}</div>
-          <div className="px-5 py-3.5 border-t border-[#E2E8F0] bg-[#FAFAFA] shrink-0 space-y-2.5">
+          <div className="flex-1 overflow-y-auto overflow-x-visible px-5 py-3.5 space-y-3">{children}</div>
+          <div className="px-5 py-3.5 border-t border-[#E2E8F0] bg-[#FAFAFA] shrink-0 space-y-2.5 rounded-b-2xl">
             {error ? (
               <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
                 {error}

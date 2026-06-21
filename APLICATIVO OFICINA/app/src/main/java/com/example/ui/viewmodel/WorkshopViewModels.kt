@@ -190,6 +190,12 @@ class OrderDetailsViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _isSavingNotes = MutableStateFlow(false)
+    val isSavingNotes: StateFlow<Boolean> = _isSavingNotes.asStateFlow()
+
+    private val _notesMessage = MutableStateFlow<String?>(null)
+    val notesMessage: StateFlow<String?> = _notesMessage.asStateFlow()
+
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
 
@@ -210,14 +216,19 @@ class OrderDetailsViewModel : ViewModel() {
     fun transitionStatus(
         orderId: String,
         newStatus: OrderStatus,
-        technicalNotes: String,
-        notifyClient: Boolean,
+        diagnosis: String,
+        customerVisibleNotes: String,
         onDone: () -> Unit,
     ) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val success = repository.updateOrderStatus(orderId, newStatus, technicalNotes, notifyClient)
+                val success = repository.updateOrderStatus(
+                    orderId,
+                    newStatus,
+                    diagnosis,
+                    customerVisibleNotes,
+                )
                 if (success) {
                     loadOrder(orderId)
                     onDone()
@@ -230,6 +241,43 @@ class OrderDetailsViewModel : ViewModel() {
                 _isLoading.value = false
             }
         }
+    }
+
+    fun saveOrderNotes(
+        orderId: String,
+        complaint: String,
+        diagnosis: String,
+        customerVisibleNotes: String,
+        onDone: () -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            _isSavingNotes.value = true
+            _notesMessage.value = null
+            _error.value = null
+            try {
+                val success = repository.updateOrderNotes(
+                    id = orderId,
+                    complaint = complaint,
+                    diagnosis = diagnosis,
+                    customerVisibleNotes = customerVisibleNotes,
+                )
+                if (success) {
+                    loadOrder(orderId)
+                    _notesMessage.value = "Observações salvas."
+                    onDone()
+                } else {
+                    _error.value = "Não foi possível salvar as observações."
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Erro ao salvar observações"
+            } finally {
+                _isSavingNotes.value = false
+            }
+        }
+    }
+
+    fun clearNotesMessage() {
+        _notesMessage.value = null
     }
 
     fun clearLastError() {

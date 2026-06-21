@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { notDeleted } from '../common/soft-delete';
 import { PrismaService } from '../prisma/prisma.service';
 import { CAR_CHECKLIST_TEMPLATE } from '../service-orders/checklist-template';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
@@ -14,14 +15,36 @@ const appointmentInclude = {
 export class AppointmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(organizationId: string, dto: CreateAppointmentDto) {
+  async create(organizationId: string, dto: CreateAppointmentDto) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: dto.vehicleId, organizationId, ...notDeleted },
+    });
+    if (!vehicle) throw new NotFoundException('Veículo não encontrado');
+
+    const scheduledAt = new Date(dto.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException('Data/hora do agendamento inválida');
+    }
+
+    if (dto.mechanicMemberId) {
+      const mechanic = await this.prisma.organizationMember.findFirst({
+        where: { id: dto.mechanicMemberId, organizationId, isActive: true },
+      });
+      if (!mechanic) throw new BadRequestException('Mecânico não encontrado');
+    }
+
+    const durationMinutes = dto.durationMinutes ?? 60;
+    if (durationMinutes < 15) {
+      throw new BadRequestException('Duração mínima: 15 minutos');
+    }
+
     return this.prisma.appointment.create({
       data: {
         organizationId,
         vehicleId: dto.vehicleId,
         mechanicMemberId: dto.mechanicMemberId ?? null,
-        scheduledAt: new Date(dto.scheduledAt),
-        durationMinutes: dto.durationMinutes ?? 60,
+        scheduledAt,
+        durationMinutes,
         status: dto.status ?? 'SCHEDULED',
         bay: dto.bay ?? null,
         notes: dto.notes ?? null,

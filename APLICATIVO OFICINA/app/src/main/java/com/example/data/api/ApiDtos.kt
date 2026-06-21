@@ -173,6 +173,7 @@ data class ServiceOrderDetailDto(
 @JsonClass(generateAdapter = true)
 data class UpdateServiceOrderRequest(
     val status: String? = null,
+    val complaint: String? = null,
     val diagnosis: String? = null,
     val internalNotes: String? = null,
     val customerVisibleNotes: String? = null,

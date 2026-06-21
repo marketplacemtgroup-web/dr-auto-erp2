@@ -61,6 +61,7 @@ object ApiMappers {
             vehicleKm = dto.entryKm?.toLong() ?: 0,
             clientComplaint = dto.complaint.orEmpty(),
             technicalDiagnostic = dto.diagnosis.orEmpty(),
+            customerVisibleNotes = dto.customerVisibleNotes.orEmpty(),
             responsibleEmployee = dto.generalResponsible?.name ?: "—",
             entryDate = formatDate(dto.enteredAt ?: dto.createdAt ?: dto.updatedAt),
             openTime = relativeTime(dto.updatedAt ?: dto.createdAt),

@@ -43,8 +43,8 @@ fun UpdateOrderScreen(
     val isLoading by viewModel.isLoading.collectAsState()
 
     var selectedStatus by remember { mutableStateOf(OrderStatus.RECEIVED) }
-    var technicalNotes by remember { mutableStateOf("") }
-    var notifyClient by remember { mutableStateOf(false) }
+    var diagnosisText by remember { mutableStateOf("") }
+    var customerNotesText by remember { mutableStateOf("") }
 
     LaunchedEffect(orderId) {
         viewModel.loadOrder(orderId)
@@ -53,7 +53,8 @@ fun UpdateOrderScreen(
     LaunchedEffect(order) {
         order?.let {
             selectedStatus = it.status
-            technicalNotes = it.technicalDiagnostic
+            diagnosisText = it.technicalDiagnostic
+            customerNotesText = it.customerVisibleNotes
         }
     }
 
@@ -149,53 +150,41 @@ fun UpdateOrderScreen(
                         }
                     }
 
-                    // Tech note input area
+                    // Diagnóstico técnico
                     item {
                         Text(
-                            text = "DIAGNÓSTICO / OBSERVAÇÃO TÉCNICA",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = MetallicSilver)
+                            text = "DIAGNÓSTICO TÉCNICO",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         InputField(
-                            value = technicalNotes,
-                            onValueChange = { technicalNotes = it },
-                            label = "Descreva as ações executadas ou necessidades encontradas..."
+                            value = diagnosisText,
+                            onValueChange = { diagnosisText = it },
+                            label = "Diagnóstico interno da oficina",
+                            singleLine = false,
+                            minLines = 3,
                         )
                     }
 
-                    // Client notification toggle
+                    // Observações visíveis ao cliente
                     item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(DarkSurface)
-                                .border(1.dp, Graphite, RoundedCornerShape(8.dp))
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Notificar Cliente?",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
-                                )
-                                Text(
-                                    text = "Envia uma notificação WhatsApp automática informando o novo status e observações.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver)
-                                )
-                            }
-                            Switch(
-                                checked = notifyClient,
-                                onCheckedChange = { notifyClient = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CrimsonRed,
-                                    checkedTrackColor = CrimsonRed.copy(alpha = 0.3f),
-                                    uncheckedThumbColor = MetallicSilver,
-                                    uncheckedTrackColor = Graphite
-                                )
-                            )
-                        }
+                        Text(
+                            text = "OBSERVAÇÕES PARA O CLIENTE",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = SuccessGreen)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Texto que o cliente vê no portal e nas comunicações.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        InputField(
+                            value = customerNotesText,
+                            onValueChange = { customerNotesText = it },
+                            label = "O que o cliente pode ver",
+                            singleLine = false,
+                            minLines = 3,
+                        )
                     }
 
                     // Action buttons
@@ -206,8 +195,8 @@ fun UpdateOrderScreen(
                                 viewModel.transitionStatus(
                                     orderId = activeOrder.id,
                                     newStatus = selectedStatus,
-                                    technicalNotes = technicalNotes,
-                                    notifyClient = notifyClient,
+                                    diagnosis = diagnosisText,
+                                    customerVisibleNotes = customerNotesText,
                                     onDone = onStatusUpdated
                                 )
                             },

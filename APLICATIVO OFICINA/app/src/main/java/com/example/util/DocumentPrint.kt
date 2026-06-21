@@ -13,37 +13,70 @@ import com.example.data.service.HttpClient
 import com.example.data.service.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
+import java.util.concurrent.TimeUnit
 
 object DocumentPrint {
+    private val printClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val original = chain.request()
+                val builder = original.newBuilder()
+                    .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+                SessionManager.token?.let { builder.header("Authorization", "Bearer $it") }
+                chain.proceed(builder.build())
+            }
+            .build()
+    }
+
     suspend fun printServiceOrder(context: Context, orderId: String) {
-        val html = fetchPrintHtml("print/service-orders/$orderId")
-        showPrintDialog(context, html, "OS #$orderId")
+        val html = fetchPrintHtml("print/service-orders/${orderId.trim()}")
+        showPrintDialog(context, html, "OS $orderId")
     }
 
     suspend fun printQuote(context: Context, quoteId: String) {
-        val html = fetchPrintHtml("print/quotes/$quoteId")
+        val html = fetchPrintHtml("print/quotes/${quoteId.trim()}")
         showPrintDialog(context, html, "Orcamento")
     }
 
     private suspend fun fetchPrintHtml(path: String): String = withContext(Dispatchers.IO) {
         val base = HttpClient.apiBaseUrl.trimEnd('/')
-        val url = "$base/$path"
+        val normalizedPath = path.trimStart('/')
+        val url = "$base/$normalizedPath"
         val token = SessionManager.token ?: throw IllegalStateException("Sessao expirada. Faca login novamente.")
         val request = Request.Builder()
             .url(url)
             .get()
             .header("Authorization", "Bearer $token")
-            .header("Accept", "text/html")
+            .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
             .build()
 
-        HttpClient.rawClient.newCall(request).execute().use { response ->
+        printClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw Exception("Falha ao gerar documento (${response.code})")
+                throw Exception(parseApiError(body, response.code))
             }
-            response.body?.string()?.takeIf { it.isNotBlank() }
-                ?: throw Exception("Documento vazio")
+            body.takeIf { it.isNotBlank() }
+                ?: throw Exception("Documento vazio retornado pela API.")
+        }
+    }
+
+    private fun parseApiError(body: String, code: Int): String {
+        val fromJson = runCatching {
+            JSONObject(body).optString("message").trim()
+        }.getOrNull()
+        return when {
+            !fromJson.isNullOrBlank() -> fromJson
+            code == 401 -> "Sessao expirada. Faca login novamente."
+            code == 403 -> "Sem permissao para imprimir este documento."
+            code == 404 -> "Documento nao encontrado na API."
+            else -> "Falha ao gerar documento ($code)."
         }
     }
 
@@ -102,8 +135,9 @@ object DocumentPrint {
                 .url(url)
                 .get()
                 .header("Authorization", "Bearer $token")
+                .header("Accept", "*/*")
                 .build()
-            HttpClient.rawClient.newCall(request).execute().use { response ->
+            printClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body ?: return null
                 val mime = body.contentType()?.toString()?.substringBefore(";") ?: "image/jpeg"

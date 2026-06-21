@@ -14,8 +14,8 @@ android {
     applicationId = "br.com.oficinadobeto.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 4
+    versionName = "1.2.1"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3001/api/\"")
     buildConfigField("String", "USE_MOCK_DATA", "\"false\"")

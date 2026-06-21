@@ -6,6 +6,8 @@ import StatusBadge from "../../components/StatusBadge";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ModuleFilters, { FilterSelect } from "../../components/modules/ModuleFilters";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
+import DateTimeField from "../../components/modules/DateTimeField";
+import { fromDatetimeLocalValue } from "../../lib/datetimeLocal";
 import VehicleSearchSelect from "../../components/vehicles/VehicleSearchSelect";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
@@ -69,7 +71,9 @@ export default function ServiceOrdersPage() {
       api.createServiceOrder(token!, {
         vehicleId: form.vehicleId,
         status: form.status,
-        estimatedAt: form.estimatedAt || undefined,
+        estimatedAt: form.estimatedAt
+          ? fromDatetimeLocalValue(form.estimatedAt) ?? undefined
+          : undefined,
         complaint: form.complaint || undefined,
       }),
     onSuccess: (os) => {
@@ -371,11 +375,9 @@ export default function ServiceOrdersPage() {
           </select>
         </FormField>
         <FormField label="Previsao de entrega">
-          <input
-            type="datetime-local"
-            className={inputClass}
+          <DateTimeField
             value={form.estimatedAt}
-            onChange={(e) => setForm((f) => ({ ...f, estimatedAt: e.target.value }))}
+            onChange={(estimatedAt) => setForm((f) => ({ ...f, estimatedAt }))}
           />
         </FormField>
       </FormDrawer>
