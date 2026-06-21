@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.types.*
 import com.example.ui.components.*
+import com.example.ui.theme.ThemeMode
 import com.example.viewmodels.PortalViewModel
 
 // --- INTENT INTEGRATIONS ---
@@ -251,13 +252,16 @@ fun LoginScreen(
 // ==========================================
 // 2. HOME SCREEN
 // ==========================================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: PortalViewModel,
     onNavigateToOrderDetails: (String) -> Unit,
     onNavigateToQuoteDetails: (String) -> Unit,
     onNavigateToHistory: () -> Unit,
-    onNavigateToSupport: () -> Unit
+    onNavigateToSupport: () -> Unit,
+    onToggleTheme: () -> Unit = {},
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
     val context = LocalContext.current
     val dashboard by viewModel.dashboard.collectAsState()
@@ -280,6 +284,21 @@ fun HomeScreen(
                     )
                 }
             }
+        },
+        topBar = {
+            TopAppBar(
+                title = { Text("") },
+                actions = {
+                    IconButton(onClick = onToggleTheme) {
+                        Icon(
+                            imageVector = if (themeMode == ThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Alternar tema",
+                            tint = BrandPalette.SlateGray
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
         }
     ) { innerPadding ->
         Column(
@@ -417,14 +436,14 @@ fun HomeScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.History,
+                                    imageVector = Icons.Default.Assignment,
                                     contentDescription = null,
                                     tint = BrandPalette.SparkBlue,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Histórico",
+                                    text = "Minhas OS",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                     color = BrandPalette.SlateGray
                                 )

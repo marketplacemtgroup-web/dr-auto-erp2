@@ -54,4 +54,34 @@ interface PortalApi {
     suspend fun switchVehicle(
         @Body request: SwitchVehicleRequest
     ): LoginResponse
+
+    @GET("portal/access/{token}")
+    suspend fun accessByToken(
+        @Path("token") token: String
+    ): LoginResponse
+
+    @GET("auth/branding")
+    suspend fun getPublicBranding(): PublicBrandingResponse
+
+    @GET("portal/public/quote/{token}")
+    suspend fun getPublicQuote(
+        @Path("token") token: String
+    ): PublicQuoteResponse
+
+    @PATCH("portal/public/quote/{token}/approve")
+    suspend fun approvePublicQuote(
+        @Path("token") token: String,
+        @Body request: ApproveQuoteRequest
+    ): PortalQuoteRow
+
+    @PATCH("portal/public/quote/{token}/reject")
+    suspend fun rejectPublicQuote(
+        @Path("token") token: String,
+        @Body request: RejectQuoteRequest
+    ): PortalQuoteRow
+
+    @POST("portal/push/fcm-register")
+    suspend fun registerFcmToken(
+        @Body request: FcmRegisterRequest
+    ): ResponseBody
 }

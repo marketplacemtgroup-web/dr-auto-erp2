@@ -18,6 +18,12 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // Host do portal web (PWA) — usado nos App Links /acesso e /orcamento
+    manifestPlaceholders["portalDeepLinkHost"] = readEnvProperty(
+      key = "PORTAL_DEEP_LINK_HOST",
+      defaultValue = "oficina-beto-portal.vercel.app",
+    )
   }
 
   signingConfigs {
@@ -93,6 +99,8 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
+  implementation(libs.firebase.messaging)
+  implementation(libs.kotlinx.coroutines.play.services)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
@@ -118,4 +126,15 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+}
+
+fun readEnvProperty(key: String, defaultValue: String): String {
+  val props = java.util.Properties()
+  val envFile = rootProject.file(".env")
+  val exampleFile = rootProject.file(".env.example")
+  when {
+    envFile.exists() -> envFile.inputStream().use { props.load(it) }
+    exampleFile.exists() -> exampleFile.inputStream().use { props.load(it) }
+  }
+  return props.getProperty(key, defaultValue)?.trim()?.takeIf { it.isNotEmpty() } ?: defaultValue
 }

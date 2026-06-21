@@ -14,6 +14,7 @@ class SessionManager(context: Context) {
         private const val KEY_ORGANIZATION_NAME = "organization_name"
         private const val KEY_DASHBOARD_CACHE = "dashboard_cache"
         private const val KEY_NOTIFICATIONS_CACHE = "notifications_cache"
+        private const val KEY_THEME_MODE = "theme_mode"
     }
 
     fun saveSession(token: String, customerName: String, plate: String, organizationName: String) {
@@ -60,6 +61,14 @@ class SessionManager(context: Context) {
 
     fun getCachedNotifications(): String? {
         return prefs.getString(KEY_NOTIFICATIONS_CACHE, null)
+    }
+
+    fun getThemeMode(): String {
+        return prefs.getString(KEY_THEME_MODE, "system") ?: "system"
+    }
+
+    fun setThemeMode(mode: String) {
+        prefs.edit().putString(KEY_THEME_MODE, mode).apply()
     }
 
     fun clearSession() {

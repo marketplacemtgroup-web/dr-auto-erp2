@@ -43,18 +43,7 @@ object ApiClient {
                 .addInterceptor(loggingInterceptor)
                 .build()
 
-            // Read API Base URL from BuildConfig (injected via .env by the secrets plugin)
-            // or fallback to the standard production URL
-            val baseUrl = try {
-                val configUrl = BuildConfig.PORTAL_API_URL
-                if (configUrl.isNullOrEmpty() || configUrl.startsWith("MY_")) {
-                    "https://api.oficinadobeto.com.br/api/"
-                } else {
-                    if (configUrl.endsWith("/")) configUrl else "$configUrl/"
-                }
-            } catch (e: Exception) {
-                "https://api.oficinadobeto.com.br/api/"
-            }
+            val baseUrl = resolveApiBaseUrl()
 
             retrofit = Retrofit.Builder()
                 .baseUrl(baseUrl)
@@ -65,5 +54,31 @@ object ApiClient {
             portalApi = retrofit!!.create(PortalApi::class.java)
         }
         return portalApi!!
+    }
+
+    /**
+     * Mesma API do monorepo (apps/api). Portal web usa VITE_API_URL + "/api" no fetch;
+     * aqui a base já inclui "/api/" porque as rotas Retrofit são relativas (ex.: portal/login).
+     */
+    private fun resolveApiBaseUrl(): String {
+        val defaultUrl = "https://oficina-beto-api.vercel.app/api/"
+        return try {
+            val configUrl = BuildConfig.PORTAL_API_URL.trim()
+            if (configUrl.isEmpty() || configUrl.startsWith("MY_")) {
+                defaultUrl
+            } else {
+                normalizeApiBaseUrl(configUrl)
+            }
+        } catch (_: Exception) {
+            defaultUrl
+        }
+    }
+
+    private fun normalizeApiBaseUrl(raw: String): String {
+        var url = raw.trim().removeSuffix("/")
+        if (!url.endsWith("/api", ignoreCase = true)) {
+            url = "$url/api"
+        }
+        return "$url/"
     }
 }

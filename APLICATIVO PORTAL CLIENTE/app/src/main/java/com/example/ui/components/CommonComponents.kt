@@ -33,15 +33,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.types.*
+import com.example.ui.theme.LocalDynamicBrand
 
-// CUSTOM BRAND THEME CORES (OFICINA DO BETO BASE PALETTE)
 object BrandPalette {
-    val DeepBlue = Color(0xFF1E3A8A)
-    val SparkBlue = Color(0xFF3B82F6)
-    val SlateGray = Color(0xFF0F172A)
-    val MetallicSilver = Color(0xFFF1F5F9)
-    val TextDark = Color(0xFF1E293B)
-    val BorderGray = Color(0xFFE2E8F0)
+    val DeepBlue: Color
+        @Composable get() = LocalDynamicBrand.current.primary
+    val SparkBlue: Color
+        @Composable get() = LocalDynamicBrand.current.accent
+    val SlateGray: Color
+        @Composable get() = LocalDynamicBrand.current.textPrimary
+    val MetallicSilver: Color
+        @Composable get() = LocalDynamicBrand.current.surfaceBg
+    val TextDark: Color
+        @Composable get() = LocalDynamicBrand.current.textDark
+    val BorderGray: Color
+        @Composable get() = LocalDynamicBrand.current.border
+    val CardBg: Color
+        @Composable get() = LocalDynamicBrand.current.cardBg
+    val NavBg: Color
+        @Composable get() = LocalDynamicBrand.current.navBg
     
     // Status Colors
     val StatusPendingBg = Color(0xFFFEF3C7)     // Amber
@@ -104,14 +114,15 @@ fun AppButton(
 @Composable
 fun AppCard(
     modifier: Modifier = Modifier,
-    backgroundColor: Color = Color.White,
+    backgroundColor: Color = Color.Unspecified,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val cardBg = if (backgroundColor == Color.Unspecified) BrandPalette.CardBg else backgroundColor
     Card(
         modifier = modifier
             .fillMaxWidth()
             .border(1.dp, BrandPalette.BorderGray, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(16.dp),
         content = content

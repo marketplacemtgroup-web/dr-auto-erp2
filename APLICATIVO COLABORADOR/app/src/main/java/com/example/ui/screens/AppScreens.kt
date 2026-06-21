@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.Branding
+import com.example.BuildConfig
 import com.example.data.*
 import com.example.data.api.*
 import com.example.ui.components.*
@@ -1744,6 +1745,12 @@ fun ProfileScreen(viewModel: AppViewModel, onNavigate: (String) -> Unit) {
                 }
             }
         }
+
+        Text(
+            text = "App v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            color = TextSecondary,
+            fontSize = 11.sp,
+        )
 
         // Red sign out button at bottom matching Screenshot
         AppCard {

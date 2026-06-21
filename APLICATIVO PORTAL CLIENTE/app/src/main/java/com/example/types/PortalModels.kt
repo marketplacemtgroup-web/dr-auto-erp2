@@ -184,3 +184,27 @@ data class RejectQuoteRequest(
 data class SwitchVehicleRequest(
     val vehicleId: String
 )
+
+@JsonClass(generateAdapter = true)
+data class PublicBrandingResponse(
+    val name: String? = null,
+    val tradeName: String? = null,
+    val logoUrl: String? = null,
+    val primaryColor: String? = null,
+    val accentColor: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class PublicQuoteResponse(
+    val organizationName: String,
+    val customerName: String,
+    val vehicle: Vehicle,
+    val quote: PortalQuoteRow,
+    val attachments: List<ServiceOrderAttachment> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class FcmRegisterRequest(
+    val token: String,
+    val platform: String? = "android"
+)
