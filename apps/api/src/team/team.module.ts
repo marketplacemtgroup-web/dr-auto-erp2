@@ -21,6 +21,6 @@ import { TeamController } from './team.controller';
     EmployeeEntriesService,
     PayrollService,
   ],
-  exports: [CommissionEngineService, EmployeesService],
+  exports: [CommissionEngineService, EmployeesService, TeamActionLogService],
 })
 export class TeamModule {}

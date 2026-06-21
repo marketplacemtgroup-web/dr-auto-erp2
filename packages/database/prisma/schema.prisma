@@ -359,6 +359,12 @@ model Organization {
   employeeEntries EmployeeEntry[]
   payrolls Payroll[]
   teamActionLogs TeamActionLog[]
+  employeeSchedules EmployeeSchedule[]
+  employeeScheduleRecurrences EmployeeScheduleRecurrence[]
+  employeeScheduleHistories EmployeeScheduleHistory[]
+  employeeTimeClockEntries EmployeeTimeClockEntry[]
+  employeeTimeClockDays EmployeeTimeClockDay[]
+  employeeRequests EmployeeRequest[]
 
   @@map("organizations")
 }
@@ -1374,6 +1380,12 @@ model Employee {
   payrolls     Payroll[]
   documents    EmployeeDocument[]
   actionLogs   TeamActionLog[]
+  schedules    EmployeeSchedule[]
+  scheduleRecurrences EmployeeScheduleRecurrence[]
+  scheduleHistories EmployeeScheduleHistory[]
+  timeClockEntries EmployeeTimeClockEntry[]
+  timeClockDays EmployeeTimeClockDay[]
+  requests     EmployeeRequest[]
 
   osGeneralResponsible ServiceOrder[] @relation("OsGeneralResponsible")
   osChecklistBy        ServiceOrder[] @relation("OsChecklistBy")
@@ -1584,4 +1596,225 @@ model TeamActionLog {
   @@index([organizationId, createdAt])
   @@index([employeeId])
   @@map("team_action_logs")
+}
+
+enum ScheduleDayType {
+  TRABALHO
+  FOLGA
+  PLANTAO
+  FERIADO
+  COMPENSACAO
+  AFASTADO
+  TREINAMENTO
+  OUTRO
+}
+
+enum ScheduleStatus {
+  PLANEJADA
+  CONFIRMADA
+  ALTERADA
+  CANCELADA
+}
+
+enum TimeClockEntryType {
+  ENTRADA
+  INTERVALO_INICIO
+  INTERVALO_FIM
+  SAIDA
+}
+
+enum TimeClockStatus {
+  VALIDO
+  PENDENTE
+  AJUSTADO
+  RECUSADO
+  CANCELADO
+}
+
+enum TimeClockOrigin {
+  WEB
+  APP_COLABORADOR
+  APP_INTERNO
+  MANUAL_ADMIN
+}
+
+enum EmployeeRequestType {
+  AJUSTE_PONTO
+  JUSTIFICATIVA_ATRASO
+  JUSTIFICATIVA_FALTA
+  FOLGA
+  TROCA_ESCALA
+  OBSERVACAO_GERENTE
+}
+
+enum EmployeeRequestStatus {
+  ENVIADA
+  EM_ANALISE
+  APROVADA
+  RECUSADA
+  CANCELADA
+}
+
+model EmployeeScheduleRecurrence {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  employeeId     String   @map("employee_id")
+  name           String?
+  daysOfWeek     Int[]    @map("days_of_week")
+  dayType        ScheduleDayType @default(TRABALHO) @map("day_type")
+  startTime      String?  @map("start_time")
+  endTime        String?  @map("end_time")
+  breakStart     String?  @map("break_start")
+  breakEnd       String?  @map("break_end")
+  periodStart    DateTime @map("period_start") @db.Date
+  periodEnd      DateTime? @map("period_end") @db.Date
+  isActive       Boolean  @default(true) @map("is_active")
+  createdById    String?  @map("created_by_id")
+  updatedById    String?  @map("updated_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  schedules    EmployeeSchedule[]
+
+  @@index([organizationId, employeeId])
+  @@map("employee_schedule_recurrences")
+}
+
+model EmployeeSchedule {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  employeeId     String         @map("employee_id")
+  scheduleDate   DateTime       @map("schedule_date") @db.Date
+  dayOfWeek      Int            @map("day_of_week")
+  dayType        ScheduleDayType @default(TRABALHO) @map("day_type")
+  startTime      String?        @map("start_time")
+  endTime        String?        @map("end_time")
+  breakStart     String?        @map("break_start")
+  breakEnd       String?        @map("break_end")
+  isRecurring    Boolean        @default(false) @map("is_recurring")
+  recurrenceId   String?        @map("recurrence_id")
+  isException    Boolean        @default(false) @map("is_exception")
+  status         ScheduleStatus @default(PLANEJADA)
+  notes          String?
+  createdById    String?        @map("created_by_id")
+  updatedById    String?        @map("updated_by_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  recurrence   EmployeeScheduleRecurrence? @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  histories    EmployeeScheduleHistory[]
+  timeClockDays EmployeeTimeClockDay[]
+
+  @@unique([employeeId, scheduleDate])
+  @@index([organizationId, scheduleDate])
+  @@index([organizationId, employeeId, scheduleDate])
+  @@map("employee_schedules")
+}
+
+model EmployeeScheduleHistory {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  scheduleId     String   @map("schedule_id")
+  employeeId     String   @map("employee_id")
+  changedById    String?  @map("changed_by_id")
+  action         String
+  previousData   Json?    @map("previous_data")
+  newData        Json?    @map("new_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  schedule     EmployeeSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([organizationId, createdAt])
+  @@map("employee_schedule_histories")
+}
+
+model EmployeeTimeClockEntry {
+  id             String             @id @default(cuid())
+  organizationId String             @map("organization_id")
+  employeeId     String             @map("employee_id")
+  userId         String?            @map("user_id")
+  entryDate      DateTime           @map("entry_date") @db.Date
+  entryType      TimeClockEntryType @map("entry_type")
+  recordedAt     DateTime           @map("recorded_at")
+  origin         TimeClockOrigin    @default(WEB)
+  status         TimeClockStatus    @default(VALIDO)
+  latitude       Decimal?           @db.Decimal(10, 7)
+  longitude      Decimal?           @db.Decimal(10, 7)
+  addressApprox  String?            @map("address_approx")
+  device         String?
+  ipAddress      String?            @map("ip_address")
+  selfieUrl      String?            @map("selfie_url")
+  notes          String?
+  adjustedById   String?            @map("adjusted_by_id")
+  adjustedAt     DateTime?          @map("adjusted_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entryDate])
+  @@index([organizationId, employeeId, entryDate])
+  @@map("employee_time_clock_entries")
+}
+
+model EmployeeTimeClockDay {
+  id                    String          @id @default(cuid())
+  organizationId        String          @map("organization_id")
+  employeeId            String          @map("employee_id")
+  workDate              DateTime        @map("work_date") @db.Date
+  scheduleId            String?         @map("schedule_id")
+  clockIn               DateTime?       @map("clock_in")
+  breakStart            DateTime?       @map("break_start")
+  breakEnd              DateTime?       @map("break_end")
+  clockOut              DateTime?       @map("clock_out")
+  workedMinutes         Int             @default(0) @map("worked_minutes")
+  expectedMinutes       Int             @default(0) @map("expected_minutes")
+  lateMinutes           Int             @default(0) @map("late_minutes")
+  overtimeMinutes       Int             @default(0) @map("overtime_minutes")
+  earlyLeaveMinutes     Int             @default(0) @map("early_leave_minutes")
+  status                TimeClockStatus @default(PENDENTE)
+  notes                 String?
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  schedule     EmployeeSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, workDate])
+  @@index([organizationId, workDate])
+  @@map("employee_time_clock_days")
+}
+
+model EmployeeRequest {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  employeeId     String                @map("employee_id")
+  requestType    EmployeeRequestType   @map("request_type")
+  referenceDate  DateTime              @map("reference_date") @db.Date
+  description    String
+  attachmentUrl  String?               @map("attachment_url")
+  status         EmployeeRequestStatus @default(ENVIADA)
+  approvedById   String?               @map("approved_by_id")
+  approvedAt     DateTime?             @map("approved_at")
+  rejectionReason String?              @map("rejection_reason")
+  metadata       Json?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([organizationId, employeeId])
+  @@index([referenceDate])
+  @@map("employee_requests")
 }

@@ -25,6 +25,22 @@ export const SYSTEM_PERMISSIONS = [
   { slug: 'commissions.manage', name: 'Gerenciar comissões', module: 'commissions' },
   { slug: 'commissions.view', name: 'Ver comissões', module: 'commissions' },
   { slug: 'payroll.manage', name: 'Fechar pagamentos da equipe', module: 'payroll' },
+  { slug: 'ponto.ver', name: 'Ver próprio ponto', module: 'ponto' },
+  { slug: 'ponto.ver_todos', name: 'Ver ponto de toda a equipe', module: 'ponto' },
+  { slug: 'ponto.bater', name: 'Registrar ponto', module: 'ponto' },
+  { slug: 'ponto.ajustar', name: 'Ajustar registros de ponto', module: 'ponto' },
+  { slug: 'ponto.aprovar_ajuste', name: 'Aprovar ajustes de ponto', module: 'ponto' },
+  { slug: 'ponto.exportar', name: 'Exportar relatórios de ponto', module: 'ponto' },
+  { slug: 'escalas.ver', name: 'Ver própria escala', module: 'escalas' },
+  { slug: 'escalas.ver_todas', name: 'Ver escalas de toda a equipe', module: 'escalas' },
+  { slug: 'escalas.criar', name: 'Criar escalas', module: 'escalas' },
+  { slug: 'escalas.editar', name: 'Editar escalas', module: 'escalas' },
+  { slug: 'escalas.cancelar', name: 'Cancelar escalas', module: 'escalas' },
+  { slug: 'escalas.exportar', name: 'Exportar relatórios de escalas', module: 'escalas' },
+  { slug: 'solicitacoes.ver', name: 'Ver solicitações', module: 'solicitacoes' },
+  { slug: 'solicitacoes.criar', name: 'Criar solicitações', module: 'solicitacoes' },
+  { slug: 'solicitacoes.aprovar', name: 'Aprovar solicitações', module: 'solicitacoes' },
+  { slug: 'solicitacoes.recusar', name: 'Recusar solicitações', module: 'solicitacoes' },
 ] as const;
 
 export async function ensureSystemPermissions(prisma: PrismaClient): Promise<void> {

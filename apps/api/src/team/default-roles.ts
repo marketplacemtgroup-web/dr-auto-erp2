@@ -13,6 +13,41 @@ export const ACCESS_PROFILE_SLUGS = [
 
 export type AccessProfileSlug = (typeof ACCESS_PROFILE_SLUGS)[number];
 
+const PONTO_ESCALAS_GERENTE = [
+  'ponto.ver',
+  'ponto.ver_todos',
+  'ponto.bater',
+  'ponto.ajustar',
+  'ponto.aprovar_ajuste',
+  'ponto.exportar',
+  'escalas.ver',
+  'escalas.ver_todas',
+  'escalas.criar',
+  'escalas.editar',
+  'escalas.cancelar',
+  'escalas.exportar',
+  'solicitacoes.ver',
+  'solicitacoes.criar',
+  'solicitacoes.aprovar',
+  'solicitacoes.recusar',
+] as const;
+
+const PONTO_ESCALAS_FUNCIONARIO = [
+  'ponto.ver',
+  'ponto.bater',
+  'escalas.ver',
+  'solicitacoes.ver',
+  'solicitacoes.criar',
+] as const;
+
+const PONTO_ESCALAS_FINANCEIRO = [
+  'ponto.ver_todos',
+  'ponto.exportar',
+  'escalas.ver_todas',
+  'escalas.exportar',
+  'solicitacoes.ver',
+] as const;
+
 /** Gerente: acesso completo ao negócio (sem painel admin do sistema). */
 const GERENTE_PERMISSIONS = [
   'dashboard.view',
@@ -31,6 +66,7 @@ const GERENTE_PERMISSIONS = [
   'commissions.manage',
   'commissions.view',
   'payroll.manage',
+  ...PONTO_ESCALAS_GERENTE,
 ] as const;
 
 const DEFAULT_ROLES: {
@@ -52,6 +88,7 @@ const DEFAULT_ROLES: {
       'vehicles.manage',
       'service_orders.manage',
       'quotes.manage',
+      ...PONTO_ESCALAS_FUNCIONARIO,
     ],
   },
   {
@@ -62,6 +99,7 @@ const DEFAULT_ROLES: {
       'service_orders.manage',
       'quotes.manage',
       'inventory.manage',
+      ...PONTO_ESCALAS_FUNCIONARIO,
     ],
   },
   {
@@ -80,6 +118,7 @@ const DEFAULT_ROLES: {
       'team.view_salaries',
       'commissions.view',
       'payroll.manage',
+      ...PONTO_ESCALAS_FINANCEIRO,
     ],
   },
   {
