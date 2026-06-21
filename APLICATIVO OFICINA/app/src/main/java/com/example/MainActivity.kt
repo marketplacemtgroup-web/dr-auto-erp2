@@ -52,7 +52,6 @@ fun MainAppLayout() {
     val ordersViewModel: OrdersViewModel = viewModel()
     val orderDetailsViewModel: OrderDetailsViewModel = viewModel()
     val checklistViewModel: ChecklistViewModel = viewModel()
-    val budgetViewModel: BudgetViewModel = viewModel()
 
     val startDestination = when {
         !sessionChecked -> null
@@ -71,7 +70,8 @@ fun MainAppLayout() {
         currentRoute != Screen.Login.route &&
         !currentRoute.startsWith("photo_checklist") &&
         !currentRoute.startsWith("budget") &&
-        !currentRoute.startsWith("update_order")
+        !currentRoute.startsWith("update_order") &&
+        currentRoute != Screen.CreateServiceOrder.route
 
     WorkshopBackground(scrimAlpha = 0.55f) {
     Scaffold(
@@ -182,6 +182,9 @@ fun MainAppLayout() {
                     onNavigateToOrderDetails = { orderId ->
                         navController.navigate(Screen.OrderDetails.createRoute(orderId))
                     },
+                    onNavigateToCreateOrder = {
+                        navController.navigate(Screen.CreateServiceOrder.route)
+                    },
                     onScreenVisible = { ordersViewModel.loadOrders() },
                 )
             }
@@ -231,6 +234,7 @@ fun MainAppLayout() {
                 arguments = listOf(navArgument("orderId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+                val budgetViewModel: BudgetViewModel = viewModel(key = "budget_$orderId")
                 BudgetScreen(
                     orderId = orderId,
                     viewModel = budgetViewModel,
@@ -255,6 +259,21 @@ fun MainAppLayout() {
                     onStatusUpdated = {
                         navController.popBackStack()
                     }
+                )
+            }
+
+            // 9. Nova ordem de serviço (wizard cliente/veículo)
+            composable(Screen.CreateServiceOrder.route) {
+                val createOrderViewModel: CreateServiceOrderViewModel = viewModel()
+                CreateServiceOrderScreen(
+                    viewModel = createOrderViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOrderCreated = { orderId ->
+                        ordersViewModel.loadOrders()
+                        navController.navigate(Screen.OrderDetails.createRoute(orderId)) {
+                            popUpTo(Screen.Orders.route) { inclusive = false }
+                        }
+                    },
                 )
             }
 

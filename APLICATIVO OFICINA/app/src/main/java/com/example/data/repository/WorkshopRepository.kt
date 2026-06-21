@@ -368,6 +368,65 @@ object WorkshopRepository {
         results
     }
 
+    suspend fun searchServices(query: String): List<ServiceCatalog> = apiCall(
+        fallback = {
+            val q = query.trim()
+            if (q.isBlank()) cachedServices
+            else cachedServices.filter {
+                it.name.contains(q, ignoreCase = true) || it.code.contains(q, ignoreCase = true)
+            }
+        },
+    ) {
+        val rows = api.listServiceCatalog(search = query.trim().ifBlank { null })
+        val results = rows.map { ApiMappers.toServiceCatalog(it) }
+        if (query.isBlank()) {
+            cachedServices = results
+            _serviceCatalogFlow.value = results
+        }
+        results
+    }
+
+    suspend fun createServiceCatalog(name: String, price: Double): ServiceCatalog = apiCall {
+        val row = api.createServiceCatalog(
+            CreateServiceCatalogRequest(
+                name = name.trim(),
+                defaultPrice = price,
+            ),
+        )
+        val created = ApiMappers.toServiceCatalog(row)
+        cachedServices = (cachedServices + created).distinctBy { it.id }
+        _serviceCatalogFlow.value = cachedServices
+        created
+    }
+
+    suspend fun ensureProducts(force: Boolean = false): String? {
+        if (!force && cachedProducts.isNotEmpty()) return null
+        return runCatching {
+            cachedProducts = api.listProducts().map { ApiMappers.toProduct(it) }
+            _productsFlow.value = cachedProducts
+        }.exceptionOrNull()?.message?.let { "Não foi possível carregar peças: $it" }
+    }
+
+    suspend fun ensureServicesAndEmployees(force: Boolean = false): List<String> {
+        val errors = mutableListOf<String>()
+        if (force || cachedServices.isEmpty()) {
+            runCatching {
+                cachedServices = api.listServiceCatalog().map { ApiMappers.toServiceCatalog(it) }
+                _serviceCatalogFlow.value = cachedServices
+            }.onFailure { errors.add("Não foi possível carregar serviços: ${it.message ?: "erro desconhecido"}") }
+        }
+        if (force || cachedEmployees.isEmpty()) {
+            runCatching {
+                cachedEmployees = api.listTechnicians().map { ApiMappers.toEmployee(it) }
+                _employeesFlow.value = cachedEmployees
+            }.onFailure { errors.add("Não foi possível carregar mecânicos: ${it.message ?: "erro desconhecido"}") }
+        }
+        catalogsLoaded = cachedProducts.isNotEmpty() &&
+            cachedServices.isNotEmpty() &&
+            cachedEmployees.isNotEmpty()
+        return errors
+    }
+
     suspend fun saveBudget(orderId: String, budget: Budget): Boolean = apiCall {
         val detail = api.getServiceOrder(orderId)
         var quoteId = budget.quoteId ?: ApiMappers.toBudget(detail).quoteId
@@ -394,7 +453,7 @@ object WorkshopRepository {
                 cachedProducts.find { it.id == item.code }?.id ?: item.code
             } else null
             val catalogItemId = if (item.type == BudgetItemType.SERVICE) {
-                cachedServices.find { it.id == item.code }?.id ?: item.code
+                cachedServices.find { it.id == item.code }?.id
             } else null
             api.addServiceOrderItem(
                 orderId,
@@ -447,5 +506,58 @@ object WorkshopRepository {
     suspend fun openWhatsAppForOrder(orderId: String): String? = apiCall {
         val link = api.createPortalLink(orderId)
         link.whatsappMessage
+    }
+
+    suspend fun searchVehicles(query: String): List<VehicleListItem> = apiCall {
+        api.listVehicles(search = query.ifBlank { null })
+            .map { ApiMappers.toVehicleListItem(it) }
+    }
+
+    suspend fun createCustomer(
+        name: String,
+        document: String? = null,
+        phone: String? = null,
+        whatsapp: String? = null,
+    ): String = apiCall {
+        api.createCustomer(
+            CreateCustomerRequest(
+                name = name.trim(),
+                document = document?.trim()?.ifBlank { null },
+                phone = phone?.trim()?.ifBlank { null },
+                whatsapp = whatsapp?.trim()?.ifBlank { null },
+            ),
+        ).id
+    }
+
+    suspend fun createVehicle(
+        customerId: String,
+        plate: String,
+        brand: String? = null,
+        model: String? = null,
+        year: Int? = null,
+        color: String? = null,
+    ): VehicleListItem = apiCall {
+        val row = api.createVehicle(
+            CreateVehicleRequest(
+                customerId = customerId,
+                plate = plate.trim().uppercase().replace(" ", ""),
+                brand = brand?.trim()?.ifBlank { null },
+                model = model?.trim()?.ifBlank { null },
+                year = year,
+                color = color?.trim()?.ifBlank { null },
+            ),
+        )
+        ApiMappers.toVehicleListItem(row)
+    }
+
+    suspend fun createServiceOrder(vehicleId: String, complaint: String? = null): Order = apiCall {
+        val row = api.createServiceOrder(
+            CreateServiceOrderRequest(
+                vehicleId = vehicleId,
+                complaint = complaint?.trim()?.ifBlank { null },
+            ),
+        )
+        refreshOrdersCache()
+        ApiMappers.toOrder(row)
     }
 }

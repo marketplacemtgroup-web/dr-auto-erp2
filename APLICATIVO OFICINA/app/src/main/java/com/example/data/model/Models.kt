@@ -162,3 +162,20 @@ data class ServiceCatalog(
     val name: String,
     val price: Double,
 )
+
+data class VehicleListItem(
+    val id: String,
+    val plate: String,
+    val brand: String?,
+    val model: String?,
+    val year: Int?,
+    val color: String?,
+    val customerId: String,
+    val customerName: String,
+) {
+    val displayLabel: String
+        get() {
+            val modelLabel = listOfNotNull(brand, model).joinToString(" ")
+            return "$customerName — $plate${if (modelLabel.isNotBlank()) " ($modelLabel)" else ""}"
+        }
+}

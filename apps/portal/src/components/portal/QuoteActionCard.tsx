@@ -57,7 +57,7 @@ export default function QuoteActionCard({
             type="button"
             disabled={busy}
             onClick={onApprove}
-            className="h-11 rounded-xl bg-green-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+            className="h-11 rounded-xl bg-green-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-green-700 active:bg-green-800"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
             {supplement ? "Aprovar novos" : "Aprovar tudo"}
@@ -66,7 +66,7 @@ export default function QuoteActionCard({
             type="button"
             disabled={busy}
             onClick={onReject}
-            className="h-11 rounded-xl border-2 border-red-600 text-red-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+            className="h-11 rounded-xl bg-red-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-red-700 active:bg-red-800"
           >
             <X size={18} />
             Recusar

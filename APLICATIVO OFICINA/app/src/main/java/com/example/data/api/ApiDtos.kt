@@ -295,3 +295,55 @@ data class ServiceCatalogRowDto(
     val name: String,
     val defaultPrice: Any,
 )
+
+@JsonClass(generateAdapter = true)
+data class CreateServiceCatalogRequest(
+    val name: String,
+    val defaultPrice: Double,
+    val category: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VehicleRowDto(
+    val id: String,
+    val plate: String,
+    val brand: String? = null,
+    val model: String? = null,
+    val year: Int? = null,
+    val color: String? = null,
+    val customer: CustomerMiniDto,
+)
+
+@JsonClass(generateAdapter = true)
+data class CustomerRowDto(
+    val id: String,
+    val name: String,
+    val document: String? = null,
+    val phone: String? = null,
+    val whatsapp: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateCustomerRequest(
+    val name: String,
+    val document: String? = null,
+    val phone: String? = null,
+    val whatsapp: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateVehicleRequest(
+    val customerId: String,
+    val plate: String,
+    val brand: String? = null,
+    val model: String? = null,
+    val year: Int? = null,
+    val color: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CreateServiceOrderRequest(
+    val vehicleId: String,
+    val status: String? = "RECEIVED",
+    val complaint: String? = null,
+)

@@ -114,4 +114,19 @@ interface WorkshopApi {
 
     @GET("service-catalog")
     suspend fun listServiceCatalog(@Query("search") search: String? = null): List<ServiceCatalogRowDto>
+
+    @POST("service-catalog")
+    suspend fun createServiceCatalog(@Body body: CreateServiceCatalogRequest): ServiceCatalogRowDto
+
+    @GET("vehicles")
+    suspend fun listVehicles(@Query("search") search: String? = null): List<VehicleRowDto>
+
+    @POST("vehicles")
+    suspend fun createVehicle(@Body body: CreateVehicleRequest): VehicleRowDto
+
+    @POST("customers")
+    suspend fun createCustomer(@Body body: CreateCustomerRequest): CustomerRowDto
+
+    @POST("service-orders")
+    suspend fun createServiceOrder(@Body body: CreateServiceOrderRequest): ServiceOrderRowDto
 }

@@ -181,6 +181,17 @@ object ApiMappers {
         price = toDouble(row.defaultPrice),
     )
 
+    fun toVehicleListItem(row: VehicleRowDto): VehicleListItem = VehicleListItem(
+        id = row.id,
+        plate = row.plate,
+        brand = row.brand,
+        model = row.model,
+        year = row.year,
+        color = row.color,
+        customerId = row.customer.id ?: "",
+        customerName = row.customer.name,
+    )
+
     fun dashboardMetrics(kpis: DashboardKpisDto, orders: List<Order>): Map<String, Int> {
         val awaitingApproval = orders.count { it.status == OrderStatus.AWAITING_APPROVAL }
         return mapOf(

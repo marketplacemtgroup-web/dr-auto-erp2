@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -34,6 +35,7 @@ fun OrdersScreen(
     viewModel: OrdersViewModel,
     preselectedFilter: String = "Todas",
     onNavigateToOrderDetails: (String) -> Unit,
+    onNavigateToCreateOrder: () -> Unit = {},
     onScreenVisible: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -92,6 +94,15 @@ fun OrdersScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToCreateOrder,
+                containerColor = CrimsonRed,
+                contentColor = FrostWhite,
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Nova ordem de serviço")
+            }
         },
         containerColor = androidx.compose.ui.graphics.Color.Transparent
     ) { innerPadding ->

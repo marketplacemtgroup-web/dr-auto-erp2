@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +28,8 @@ import com.example.data.navigation.Screen
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.OrderDetailsViewModel
+import com.example.util.DocumentPrint
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +43,8 @@ fun OrderDetailsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var printError by remember { mutableStateOf<String?>(null) }
     val order by viewModel.order.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -166,6 +171,36 @@ fun OrderDetailsScreen(
                                 onClick = { onNavigateToUpdateOrder(activeOrder.id) },
                                 isSecondary = true
                             )
+
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        printError = null
+                                        try {
+                                            DocumentPrint.printServiceOrder(context, activeOrder.id)
+                                        } catch (e: Exception) {
+                                            printError = e.message ?: "Falha ao gerar PDF"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = FrostWhite),
+                                border = BorderStroke(1.dp, PremiumGold),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = PremiumGold)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("PDF / Imprimir OS", fontWeight = FontWeight.Bold)
+                            }
+
+                            printError?.let { message ->
+                                Text(
+                                    text = message,
+                                    color = DangerRed,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
                     }
 

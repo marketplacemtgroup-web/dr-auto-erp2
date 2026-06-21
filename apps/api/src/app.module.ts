@@ -27,6 +27,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { StorageModule } from './storage/storage.module';
 import { TeamModule } from './team/team.module';
 import { CronModule } from './cron/cron.module';
+import { PrintModule } from './print/print.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { CronModule } from './cron/cron.module';
     NotificationsModule,
     TeamModule,
     CronModule,
+    PrintModule,
   ],
 })
 export class AppModule {}

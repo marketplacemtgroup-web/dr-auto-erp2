@@ -154,8 +154,27 @@ fun InputField(
     trailingIcon: @Composable (() -> Unit)? = null,
     isError: Boolean = false,
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
-    testTag: String = "input_field"
+    testTag: String = "input_field",
+    enableVoice: Boolean = true,
+    voiceAppend: Boolean = true,
 ) {
+    val voiceHandler = if (enableVoice) rememberVoiceInputHandler() else null
+    val resolvedTrailing: @Composable (() -> Unit)? = when {
+        trailingIcon != null -> trailingIcon
+        enableVoice && voiceHandler != null -> {
+            {
+                VoiceMicIconButton(
+                    onTranscript = { transcript ->
+                        onValueChange(
+                            if (voiceAppend) appendVoiceTranscript(value, transcript) else transcript,
+                        )
+                    },
+                )
+            }
+        }
+        else -> null
+    }
+
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -164,7 +183,7 @@ fun InputField(
             .testTag(testTag),
         label = { Text(label, color = MetallicSilver) },
         leadingIcon = leadingIcon,
-        trailingIcon = trailingIcon,
+        trailingIcon = resolvedTrailing,
         isError = isError,
         visualTransformation = visualTransformation,
         singleLine = true,

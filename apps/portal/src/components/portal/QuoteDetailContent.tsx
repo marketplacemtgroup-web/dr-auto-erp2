@@ -153,12 +153,12 @@ export default function QuoteDetailContent({
       ) : null}
 
       {canRespond && onApprove && onReject ? (
-        <div className="flex gap-3 print:hidden">
+        <div className="grid grid-cols-2 gap-3 print:hidden">
           <button
             type="button"
             disabled={busy}
             onClick={onApprove}
-            className="flex-1 h-12 rounded-xl bg-[#0F3D4C] text-white font-medium flex items-center justify-center gap-2 disabled:opacity-60"
+            className="h-12 rounded-xl bg-green-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-green-700 active:bg-green-800"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
             {supplement ? "Aprovar novos itens" : "Aprovar"}
@@ -167,10 +167,10 @@ export default function QuoteDetailContent({
             type="button"
             disabled={busy}
             onClick={onReject}
-            className="h-12 px-4 rounded-xl border border-red-200 text-red-600 font-medium flex items-center gap-1 disabled:opacity-60"
+            className="h-12 rounded-xl bg-red-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-red-700 active:bg-red-800"
           >
             <X size={18} />
-            {supplement ? "Recusar" : "Recusar"}
+            Recusar
           </button>
         </div>
       ) : null}

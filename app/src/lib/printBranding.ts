@@ -1,8 +1,9 @@
 import { branding } from "./branding";
+import { resolveAssetUrl } from "./assetUrl";
 import type { BranchRow, OrganizationDetail } from "./api";
 
-/** Logo fixo do deploy — usado na impressão de orçamento e OS. */
-function resolvePrintLogoUrl(): string {
+/** Logo do deploy — fallback quando a oficina não enviou logo. */
+function resolveDefaultPrintLogoUrl(): string {
   const path = branding.logoUrl;
   if (typeof window !== "undefined" && path.startsWith("/")) {
     return `${window.location.origin}${path}`;
@@ -16,9 +17,10 @@ export function resolvePrintBranding(org?: OrganizationDetail | null) {
 
   return {
     name: org?.tradeName || org?.name || branding.defaultOrganizationName,
-    logoUrl: resolvePrintLogoUrl(),
+    logoUrl: resolveAssetUrl(org?.logoUrl) ?? resolveDefaultPrintLogoUrl(),
     document: org?.document ?? null,
     phone: org?.phone ?? null,
+    email: org?.email ?? null,
     address,
     footerText: org?.footerText ?? null,
   };

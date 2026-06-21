@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 
 object AppPermissions {
     const val CAMERA = Manifest.permission.CAMERA
+    const val RECORD_AUDIO = Manifest.permission.RECORD_AUDIO
 
     fun galleryPermission(): String? = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> Manifest.permission.READ_MEDIA_IMAGES
@@ -27,6 +28,8 @@ object AppPermissions {
         val perm = galleryPermission() ?: return true
         return isGranted(context, perm)
     }
+
+    fun hasMicrophone(context: Context): Boolean = isGranted(context, RECORD_AUDIO)
 
     fun openAppSettings(context: Context) {
         val intent = Intent(
