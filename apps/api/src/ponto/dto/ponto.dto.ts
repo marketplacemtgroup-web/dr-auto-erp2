@@ -48,6 +48,11 @@ export class BaterPontoDto {
   @IsOptional()
   @IsEnum(TimeClockOrigin)
   origin?: TimeClockOrigin;
+
+  /** Horário informado pelo dispositivo (ISO-8601). Usado se dentro de ±5 min do servidor. */
+  @IsOptional()
+  @IsDateString()
+  clientRecordedAt?: string;
 }
 
 export class AjustePontoDto {

@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "predev": "npx --yes kill-port 4000 3000 3001 && node scripts/generate-dev-ssl.mjs && npm run generate -w @autocore/database",
-    "dev": "node scripts/print-lan-url.mjs && concurrently -k -n api,dash,portal -c blue,green,magenta \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:portal\"",
+    "dev": "node scripts/print-lan-url.mjs && concurrently -k -n api,dash,portal -c blue,green,magenta \"npm run dev:api\" \"npx --yes wait-on tcp:127.0.0.1:4000 -t 120000 && npm run dev:web\" \"npx --yes wait-on tcp:127.0.0.1:4000 -t 120000 && npm run dev:portal\"",
     "dev:portal": "npm run dev -w @autocore/portal",
     "lan:url": "node scripts/print-lan-url.mjs",
     "preview:lan": "node scripts/print-lan-url.mjs && npm run preview -w app -- --host",

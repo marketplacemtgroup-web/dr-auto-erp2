@@ -1,13 +1,17 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { EmployeeStatus } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -26,6 +30,7 @@ import {
 } from './dto/employee-access.dto';
 import { CommissionRulesService } from './commission-rules.service';
 import { EmployeeAccessService } from './employee-access.service';
+import { EmployeeDocumentsService } from './employee-documents.service';
 import { EmployeeEntriesService } from './employee-entries.service';
 import { EmployeesService } from './employees.service';
 import { JobTitlesService } from './job-titles.service';
@@ -41,6 +46,7 @@ export class TeamController {
     private readonly commissionRules: CommissionRulesService,
     private readonly entries: EmployeeEntriesService,
     private readonly payroll: PayrollService,
+    private readonly employeeDocuments: EmployeeDocumentsService,
   ) {}
 
   @Get('stats')
@@ -98,6 +104,42 @@ export class TeamController {
     @Body() dto: UpdateEmployeeDto,
   ) {
     return this.employees.update(user.organizationId, id, dto, user.userId);
+  }
+
+  @Get('employees/:id/documentos')
+  @RequirePermissions('team.manage', 'team.view_salaries', 'commissions.view')
+  listEmployeeDocuments(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+  ) {
+    return this.employeeDocuments.list(user.organizationId, id);
+  }
+
+  @Post('employees/:id/documentos')
+  @RequirePermissions('team.manage', 'payroll.manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  uploadEmployeeDocument(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('docType') docType?: string,
+  ) {
+    return this.employeeDocuments.upload(
+      user.organizationId,
+      id,
+      file,
+      docType ?? 'outro',
+    );
+  }
+
+  @Delete('employees/:id/documentos/:docId')
+  @RequirePermissions('team.manage', 'payroll.manage')
+  deleteEmployeeDocument(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+  ) {
+    return this.employeeDocuments.remove(user.organizationId, id, docId);
   }
 
   @Get('login-email-domain')

@@ -28,6 +28,11 @@ import { StorageModule } from './storage/storage.module';
 import { TeamModule } from './team/team.module';
 import { CronModule } from './cron/cron.module';
 import { PrintModule } from './print/print.module';
+import { SharedModule } from './shared/shared.module';
+import { EscalasModule } from './escalas/escalas.module';
+import { PontoModule } from './ponto/ponto.module';
+import { SolicitacoesFuncionariosModule } from './solicitacoes-funcionarios/solicitacoes-funcionarios.module';
+import { ColaboradorAppModule } from './colaborador-app/colaborador-app.module';
 
 @Module({
   imports: [
@@ -36,6 +41,7 @@ import { PrintModule } from './print/print.module';
     StorageModule,
     AuditModule,
     EventsModule,
+    SharedModule,
     AuthModule,
     OrganizationsModule,
     UsersModule,
@@ -58,6 +64,10 @@ import { PrintModule } from './print/print.module';
     SearchModule,
     NotificationsModule,
     TeamModule,
+    EscalasModule,
+    PontoModule,
+    SolicitacoesFuncionariosModule,
+    ColaboradorAppModule,
     CronModule,
     PrintModule,
   ],

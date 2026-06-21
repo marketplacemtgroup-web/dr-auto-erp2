@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Colab: Build Debug",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug.ps1",
+      "args": ["build"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "C:\\Program Files\\Android\\Android Studio\\jbr"
+        }
+      },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Colab: Install APK",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug.ps1",
+      "args": ["install"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Colab: Run App",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug.ps1",
+      "args": ["run"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Colab: Logcat (HTTP + erros)",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug.ps1",
+      "args": ["log"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Colab: Build + Install + Run + Log",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug.ps1",
+      "args": ["all"],
+      "options": {
+        "env": {
+          "JAVA_HOME": "C:\\Program Files\\Android\\Android Studio\\jbr"
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}

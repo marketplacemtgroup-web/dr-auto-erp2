@@ -24,6 +24,7 @@ export const SYSTEM_PERMISSIONS = [
   { slug: 'team.view_salaries', name: 'Ver salários e pagamentos', module: 'team' },
   { slug: 'commissions.manage', name: 'Gerenciar comissões', module: 'commissions' },
   { slug: 'commissions.view', name: 'Ver comissões', module: 'commissions' },
+  { slug: 'commissions.view_own', name: 'Ver próprias comissões (app colaborador)', module: 'commissions' },
   { slug: 'payroll.manage', name: 'Fechar pagamentos da equipe', module: 'payroll' },
   { slug: 'ponto.ver', name: 'Ver próprio ponto', module: 'ponto' },
   { slug: 'ponto.ver_todos', name: 'Ver ponto de toda a equipe', module: 'ponto' },

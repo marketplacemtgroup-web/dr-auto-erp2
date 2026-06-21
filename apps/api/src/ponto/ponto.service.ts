@@ -221,6 +221,17 @@ export class PontoService {
     );
 
     const now = new Date();
+    let recordedAt = now;
+    if (dto.clientRecordedAt) {
+      const clientDate = new Date(dto.clientRecordedAt);
+      if (!Number.isNaN(clientDate.getTime())) {
+        const diffMs = Math.abs(clientDate.getTime() - now.getTime());
+        if (diffMs <= 5 * 60 * 1000) {
+          recordedAt = clientDate;
+        }
+      }
+    }
+
     const origin = dto.origin ?? TimeClockOrigin.WEB;
 
     if (origin !== TimeClockOrigin.MANUAL_ADMIN) {
@@ -237,7 +248,7 @@ export class PontoService {
         userId: user.userId,
         entryDate: date,
         entryType: dto.entryType,
-        recordedAt: now,
+        recordedAt,
         origin,
         status: TimeClockStatus.VALIDO,
         latitude: dto.latitude ?? null,

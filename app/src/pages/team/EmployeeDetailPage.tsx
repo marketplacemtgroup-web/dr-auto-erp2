@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
-import { api, type EmployeeRow } from "../../lib/api";
+import { ArrowLeft, Trash2, Upload } from "lucide-react";
+import { api, type EmployeeRow, type EmployeeDocumentRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
@@ -22,6 +22,8 @@ export default function EmployeeDetailPage() {
   });
   const [newPassword, setNewPassword] = useState("");
   const [editProfile, setEditProfile] = useState("");
+  const [docType, setDocType] = useState("recibo_comissao");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, error } = useApiQuery(
     ["employee", id ?? ""],
@@ -30,6 +32,12 @@ export default function EmployeeDetailPage() {
   );
   const { data: loginDomain } = useApiQuery(["team-login-domain"], (t) =>
     api.teamLoginEmailDomain(t),
+  );
+
+  const { data: documents = [], refetch: refetchDocuments } = useApiQuery(
+    ["employee-documents", id ?? ""],
+    (t) => api.employeeDocuments(t, id!),
+    !!id,
   );
 
   const invalidate = () => {
@@ -57,6 +65,19 @@ export default function EmployeeDetailPage() {
   const resetPassword = useMutation({
     mutationFn: () => api.resetEmployeePassword(token!, id!, newPassword),
     onSuccess: () => setNewPassword(""),
+  });
+
+  const uploadDocument = useMutation({
+    mutationFn: (file: File) => api.uploadEmployeeDocument(token!, id!, file, docType),
+    onSuccess: () => {
+      refetchDocuments();
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+  });
+
+  const deleteDocument = useMutation({
+    mutationFn: (docId: string) => api.deleteEmployeeDocument(token!, id!, docId),
+    onSuccess: () => refetchDocuments(),
   });
 
   if (isLoading) return <p className="p-6 text-sm text-[#6B7280]">Carregando...</p>;
@@ -279,6 +300,83 @@ export default function EmployeeDetailPage() {
               {emp.commissionRules!.map((r, i) => (
                 <li key={i}>
                   {r.baseCalculation} — {r.percentage != null ? `${r.percentage}%` : "valor fixo"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="bg-white rounded-xl border border-[#E5E7EB] p-5 lg:col-span-2">
+          <h2 className="font-semibold mb-3">Documentos e recibos</h2>
+          <p className="text-sm text-[#6B7280] mb-4">
+            Envie recibos de comissão, comprovantes e outros documentos. O colaborador visualiza no app.
+          </p>
+          <div className="flex flex-wrap items-end gap-3 mb-4">
+            <FormField label="Tipo">
+              <select
+                className={selectClass}
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+              >
+                <option value="recibo_comissao">Recibo de comissão</option>
+                <option value="comprovante_pagamento">Comprovante de pagamento</option>
+                <option value="termo">Termo / contrato</option>
+                <option value="outro">Outro</option>
+              </select>
+            </FormField>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadDocument.mutate(file);
+              }}
+            />
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-[#0057D9] text-white rounded-lg disabled:opacity-50"
+              disabled={uploadDocument.isPending}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={16} />
+              {uploadDocument.isPending ? "Enviando..." : "Enviar arquivo"}
+            </button>
+            {(uploadDocument.error as Error | null) && (
+              <p className="text-sm text-red-600 w-full">
+                {(uploadDocument.error as Error).message}
+              </p>
+            )}
+          </div>
+          {(documents as EmployeeDocumentRow[]).length === 0 ? (
+            <p className="text-sm text-[#6B7280]">Nenhum documento enviado.</p>
+          ) : (
+            <ul className="text-sm space-y-2">
+              {(documents as EmployeeDocumentRow[]).map((doc) => (
+                <li
+                  key={doc.id}
+                  className="flex items-center justify-between gap-3 border-b border-[#F3F4F6] pb-2"
+                >
+                  <div>
+                    <p className="font-medium text-[#111827]">{doc.fileName}</p>
+                    <p className="text-[#6B7280] text-xs">
+                      {doc.docType} · {new Date(doc.createdAt).toLocaleString("pt-BR")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                    disabled={deleteDocument.isPending}
+                    onClick={() => {
+                      if (window.confirm("Excluir este documento?")) {
+                        deleteDocument.mutate(doc.id);
+                      }
+                    }}
+                    title="Excluir"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </li>
               ))}
             </ul>

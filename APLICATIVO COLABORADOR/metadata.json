@@ -1,0 +1,6 @@
+{
+  "name": "Beto Mecânica Colaborador",
+  "description": "Aplicativo para acompanhamento de ordens de serviço, comissões, ponto e escalas do funcionário da Beto Mecânica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -38,6 +38,7 @@ const PONTO_ESCALAS_FUNCIONARIO = [
   'escalas.ver',
   'solicitacoes.ver',
   'solicitacoes.criar',
+  'commissions.view_own',
 ] as const;
 
 const PONTO_ESCALAS_FINANCEIRO = [

@@ -660,6 +660,15 @@ export interface EmployeeRow {
   monthToPay?: number;
 }
 
+export interface EmployeeDocumentRow {
+  id: string;
+  employeeId: string;
+  docType: string;
+  fileName: string;
+  fileUrl: string;
+  createdAt: string;
+}
+
 export interface JobTitleRow {
   id: string;
   name: string;
@@ -2053,6 +2062,38 @@ export const api = {
       body: JSON.stringify({ password }),
     }, token),
 
+  employeeDocuments: (token: string, employeeId: string) =>
+    request<EmployeeDocumentRow[]>(`/team/employees/${employeeId}/documentos`, { method: "GET" }, token),
+
+  uploadEmployeeDocument: async (
+    token: string,
+    employeeId: string,
+    file: File,
+    docType: string,
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("docType", docType);
+    const res = await fetch(`${API_URL}/api/team/employees/${employeeId}/documentos`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(
+        (body as { message?: string }).message?.toString() ?? "Erro no upload",
+        res.status,
+      );
+    }
+    return res.json() as Promise<EmployeeDocumentRow>;
+  },
+
+  deleteEmployeeDocument: (token: string, employeeId: string, docId: string) =>
+    request<{ ok: boolean }>(`/team/employees/${employeeId}/documentos/${docId}`, {
+      method: "DELETE",
+    }, token),
+
   jobTitles: (token: string) =>
     request<JobTitleRow[]>("/team/job-titles", { method: "GET" }, token),
 
@@ -2172,6 +2213,178 @@ export const api = {
     const suffix = q.toString() ? `?${q}` : "";
     return request<unknown[]>(`/team/commissions${suffix}`, { method: "GET" }, token);
   },
+
+  escalasStats: (token: string, date?: string) =>
+    request<EscalasStats>(
+      `/escalas/stats${date ? `?date=${date}` : ""}`,
+      { method: "GET" },
+      token,
+    ),
+
+  escalas: (
+    token: string,
+    params?: {
+      employeeId?: string;
+      jobTitleId?: string;
+      periodStart?: string;
+      periodEnd?: string;
+      dayType?: string;
+      status?: string;
+    },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.jobTitleId) q.set("jobTitleId", params.jobTitleId);
+    if (params?.periodStart) q.set("periodStart", params.periodStart);
+    if (params?.periodEnd) q.set("periodEnd", params.periodEnd);
+    if (params?.dayType) q.set("dayType", params.dayType);
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<ScheduleRow[]>(`/escalas${suffix}`, { method: "GET" }, token);
+  },
+
+  createEscala: (token: string, data: Record<string, unknown>) =>
+    request<ScheduleRow>("/escalas", { method: "POST", body: JSON.stringify(data) }, token),
+
+  createEscalaRecorrencia: (token: string, data: Record<string, unknown>) =>
+    request<{ recurrence: unknown; schedulesCreated: number }>(
+      "/escalas/recorrencia",
+      { method: "POST", body: JSON.stringify(data) },
+      token,
+    ),
+
+  updateEscala: (token: string, id: string, data: Record<string, unknown>) =>
+    request<ScheduleRow>(`/escalas/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
+
+  cancelEscala: (token: string, id: string) =>
+    request<ScheduleRow>(`/escalas/${id}`, { method: "DELETE" }, token),
+
+  escalasRelatorio: (
+    token: string,
+    periodStart: string,
+    periodEnd: string,
+    employeeId?: string,
+  ) => {
+    const q = new URLSearchParams({ periodStart, periodEnd });
+    if (employeeId) q.set("employeeId", employeeId);
+    return request<unknown[]>(`/escalas/relatorio?${q}`, { method: "GET" }, token);
+  },
+
+  pontoPainel: (token: string, date?: string) =>
+    request<PontoPainel>(
+      `/ponto/painel${date ? `?date=${date}` : ""}`,
+      { method: "GET" },
+      token,
+    ),
+
+  baterPonto: (token: string, data: { entryType: string; employeeId?: string; notes?: string }) =>
+    request<unknown>("/ponto/bater", { method: "POST", body: JSON.stringify(data) }, token),
+
+  pontoHistorico: (
+    token: string,
+    params?: { employeeId?: string; periodStart?: string; periodEnd?: string; status?: string },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.periodStart) q.set("periodStart", params.periodStart);
+    if (params?.periodEnd) q.set("periodEnd", params.periodEnd);
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<TimeClockDayRow[]>(`/ponto/historico${suffix}`, { method: "GET" }, token);
+  },
+
+  pontoAjustesPendentes: (token: string) =>
+    request<TimeClockDayRow[]>("/ponto/ajustes-pendentes", { method: "GET" }, token),
+
+  pontoAjuste: (token: string, data: Record<string, unknown>) =>
+    request<TimeClockDayRow>("/ponto/ajuste", { method: "POST", body: JSON.stringify(data) }, token),
+
+  pontoAprovarAjuste: (token: string, id: string) =>
+    request<TimeClockDayRow>(`/ponto/ajuste/${id}/aprovar`, { method: "PATCH" }, token),
+
+  pontoRecusarAjuste: (token: string, id: string, reason?: string) =>
+    request<TimeClockDayRow>(
+      `/ponto/ajuste/${id}/recusar`,
+      { method: "PATCH", body: JSON.stringify({ reason }) },
+      token,
+    ),
+
+  pontoRelatorio: (
+    token: string,
+    periodStart: string,
+    periodEnd: string,
+    params?: { employeeId?: string; jobTitleId?: string; status?: string },
+  ) => {
+    const q = new URLSearchParams({ periodStart, periodEnd });
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.jobTitleId) q.set("jobTitleId", params.jobTitleId);
+    if (params?.status) q.set("status", params.status);
+    return request<unknown[]>(`/ponto/relatorio?${q}`, { method: "GET" }, token);
+  },
+
+  pontoFuncionario: (
+    token: string,
+    employeeId: string,
+    periodStart: string,
+    periodEnd: string,
+  ) =>
+    request<Record<string, unknown>>(
+      `/ponto/funcionario/${employeeId}?periodStart=${periodStart}&periodEnd=${periodEnd}`,
+      { method: "GET" },
+      token,
+    ),
+
+  solicitacoesFuncionarios: (
+    token: string,
+    params?: {
+      employeeId?: string;
+      requestType?: string;
+      status?: string;
+      periodStart?: string;
+      periodEnd?: string;
+    },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.employeeId) q.set("employeeId", params.employeeId);
+    if (params?.requestType) q.set("requestType", params.requestType);
+    if (params?.status) q.set("status", params.status);
+    if (params?.periodStart) q.set("periodStart", params.periodStart);
+    if (params?.periodEnd) q.set("periodEnd", params.periodEnd);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<EmployeeRequestRow[]>(
+      `/solicitacoes-funcionarios${suffix}`,
+      { method: "GET" },
+      token,
+    );
+  },
+
+  createSolicitacaoFuncionario: (token: string, data: Record<string, unknown>) =>
+    request<EmployeeRequestRow>(
+      "/solicitacoes-funcionarios",
+      { method: "POST", body: JSON.stringify(data) },
+      token,
+    ),
+
+  aprovarSolicitacaoFuncionario: (token: string, id: string) =>
+    request<EmployeeRequestRow>(
+      `/solicitacoes-funcionarios/${id}/aprovar`,
+      { method: "PATCH" },
+      token,
+    ),
+
+  recusarSolicitacaoFuncionario: (token: string, id: string, reason: string) =>
+    request<EmployeeRequestRow>(
+      `/solicitacoes-funcionarios/${id}/recusar`,
+      { method: "PATCH", body: JSON.stringify({ reason }) },
+      token,
+    ),
+
+  cancelarSolicitacaoFuncionario: (token: string, id: string) =>
+    request<EmployeeRequestRow>(
+      `/solicitacoes-funcionarios/${id}/cancelar`,
+      { method: "PATCH" },
+      token,
+    ),
 };
 
 export interface CustomerRow {
@@ -2393,4 +2606,72 @@ export interface BranchRow {
   city?: string | null;
   state?: string | null;
   zipCode?: string | null;
+}
+
+export interface EscalasStats {
+  workingToday: number;
+  offToday: number;
+  weekPlantao: number;
+  pendingConfirm: number;
+}
+
+export interface ScheduleRow {
+  id: string;
+  scheduleDate: string;
+  dayOfWeek: number;
+  dayType: string;
+  startTime: string | null;
+  endTime: string | null;
+  breakStart: string | null;
+  breakEnd: string | null;
+  status: string;
+  notes: string | null;
+  isRecurring: boolean;
+  isException: boolean;
+  employee: { id: string; name: string; jobTitle?: { name: string } | null };
+}
+
+export interface PontoPainel {
+  stats: {
+    presentNow: number;
+    entriesToday: number;
+    pendingExit: number;
+    lateToday: number;
+    pendingAdjustments: number;
+    totalWorkedMinutes: number;
+  };
+  rows: TimeClockDayRow[];
+}
+
+export interface TimeClockDayRow {
+  id: string;
+  workDate: string;
+  clockIn: string | null;
+  breakStart: string | null;
+  breakEnd: string | null;
+  clockOut: string | null;
+  workedMinutes: number;
+  expectedMinutes: number;
+  lateMinutes: number;
+  overtimeMinutes: number;
+  earlyLeaveMinutes: number;
+  status: string;
+  clockInFormatted?: string | null;
+  breakStartFormatted?: string | null;
+  breakEndFormatted?: string | null;
+  clockOutFormatted?: string | null;
+  employee: { id: string; name: string; jobTitle?: { name: string } | null };
+  schedule?: ScheduleRow | null;
+}
+
+export interface EmployeeRequestRow {
+  id: string;
+  requestType: string;
+  referenceDate: string;
+  description: string;
+  attachmentUrl: string | null;
+  status: string;
+  rejectionReason: string | null;
+  createdAt: string;
+  employee: { id: string; name: string; jobTitle?: { name: string } | null };
 }

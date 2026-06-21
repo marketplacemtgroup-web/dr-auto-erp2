@@ -30,6 +30,9 @@ export const routes = {
   equipeLancamentos: "/dashboard/equipe/lancamentos",
   equipeFechamentos: "/dashboard/equipe/fechamentos",
   equipeProdutividade: "/dashboard/equipe/produtividade",
+  equipeEscalas: "/dashboard/equipe/escalas",
+  equipePonto: "/dashboard/equipe/ponto",
+  equipeSolicitacoes: "/dashboard/equipe/solicitacoes",
   equipeRelatorios: "/dashboard/equipe/relatorios",
 } as const;
 

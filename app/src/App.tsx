@@ -37,6 +37,9 @@ const CommissionRulesPage = lazyWithRetry(() => import("./pages/team/CommissionR
 const TeamEntriesPage = lazyWithRetry(() => import("./pages/team/TeamEntriesPage"));
 const PayrollPage = lazyWithRetry(() => import("./pages/team/PayrollPage"));
 const ProductivityPage = lazyWithRetry(() => import("./pages/team/ProductivityPage"));
+const EscalasPage = lazyWithRetry(() => import("./pages/team/EscalasPage"));
+const PontoPage = lazyWithRetry(() => import("./pages/team/PontoPage"));
+const SolicitacoesPage = lazyWithRetry(() => import("./pages/team/SolicitacoesPage"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
@@ -267,6 +270,30 @@ export default function App() {
               element={
                 <Lazy>
                   <ProductivityPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="escalas"
+              element={
+                <Lazy>
+                  <EscalasPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="ponto"
+              element={
+                <Lazy>
+                  <PontoPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="solicitacoes"
+              element={
+                <Lazy>
+                  <SolicitacoesPage />
                 </Lazy>
               }
             />

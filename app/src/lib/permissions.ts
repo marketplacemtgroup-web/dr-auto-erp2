@@ -13,6 +13,11 @@ export const PERMISSIONS = {
   purchases: "purchases.manage",
   financial: "financial.manage",
   team: "team.manage",
+  pontoVer: "ponto.ver",
+  pontoVerTodos: "ponto.ver_todos",
+  escalasVer: "escalas.ver",
+  escalasVerTodas: "escalas.ver_todas",
+  solicitacoesVer: "solicitacoes.ver",
   reports: "dashboard.view_financial",
   admin: "admin.access",
   settings: "settings.manage",
@@ -34,7 +39,7 @@ export const MENU_ITEMS: Array<{
   { label: "Fornecedores", path: routes.fornecedores, permission: [PERMISSIONS.suppliers, PERMISSIONS.inventory] },
   { label: "Compras", path: routes.compras, permission: [PERMISSIONS.purchases, PERMISSIONS.inventory] },
   { label: "Financeiro", path: routes.financeiro, permission: PERMISSIONS.financial },
-  { label: "Equipe & Comissoes", path: routes.equipeFuncionarios, permission: PERMISSIONS.team },
+  { label: "Equipe & Comissoes", path: routes.equipeFuncionarios, permission: [PERMISSIONS.team, PERMISSIONS.pontoVer, PERMISSIONS.escalasVer, PERMISSIONS.solicitacoesVer] },
   { label: "Relatorios", path: routes.relatorios, permission: PERMISSIONS.reports },
   { label: "Admin", path: routes.admin, permission: PERMISSIONS.admin },
   { label: "Configuracoes", path: routes.configuracoes, permission: PERMISSIONS.settings },
@@ -58,10 +63,19 @@ export function canViewFinancialDashboard(permissions?: string[]): boolean {
   return hasPermission(permissions, PERMISSIONS.dashboardFinancial);
 }
 
-/** Rota do dashboard → permissão mínima (prefix match). */
-export function permissionForPath(pathname: string): string | null {
+/** Rota do dashboard → permissão mínima (prefix match). string[] = qualquer uma (OR). */
+export function permissionForPath(pathname: string): string | string[] | null {
   const normalized = pathname.replace(/\/+$/, "") || routes.dashboardHome;
-  if (normalized.startsWith(routes.equipe)) return PERMISSIONS.team;
+  if (normalized.startsWith(routes.equipe)) {
+    return [
+      PERMISSIONS.team,
+      PERMISSIONS.pontoVer,
+      PERMISSIONS.pontoVerTodos,
+      PERMISSIONS.escalasVer,
+      PERMISSIONS.escalasVerTodas,
+      PERMISSIONS.solicitacoesVer,
+    ];
+  }
   const sorted = [...MENU_ITEMS].sort((a, b) => b.path.length - a.path.length);
   for (const item of sorted) {
     if (normalized === item.path || normalized.startsWith(`${item.path}/`)) {

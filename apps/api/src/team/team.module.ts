@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CommissionEngineService } from './commission-engine.service';
 import { CommissionRulesService } from './commission-rules.service';
+import { EmployeeDocumentsService } from './employee-documents.service';
 import { EmployeeEntriesService } from './employee-entries.service';
 import { EmployeeAccessService } from './employee-access.service';
 import { EmployeesService } from './employees.service';
@@ -19,8 +20,9 @@ import { TeamController } from './team.controller';
     JobTitlesService,
     CommissionRulesService,
     EmployeeEntriesService,
+    EmployeeDocumentsService,
     PayrollService,
   ],
-  exports: [CommissionEngineService, EmployeesService, TeamActionLogService],
+  exports: [CommissionEngineService, EmployeesService, TeamActionLogService, CommissionRulesService],
 })
 export class TeamModule {}
