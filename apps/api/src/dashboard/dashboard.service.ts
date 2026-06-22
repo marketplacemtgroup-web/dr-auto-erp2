@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ServiceOrderStatus } from '@autocore/database';
 import { notDeleted } from '../common/soft-delete';
 import { endOfDay, roundMoney, startOfDay } from '../reports/reports-date.util';
+import { PROFIT_RECOGNIZED_STATUSES } from '../reports/reports-profit.util';
 import { ReportsService } from '../reports/reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -133,7 +134,7 @@ export class DashboardService {
         this.prisma.serviceOrder.findMany({
           where: {
             ...active,
-            status: 'DELIVERED',
+            status: { in: PROFIT_RECOGNIZED_STATUSES },
             updatedAt: { gte: monthStart, lte: todayEnd },
           },
           select: { totalAmount: true, createdAt: true, updatedAt: true },

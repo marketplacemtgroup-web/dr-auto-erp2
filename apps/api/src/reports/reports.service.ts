@@ -8,6 +8,13 @@ import {
   roundMoney,
   startOfDay,
 } from './reports-date.util';
+import {
+  PROFIT_RECOGNIZED_STATUSES,
+  calcItemProfit,
+  itemPartUnitCost,
+  itemRevenue,
+  profitRecognizedOrderWhere,
+} from './reports-profit.util';
 
 type ProfitTotals = {
   partsProfit: number;
@@ -443,15 +450,14 @@ export class ReportsService {
         },
       }),
       this.prisma.serviceOrder.findMany({
-        where: {
-          organizationId,
-          status: 'DELIVERED',
-          updatedAt: { gte: period.from, lte: period.to },
-          deletedAt: null,
-        },
+        where: profitRecognizedOrderWhere(organizationId, period),
         include: {
           vehicle: { include: { customer: true } },
-          items: { include: { product: { select: { costPrice: true } } } },
+          items: {
+            include: {
+              product: { select: { costPrice: true, averageCost: true, name: true } },
+            },
+          },
         },
       }),
       this.prisma.serviceOrder.findMany({
@@ -488,13 +494,11 @@ export class ReportsService {
       this.prisma.serviceOrderItem.findMany({
         where: {
           organizationId,
-          serviceOrder: {
-            status: 'DELIVERED',
-            updatedAt: { gte: period.from, lte: period.to },
-            deletedAt: null,
-          },
+          serviceOrder: profitRecognizedOrderWhere(organizationId, period),
         },
-        include: { product: { select: { costPrice: true, name: true } } },
+        include: {
+          product: { select: { costPrice: true, averageCost: true, name: true } },
+        },
       }),
       this.prisma.serviceOrder.findMany({
         where: {
@@ -536,7 +540,7 @@ export class ReportsService {
       let cost = 0;
       for (const item of order.items) {
         if (item.itemType === 'PART') {
-          cost += Number(item.product?.costPrice ?? 0) * item.quantity;
+          cost += itemPartUnitCost(item, item.product) * item.quantity;
         }
       }
       const margin = revenue - cost;
@@ -571,7 +575,7 @@ export class ReportsService {
       };
       cur.count += 1;
       cur.total += Number(order.totalAmount);
-      if (order.status === 'DELIVERED') {
+      if (PROFIT_RECOGNIZED_STATUSES.includes(order.status)) {
         cur.delivered += 1;
         cur.deliveryMs += order.updatedAt.getTime() - order.createdAt.getTime();
       }
@@ -581,7 +585,7 @@ export class ReportsService {
     const serviceMap = new Map<string, { description: string; count: number; revenue: number }>();
     const partMap = new Map<string, { description: string; count: number; revenue: number; profit: number }>();
     for (const item of deliveredItems) {
-      const revenue = Number(item.unitPrice) * item.quantity;
+      const revenue = itemRevenue(item);
       if (item.itemType === 'SERVICE') {
         const cur = serviceMap.get(item.description) ?? {
           description: item.description,
@@ -592,7 +596,7 @@ export class ReportsService {
         cur.revenue += revenue;
         serviceMap.set(item.description, cur);
       } else {
-        const cost = Number(item.product?.costPrice ?? 0) * item.quantity;
+        const profit = calcItemProfit(item, item.product);
         const key = item.product?.name ?? item.description;
         const cur = partMap.get(key) ?? {
           description: key,
@@ -602,7 +606,7 @@ export class ReportsService {
         };
         cur.count += item.quantity;
         cur.revenue += revenue;
-        cur.profit += revenue - cost;
+        cur.profit += profit;
         partMap.set(key, cur);
       }
     }
@@ -685,12 +689,7 @@ export class ReportsService {
         _count: { _all: true },
       }),
       this.prisma.serviceOrder.findMany({
-        where: {
-          organizationId,
-          status: 'DELIVERED',
-          updatedAt: { gte: period.from, lte: period.to },
-          deletedAt: null,
-        },
+        where: profitRecognizedOrderWhere(organizationId, period),
         include: {
           vehicle: { include: { customer: true } },
         },
@@ -753,7 +752,7 @@ export class ReportsService {
       const priorOrders = await this.prisma.serviceOrder.findMany({
         where: {
           organizationId,
-          status: 'DELIVERED',
+          status: { in: PROFIT_RECOGNIZED_STATUSES },
           createdAt: { lt: period.from },
           vehicle: { customerId: { in: Array.from(periodCustomerIds) } },
         },
@@ -850,10 +849,7 @@ export class ReportsService {
           organizationId,
           itemType: 'PART',
           productId: { not: null },
-          serviceOrder: {
-            status: 'DELIVERED',
-            updatedAt: { gte: period.from, lte: period.to },
-          },
+          serviceOrder: profitRecognizedOrderWhere(organizationId, period),
         },
         select: {
           productId: true,
@@ -1025,11 +1021,7 @@ export class ReportsService {
     const items = await this.prisma.serviceOrderItem.findMany({
       where: {
         organizationId,
-        serviceOrder: {
-          status: 'DELIVERED',
-          updatedAt: { gte: period.from, lte: period.to },
-          deletedAt: null,
-        },
+        serviceOrder: profitRecognizedOrderWhere(organizationId, period),
       },
       include: { product: { select: { costPrice: true, averageCost: true } } },
     });
@@ -1039,15 +1031,10 @@ export class ReportsService {
     let partsRevenue = 0;
     let servicesRevenue = 0;
     for (const item of items) {
-      const revenue = Number(item.unitPrice) * item.quantity - Number(item.discount);
+      const revenue = itemRevenue(item);
       if (item.itemType === 'PART') {
         partsRevenue += revenue;
-        const unitCost =
-          item.unitCost != null
-            ? Number(item.unitCost)
-            : Number(item.product?.averageCost) || Number(item.product?.costPrice ?? 0);
-        const cost = unitCost * item.quantity;
-        partsProfit += revenue - cost;
+        partsProfit += calcItemProfit(item, item.product);
       } else {
         servicesRevenue += revenue;
         servicesProfit += revenue;

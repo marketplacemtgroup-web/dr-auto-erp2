@@ -21,7 +21,7 @@ object PortalFcmManager {
             ApiClient.getApi(context).registerFcmToken(
                 FcmRegisterRequest(token = fcmToken, platform = "android"),
             )
-            Log.d(TAG, "FCM token registered")
+            Log.i(TAG, "FCM token registered with API")
         } catch (e: Exception) {
             Log.w(TAG, "FCM registration skipped: ${e.message}")
         }

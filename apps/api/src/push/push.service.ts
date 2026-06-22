@@ -187,6 +187,16 @@ export class PushService {
           token: row.token,
           notification: { title: payload.title, body: payload.body },
           data: Object.keys(data).length ? data : undefined,
+          android: {
+            priority: 'high',
+            notification: {
+              channelId: 'portal_alerts',
+              sound: 'default',
+              priority: 'high',
+              defaultSound: true,
+              defaultVibrateTimings: true,
+            },
+          },
         });
       }
     } catch (err) {

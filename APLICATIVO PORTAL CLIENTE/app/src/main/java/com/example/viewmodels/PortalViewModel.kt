@@ -8,6 +8,7 @@ import com.example.lib.ApiErrorMapper
 import com.example.lib.QuoteLineHelper
 import com.example.services.ApiClient
 import com.example.services.PortalFcmManager
+import com.example.services.PortalNotificationHelper
 import com.example.services.PortalNotificationPermission
 import com.example.services.SessionManager
 import com.example.types.*
@@ -75,6 +76,8 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     val publicBrandingLogoUrl: StateFlow<String?> = _publicBrandingLogoUrl
 
     private var pollingJob: Job? = null
+    private var knownNotificationIds = mutableSetOf<String>()
+    private var notificationsTrayInitialized = false
 
     private val dashboardAdapter = moshi.adapter(PortalDashboard::class.java)
     @Suppress("UNCHECKED_CAST")
@@ -270,6 +273,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 val notifs = api.getNotifications()
                 _notifications.value = notifs
                 sessionManager.cacheNotifications(notificationsAdapter.toJson(notifs))
+                notifyTrayForNewInboxItems(notifs)
 
                 val vehs = api.getVehicles()
                 _vehicles.value = vehs
@@ -307,6 +311,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 val notifs = api.getNotifications()
                 _notifications.value = notifs
                 sessionManager.cacheNotifications(notificationsAdapter.toJson(notifs))
+                notifyTrayForNewInboxItems(notifs)
 
                 _isOffline.value = false
             } catch (e: Exception) {
@@ -315,6 +320,29 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _isRefreshing.value = false
             }
         }
+    }
+
+    private fun notifyTrayForNewInboxItems(notifs: List<PortalNotification>) {
+        val newUnread = notifs.filter { !it.read && it.id !in knownNotificationIds }
+        if (notificationsTrayInitialized && newUnread.isNotEmpty()) {
+            val latest = newUnread.maxByOrNull { it.createdAt } ?: return
+            PortalNotificationHelper.showFromPortalNotification(
+                context = getApplication(),
+                notificationId = latest.id,
+                title = latest.title,
+                body = latest.body,
+                serviceOrderId = latest.serviceOrderId,
+                quoteId = latest.quoteId,
+                type = latest.type,
+            )
+        }
+        knownNotificationIds = notifs.map { it.id }.toMutableSet()
+        notificationsTrayInitialized = true
+    }
+
+    private fun resetNotificationTrayTracking() {
+        knownNotificationIds.clear()
+        notificationsTrayInitialized = false
     }
 
     private fun hasCachedDashboard(): Boolean =
@@ -603,6 +631,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
     fun logout(onComplete: () -> Unit) {
         stopPolling()
+        resetNotificationTrayTracking()
         sessionManager.clearSession()
         _isLoggedIn.value = false
         _dashboard.value = null
