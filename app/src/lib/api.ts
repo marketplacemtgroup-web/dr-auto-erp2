@@ -1,4 +1,5 @@
 import { fetchWithTimeout, parseJsonBody } from "./http";
+import type { ServiceOrderItemType } from "./itemType";
 
 // Produção: URL vazia → mesmo host (`/api` via nginx).
 // Dev no PC: pode usar VITE_API_URL ou proxy do Vite.
@@ -1373,7 +1374,7 @@ export const api = {
     serviceOrderId: string,
     data: {
       description: string;
-      itemType?: "SERVICE" | "PART";
+      itemType?: ServiceOrderItemType;
       quantity?: number;
       unitPrice: number;
       productId?: string;
@@ -1397,7 +1398,7 @@ export const api = {
     itemId: string,
     data: {
       description?: string;
-      itemType?: "SERVICE" | "PART";
+      itemType?: ServiceOrderItemType;
       quantity?: number;
       unitPrice?: number;
       discount?: number;
