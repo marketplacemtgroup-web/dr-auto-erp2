@@ -133,11 +133,20 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 4. No ERP, altere o status de uma OS desse cliente.
 
-5. **Teste com app fechado:** force o fechamento do app (remova dos recentes), envie outra notificação pelo ERP e aguarde na bandeja do celular (não precisa abrir o app).
+5. **Teste com app fechado:** remova o app dos recentes (não use “Forçar parada” nas configurações). Dispare outro alerta pelo ERP e aguarde na bandeja — **sem abrir o app**.
 
-> **Importante:** a API envia push FCM em modo *data-only* com prioridade alta, para o `PortalMessagingService` exibir na bandeja mesmo com o app fechado. Após atualizar a API, faça **redeploy na Vercel**. Se só funcionava com o app aberto, provavelmente era o *polling* interno (a cada ~20s), não o FCM de verdade.
+> **Como funciona agora:** a API envia FCM **híbrido** (`notification` + `data`). Com o app fechado, o **próprio Android** exibe a notificação na bandeja (com som), usando o canal `portal_alerts_v2`. Com o app aberto, o `PortalMessagingService` exibe localmente. **Redeploy obrigatório na Vercel** após mudanças na API.
 
-5. Deve chegar notificação na **bandeja** do celular (não só na aba Notificações do app).
+6. Deve chegar notificação na **bandeja** com **som** (canal “Alertas do portal”).
+
+### Se ainda não tocar com app fechado
+
+1. **Redeploy da API** — sem isso nada muda em produção.
+2. **Reinstale o APK novo** (canal de notificação mudou para `portal_alerts_v2`).
+3. Abra o app, faça login, aceite notificações.
+4. Configurações do Android → Apps → Portal do Cliente → Notificações → canal **Alertas do portal** → Som **ativado**.
+5. **Samsung / Xiaomi / Motorola:** Configurações → Bateria → desative economia de energia para este app (ou “Sem restrições”).
+6. Não use **Forçar parada** do app — isso bloqueia FCM até abrir de novo.
 
 ---
 
@@ -156,6 +165,8 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Troubleshooting
 
-- **Inbox no app OK, bandeja vazia:** API sem `FIREBASE_SERVICE_ACCOUNT` ou permissão negada no celular.
-- **env-check ok, sem push:** app sem login, sem permissão, ou token FCM não registrado — veja Logcat `PortalFcmManager`.
-- **Projetos diferentes:** app e API precisam usar o **mesmo** projeto Firebase (`oficina-do-beto-campinas`).
+- **Só funciona com app aberto:** era o *polling* (a cada ~20s), não FCM. Faça redeploy da API + APK novo.
+- **Inbox no app OK, bandeja vazia:** API sem `FIREBASE_SERVICE_ACCOUNT`, permissão negada, ou token FCM inválido.
+- **Aparece mas sem som:** verifique canal `portal_alerts_v2` nas configurações do app e modo Não Perturbe.
+- **env-check ok, sem push:** login + permissão + token — Logcat `PortalFcmManager` / `PortalMessagingService`.
+- **Projetos diferentes:** app e API no mesmo Firebase (`oficina-do-beto-campinas`).

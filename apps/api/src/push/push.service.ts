@@ -183,25 +183,58 @@ export class PushService {
         });
       }
       for (const row of tokens) {
-        await admin.messaging().send({
-          token: row.token,
-          // Data-only + alta prioridade: onMessageReceived roda com app fechado e exibe na bandeja.
-          data: {
-            title: payload.title,
-            body: payload.body,
-            ...(payload.url ? { url: payload.url } : {}),
-            ...(serviceOrderId ? { serviceOrderId } : {}),
-            ...(quoteId ? { quoteId } : {}),
-            ...(type ? { type } : {}),
-          },
-          android: {
-            priority: 'high',
-            ttl: 86_400,
-          },
-        });
+        const dataPayload: Record<string, string> = {
+          title: payload.title,
+          body: payload.body,
+          ...(payload.url ? { url: payload.url } : {}),
+          ...(serviceOrderId ? { serviceOrderId } : {}),
+          ...(quoteId ? { quoteId } : {}),
+          ...(type ? { type } : {}),
+        };
+
+        try {
+          const messageId = await admin.messaging().send({
+            token: row.token,
+            // Híbrido: com app fechado o Android exibe notification (com som). Data = deep link ao tocar.
+            notification: {
+              title: payload.title,
+              body: payload.body,
+            },
+            data: dataPayload,
+            android: {
+              priority: 'high',
+              ttl: 86_400,
+              collapseKey: type ?? 'portal_alert',
+              notification: {
+                channelId: 'portal_alerts_v2',
+                sound: 'default',
+                priority: 'max',
+                defaultSound: true,
+                defaultVibrateTimings: true,
+                visibility: 'public',
+                notificationCount: 1,
+              },
+            },
+          });
+          this.logger.log(`FCM enviado (${row.id}, vehicle=${vehicleId}): ${messageId}`);
+        } catch (err: unknown) {
+          const code =
+            err && typeof err === 'object' && 'code' in err
+              ? String((err as { code: string }).code)
+              : '';
+          this.logger.warn(`FCM falhou (${row.id}): ${code || String(err)}`);
+          if (
+            code.includes('registration-token-not-registered') ||
+            code.includes('invalid-registration-token') ||
+            code.includes('invalid-argument')
+          ) {
+            await this.prisma.fcmToken.delete({ where: { id: row.id } }).catch(() => null);
+            this.logger.warn(`Token FCM removido (${row.id}) — será recriado no próximo login`);
+          }
+        }
       }
     } catch (err) {
-      this.logger.warn(`FCM falhou: ${String(err)}`);
+      this.logger.warn(`FCM falhou (init): ${String(err)}`);
     }
   }
 }

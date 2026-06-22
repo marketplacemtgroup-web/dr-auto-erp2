@@ -1,5 +1,6 @@
 package com.example.services
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +9,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
@@ -15,8 +17,10 @@ import com.example.R
 import com.google.firebase.messaging.RemoteMessage
 
 object PortalNotificationHelper {
-    /** Canal com som e heads-up (estilo WhatsApp). */
-    const val CHANNEL_ID = "portal_alerts"
+    /**
+     * Canal novo (v2) com som garantido. Se o canal antigo foi criado sem som, o Android não corrige sozinho.
+     */
+    const val CHANNEL_ID = "portal_alerts_v2"
     const val EXTRA_NAV_TARGET = "nav_target"
     const val EXTRA_ORDER_ID = "order_id"
     const val EXTRA_QUOTE_ID = "quote_id"
@@ -25,12 +29,27 @@ object PortalNotificationHelper {
     const val NAV_QUOTE = "quote"
     const val NAV_APPOINTMENTS = "appointments"
 
+    private const val TAG = "PortalNotification"
+
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
 
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+        val existing = manager.getNotificationChannel(CHANNEL_ID)
+        if (existing != null) {
+            val ok = existing.importance >= NotificationManager.IMPORTANCE_HIGH &&
+                existing.sound != null
+            if (ok) return
+            manager.deleteNotificationChannel(CHANNEL_ID)
+            Log.i(TAG, "Canal de notificação recriado (som/importância incorretos)")
+        }
+
         val channel = NotificationChannel(
             CHANNEL_ID,
             context.getString(R.string.notification_channel_name),
@@ -38,21 +57,21 @@ object PortalNotificationHelper {
         ).apply {
             description = context.getString(R.string.notification_channel_description)
             enableVibration(true)
-            vibrationPattern = longArrayOf(0, 250, 120, 250)
+            vibrationPattern = longArrayOf(0, 300, 150, 300)
             enableLights(true)
-            setSound(
-                soundUri,
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build(),
-            )
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setBypassDnd(false)
+            setShowBadge(true)
+            setSound(soundUri, audioAttributes)
         }
         manager.createNotificationChannel(channel)
     }
 
     fun showFromRemoteMessage(context: Context, message: RemoteMessage) {
-        if (!PortalNotificationPermission.isGranted(context)) return
+        if (!PortalNotificationPermission.isGranted(context)) {
+            Log.w(TAG, "Permissão POST_NOTIFICATIONS negada — push não exibido")
+            return
+        }
 
         val title = message.notification?.title
             ?: message.data["title"]
@@ -167,15 +186,21 @@ object PortalNotificationHelper {
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setSound(soundUri)
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+            .setVibrate(longArrayOf(0, 300, 150, 300))
+            .setDefaults(NotificationCompat.DEFAULT_LIGHTS)
+            .setOnlyAlertOnce(false)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Falha ao exibir notificação", e)
+        }
     }
 }

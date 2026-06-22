@@ -1,5 +1,7 @@
 package com.example.services
 
+import android.content.Context
+import android.os.PowerManager
 import android.util.Log
 import com.example.types.FcmRegisterRequest
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -10,7 +12,6 @@ import kotlinx.coroutines.launch
 
 class PortalMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
-        super.onNewToken(token)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (
@@ -20,6 +21,7 @@ class PortalMessagingService : FirebaseMessagingService() {
                     ApiClient.getApi(this@PortalMessagingService).registerFcmToken(
                         FcmRegisterRequest(token = token, platform = "android"),
                     )
+                    Log.i(TAG, "FCM token re-registrado após refresh")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to register new FCM token", e)
@@ -28,8 +30,37 @@ class PortalMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        Log.d(TAG, "Push received (app pode estar fechado): ${message.data["title"] ?: message.notification?.title}")
-        PortalNotificationHelper.showFromRemoteMessage(this, message)
+        val appContext = applicationContext
+        PortalNotificationHelper.ensureChannel(appContext)
+
+        val hasNotificationPayload = message.notification != null
+        if (hasNotificationPayload && !PortalAppState.isInForeground) {
+            Log.d(TAG, "Push com notification payload — sistema exibe (app em background)")
+            return
+        }
+
+        val wakeLock = acquireWakeLock(appContext)
+        try {
+            Log.d(
+                TAG,
+                "Exibindo push localmente: ${message.data["title"] ?: message.notification?.title}",
+            )
+            PortalNotificationHelper.showFromRemoteMessage(appContext, message)
+        } finally {
+            releaseWakeLock(wakeLock)
+        }
+    }
+
+    private fun acquireWakeLock(context: Context): PowerManager.WakeLock? {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return null
+        return pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "portalcliente:fcm").apply {
+            setReferenceCounted(false)
+            acquire(15_000)
+        }
+    }
+
+    private fun releaseWakeLock(wakeLock: PowerManager.WakeLock?) {
+        if (wakeLock?.isHeld == true) wakeLock.release()
     }
 
     companion object {

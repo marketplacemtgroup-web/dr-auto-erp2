@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.services.PortalAppState
 import com.example.services.PortalNotificationHelper
 import com.example.services.PortalNotificationPermission
 import com.example.ui.components.BrandPalette
@@ -86,6 +87,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        PortalNotificationHelper.ensureChannel(this)
         pendingNotificationNav = parseNotificationNav(intent)
 
         setContent {
@@ -112,6 +114,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        PortalAppState.isInForeground = true
+        PortalNotificationHelper.ensureChannel(this)
+        viewModel.registerPushToken()
+    }
+
+    override fun onPause() {
+        PortalAppState.isInForeground = false
+        super.onPause()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -126,12 +140,47 @@ data class NotificationNav(
 )
 
 fun parseNotificationNav(intent: Intent?): NotificationNav? {
-    val target = intent?.getStringExtra(PortalNotificationHelper.EXTRA_NAV_TARGET) ?: return null
-    return NotificationNav(
-        target = target,
-        orderId = intent.getStringExtra(PortalNotificationHelper.EXTRA_ORDER_ID),
-        quoteId = intent.getStringExtra(PortalNotificationHelper.EXTRA_QUOTE_ID),
-    )
+    intent ?: return null
+
+    intent.getStringExtra(PortalNotificationHelper.EXTRA_NAV_TARGET)?.let { target ->
+        return NotificationNav(
+            target = target,
+            orderId = intent.getStringExtra(PortalNotificationHelper.EXTRA_ORDER_ID),
+            quoteId = intent.getStringExtra(PortalNotificationHelper.EXTRA_QUOTE_ID),
+        )
+    }
+
+    // FCM (app fechado): ao tocar na notificação do sistema, os dados vêm nos extras do Intent.
+    val extras = intent.extras ?: return null
+    val serviceOrderId = extras.getString("serviceOrderId")?.takeIf { it.isNotBlank() }
+    val quoteId = extras.getString("quoteId")?.takeIf { it.isNotBlank() }
+    val type = extras.getString("type")?.takeIf { it.isNotBlank() }
+    val url = extras.getString("url")?.takeIf { it.isNotBlank() }
+
+    return when {
+        serviceOrderId != null -> NotificationNav(
+            target = PortalNotificationHelper.NAV_ORDER,
+            orderId = serviceOrderId,
+        )
+        quoteId != null -> NotificationNav(
+            target = PortalNotificationHelper.NAV_QUOTE,
+            quoteId = quoteId,
+        )
+        type == "manutencao_preventiva" -> NotificationNav(
+            target = PortalNotificationHelper.NAV_APPOINTMENTS,
+        )
+        url?.contains("agendamento", ignoreCase = true) == true -> NotificationNav(
+            target = PortalNotificationHelper.NAV_APPOINTMENTS,
+        )
+        url?.contains("orcamento", ignoreCase = true) == true -> {
+            val token = url.substringAfterLast('/').takeIf { it.isNotBlank() }
+            NotificationNav(target = PortalNotificationHelper.NAV_QUOTE, quoteId = token)
+        }
+        extras.getString("body") != null -> NotificationNav(
+            target = PortalNotificationHelper.NAV_NOTIFICATIONS,
+        )
+        else -> null
+    }
 }
 
 fun clearNotificationNavExtras(intent: Intent?) {
