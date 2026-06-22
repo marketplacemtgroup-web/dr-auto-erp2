@@ -10,6 +10,11 @@ import FormDrawer, { FormField, inputClass, selectClass } from "../../components
 import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/share/ShareLinkDialog";
 import { api, type ServiceOrderItemRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
+import {
+  itemTypeLabel,
+  SERVICE_ORDER_ITEM_TYPE_OPTIONS,
+  type ServiceOrderItemType,
+} from "../../lib/itemType";
 import { quoteStatusLabel, quoteStatusVariant } from "../../lib/service-order-status";
 import { portalPublicQuoteUrl, routes } from "../../lib/routes";
 import { applyUrlTemplate, defaultQuoteWhatsAppMessage, resolveOrganizationWhatsApp } from "../../lib/shareLink";
@@ -29,7 +34,7 @@ export default function QuoteDetailPage() {
   const [editingItem, setEditingItem] = useState<ServiceOrderItemRow | null>(null);
   const [itemForm, setItemForm] = useState({
     description: "",
-    itemType: "SERVICE" as "SERVICE" | "PART",
+    itemType: "SERVICE" as ServiceOrderItemType,
     quantity: "1",
     unitPrice: "",
     productId: "",
@@ -402,7 +407,7 @@ export default function QuoteDetailPage() {
               <tr key={item.id} className="border-t border-[#F1F5F9]">
                 <td className="px-4 py-3">{item.description}</td>
                 <td className="px-4 py-3 text-[#64748B]">
-                  {item.itemType === "PART" ? "Peça" : "Serviço"}
+                  {itemTypeLabel(item.itemType)}
                 </td>
                 <td className="px-4 py-3 text-right">{item.quantity}</td>
                 <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
@@ -470,12 +475,15 @@ export default function QuoteDetailPage() {
               onChange={(e) =>
                 setItemForm((f) => ({
                   ...f,
-                  itemType: e.target.value as "SERVICE" | "PART",
+                  itemType: e.target.value as ServiceOrderItemType,
                 }))
               }
             >
-              <option value="SERVICE">Serviço</option>
-              <option value="PART">Peça</option>
+              {SERVICE_ORDER_ITEM_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </FormField>
         )}

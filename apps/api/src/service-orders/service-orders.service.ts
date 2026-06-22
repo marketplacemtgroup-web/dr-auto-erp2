@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ServiceOrderStatus } from '@prisma/client';
+import { Prisma, ServiceOrderItemType, ServiceOrderStatus } from '@prisma/client';
 import { QuotesSyncService } from '../quotes/quotes-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockMovementService } from '../products/stock-movement.service';
@@ -12,6 +12,7 @@ import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { AuditService } from '../audit/audit.service';
 import { notDeleted } from '../common/soft-delete';
+import { isCommissionEligibleItemType } from '../common/item-type.util';
 import { EventsService } from '../events/events.service';
 import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
 import { FinancialService } from '../financial/financial.service';
@@ -99,7 +100,7 @@ export class ServiceOrdersService {
   private async previewItemCommission(
     organizationId: string,
     params: {
-      itemType: 'SERVICE' | 'PART';
+      itemType: 'SERVICE' | 'PART' | 'SCANNER' | 'THIRD_PARTY';
       quantity: number;
       unitPrice: number;
       discount?: number;
@@ -110,13 +111,14 @@ export class ServiceOrdersService {
       executionById?: string | null;
     },
   ) {
+    if (!isCommissionEligibleItemType(params.itemType)) return null;
     const employeeId =
       params.itemType === 'SERVICE'
         ? params.executorId ?? params.executionById
         : params.soldById;
     if (!employeeId) return null;
     return this.commissionEngine.previewForItem(organizationId, employeeId, {
-      itemType: params.itemType,
+      itemType: params.itemType as ServiceOrderItemType,
       quantity: params.quantity,
       unitPrice: params.unitPrice,
       discount: params.discount ?? 0,

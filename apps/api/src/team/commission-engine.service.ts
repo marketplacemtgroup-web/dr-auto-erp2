@@ -9,6 +9,7 @@ import {
   ServiceOrderItemType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isCommissionEligibleItemType } from '../common/item-type.util';
 
 type RuleRow = {
   id: string;
@@ -133,6 +134,10 @@ export class CommissionEngineService {
         Number(item.unitPrice),
         discount,
       );
+
+      if (!isCommissionEligibleItemType(item.itemType)) {
+        continue;
+      }
 
       if (item.itemType === 'SERVICE') {
         const employeeId = item.executorId ?? so.executionById;

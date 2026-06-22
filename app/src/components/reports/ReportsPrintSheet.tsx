@@ -36,6 +36,8 @@ export default function ReportsPrintSheet({ report }: Props) {
           <Row label="Resultado caixa" value={formatMoney(f.result)} />
           <Row label="Lucro pecas" value={formatMoney(f.partsProfit)} />
           <Row label="Lucro servicos" value={formatMoney(f.servicesProfit)} />
+          <Row label="Lucro scanner" value={formatMoney(f.scannerProfit ?? 0)} />
+          <Row label="Lucro terceirizado" value={formatMoney(f.outsourcedProfit ?? 0)} />
           <Row label="Lucro bruto" value={formatMoney(f.grossProfit)} />
           <Row label="Lucro total" value={formatMoney(f.totalProfit)} />
           <Row label="Descontos concedidos" value={formatMoney(f.discountsGiven)} />

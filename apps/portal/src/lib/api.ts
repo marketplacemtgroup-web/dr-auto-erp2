@@ -150,7 +150,7 @@ export interface PortalServiceOrderDetail {
 export interface QuoteLineRow {
   id: string;
   description: string;
-  lineType: "SERVICE" | "PART" | "THIRD_PARTY";
+  lineType: "SERVICE" | "PART" | "SCANNER" | "THIRD_PARTY";
   quantity: number;
   unitPrice: string | number;
   discount?: string | number;

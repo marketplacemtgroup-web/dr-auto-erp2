@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, QuoteLineType, ServiceOrderStatus } from '@prisma/client';
+import { mapServiceOrderItemToQuoteLineType } from '../common/item-type.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { PortalCustomerNotifyService, type QuoteNotifyKind } from '../events/portal-customer-notify.service';
 
@@ -27,8 +28,7 @@ export class QuotesSyncService {
   }
 
   private mapItemType(itemType: string): QuoteLineType {
-    if (itemType === 'PART') return 'PART';
-    return 'SERVICE';
+    return mapServiceOrderItemToQuoteLineType(itemType);
   }
 
   private lineTotal(line: { unitPrice: Prisma.Decimal; quantity: number; discount: Prisma.Decimal }) {

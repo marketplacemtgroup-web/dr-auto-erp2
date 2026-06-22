@@ -47,6 +47,7 @@ enum AttachmentEntityType {
 enum QuoteLineType {
   SERVICE
   PART
+  SCANNER
   THIRD_PARTY
 }
 
@@ -752,6 +753,8 @@ model Attachment {
 enum ServiceOrderItemType {
   SERVICE
   PART
+  SCANNER
+  THIRD_PARTY
 }
 
 model ServiceOrderItem {

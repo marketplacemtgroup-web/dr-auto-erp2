@@ -67,6 +67,8 @@ export interface DashboardFinancialKpis {
   averageServiceTimeMinutes: number;
   partsProfit: number;
   servicesProfit: number;
+  scannerProfit?: number;
+  outsourcedProfit?: number;
   grossProfit?: number;
   expenses?: number;
   totalProfit?: number;
@@ -201,7 +203,7 @@ export interface OfficeNotificationRow {
 export interface QuoteLineRow {
   id: string;
   description: string;
-  lineType: "SERVICE" | "PART" | "THIRD_PARTY";
+  lineType: "SERVICE" | "PART" | "SCANNER" | "THIRD_PARTY";
   quantity: number;
   unitPrice: string | number;
   discount?: string | number;
@@ -213,7 +215,7 @@ export interface QuoteLineRow {
 export interface PortalQuoteItemRow {
   id: string;
   description: string;
-  itemType: "SERVICE" | "PART";
+  itemType: "SERVICE" | "PART" | "SCANNER" | "THIRD_PARTY";
   quantity: number;
   unitPrice: string | number;
 }
@@ -391,10 +393,14 @@ export interface FinancialProfitSummary {
   expenses: number;
   partsProfit: number;
   servicesProfit: number;
+  scannerProfit?: number;
+  outsourcedProfit?: number;
   grossProfit: number;
   totalProfit: number;
   partsRevenue: number;
   servicesRevenue: number;
+  scannerRevenue?: number;
+  outsourcedRevenue?: number;
 }
 
 export interface FinancialEntryRow {
@@ -502,10 +508,14 @@ export interface ReportsFull {
     result: number;
     partsProfit: number;
     servicesProfit: number;
+    scannerProfit?: number;
+    outsourcedProfit?: number;
     grossProfit: number;
     totalProfit: number;
     partsRevenue: number;
     servicesRevenue: number;
+    scannerRevenue?: number;
+    outsourcedRevenue?: number;
     discountsGiven: number;
     openReceivables: { count: number; amount: number };
     openPayables: { count: number; amount: number };
@@ -558,6 +568,8 @@ export interface ReportsFull {
       averageDeliveryDays: number;
     }>;
     topServices: Array<{ description: string; count: number; revenue: number }>;
+    topScanner?: Array<{ description: string; count: number; revenue: number }>;
+    topOutsourced?: Array<{ description: string; count: number; revenue: number }>;
     topParts: Array<{ description: string; count: number; revenue: number; profit: number }>;
     marginByOrder: Array<{
       id: string;
@@ -728,7 +740,7 @@ export interface TeamStats {
 export interface ServiceOrderItemRow {
   id: string;
   description: string;
-  itemType: "SERVICE" | "PART";
+  itemType: "SERVICE" | "PART" | "SCANNER" | "THIRD_PARTY";
   quantity: number;
   unitPrice: string | number;
   discount?: string | number;

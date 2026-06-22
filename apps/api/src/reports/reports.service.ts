@@ -15,12 +15,17 @@ import {
   itemRevenue,
   profitRecognizedOrderWhere,
 } from './reports-profit.util';
+import type { ServiceOrderItemTypeValue } from '../common/item-type.util';
 
 type ProfitTotals = {
   partsProfit: number;
   servicesProfit: number;
+  scannerProfit: number;
+  outsourcedProfit: number;
   partsRevenue: number;
   servicesRevenue: number;
+  scannerRevenue: number;
+  outsourcedRevenue: number;
 };
 
 @Injectable()
@@ -358,10 +363,14 @@ export class ReportsService {
       result: roundMoney(revenue - expense),
       partsProfit: profitMetrics.partsProfit,
       servicesProfit: profitMetrics.servicesProfit,
+      scannerProfit: profitMetrics.scannerProfit,
+      outsourcedProfit: profitMetrics.outsourcedProfit,
       grossProfit: profitMetrics.grossProfit,
       totalProfit: profitMetrics.totalProfit,
       partsRevenue: profit.partsRevenue,
       servicesRevenue: profit.servicesRevenue,
+      scannerRevenue: profit.scannerRevenue,
+      outsourcedRevenue: profit.outsourcedRevenue,
       discountsGiven: roundMoney(Number(discountsAgg._sum.discountAmount ?? 0)),
       interestPaid: roundMoney(
         Number(interestFeesAgg._sum.interestAmount ?? 0) +
@@ -584,9 +593,12 @@ export class ReportsService {
 
     const serviceMap = new Map<string, { description: string; count: number; revenue: number }>();
     const partMap = new Map<string, { description: string; count: number; revenue: number; profit: number }>();
+    const scannerMap = new Map<string, { description: string; count: number; revenue: number }>();
+    const outsourcedMap = new Map<string, { description: string; count: number; revenue: number }>();
     for (const item of deliveredItems) {
       const revenue = itemRevenue(item);
-      if (item.itemType === 'SERVICE') {
+      const itemType = item.itemType as ServiceOrderItemTypeValue;
+      if (itemType === 'SERVICE') {
         const cur = serviceMap.get(item.description) ?? {
           description: item.description,
           count: 0,
@@ -595,6 +607,24 @@ export class ReportsService {
         cur.count += item.quantity;
         cur.revenue += revenue;
         serviceMap.set(item.description, cur);
+      } else if (itemType === 'SCANNER') {
+        const cur = scannerMap.get(item.description) ?? {
+          description: item.description,
+          count: 0,
+          revenue: 0,
+        };
+        cur.count += item.quantity;
+        cur.revenue += revenue;
+        scannerMap.set(item.description, cur);
+      } else if (itemType === 'THIRD_PARTY') {
+        const cur = outsourcedMap.get(item.description) ?? {
+          description: item.description,
+          count: 0,
+          revenue: 0,
+        };
+        cur.count += item.quantity;
+        cur.revenue += revenue;
+        outsourcedMap.set(item.description, cur);
       } else {
         const profit = calcItemProfit(item, item.product);
         const key = item.product?.name ?? item.description;
@@ -647,6 +677,14 @@ export class ReportsService {
         }))
         .sort((a, b) => b.count - a.count),
       topServices: Array.from(serviceMap.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 15)
+        .map((s) => ({ ...s, revenue: roundMoney(s.revenue) })),
+      topScanner: Array.from(scannerMap.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 15)
+        .map((s) => ({ ...s, revenue: roundMoney(s.revenue) })),
+      topOutsourced: Array.from(outsourcedMap.values())
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 15)
         .map((s) => ({ ...s, revenue: roundMoney(s.revenue) })),
@@ -970,6 +1008,8 @@ export class ReportsService {
 
     const partsProfit = profit.partsProfit;
     const servicesProfit = profit.servicesProfit;
+    const scannerProfit = profit.scannerProfit;
+    const outsourcedProfit = profit.outsourcedProfit;
     const metrics = this.composeProfitMetrics(profit, paidPayables);
 
     return {
@@ -981,10 +1021,14 @@ export class ReportsService {
       expenses: metrics.expenses,
       partsProfit,
       servicesProfit,
+      scannerProfit,
+      outsourcedProfit,
       grossProfit: metrics.grossProfit,
       totalProfit: metrics.totalProfit,
       partsRevenue: profit.partsRevenue,
       servicesRevenue: profit.servicesRevenue,
+      scannerRevenue: profit.scannerRevenue,
+      outsourcedRevenue: profit.outsourcedRevenue,
     };
   }
 
@@ -1004,13 +1048,19 @@ export class ReportsService {
   ) {
     const partsProfit = profit.partsProfit;
     const servicesProfit = profit.servicesProfit;
-    const grossProfit = roundMoney(partsProfit + servicesProfit);
+    const scannerProfit = profit.scannerProfit;
+    const outsourcedProfit = profit.outsourcedProfit;
+    const grossProfit = roundMoney(
+      partsProfit + servicesProfit + scannerProfit + outsourcedProfit,
+    );
     const expenses = roundMoney(
       paidPayables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
     );
     return {
       partsProfit,
       servicesProfit,
+      scannerProfit,
+      outsourcedProfit,
       grossProfit,
       expenses,
       totalProfit: roundMoney(grossProfit - expenses),
@@ -1028,23 +1078,38 @@ export class ReportsService {
 
     let partsProfit = 0;
     let servicesProfit = 0;
+    let scannerProfit = 0;
+    let outsourcedProfit = 0;
     let partsRevenue = 0;
     let servicesRevenue = 0;
+    let scannerRevenue = 0;
+    let outsourcedRevenue = 0;
     for (const item of items) {
       const revenue = itemRevenue(item);
-      if (item.itemType === 'PART') {
+      const itemType = item.itemType as ServiceOrderItemTypeValue;
+      if (itemType === 'PART') {
         partsRevenue += revenue;
         partsProfit += calcItemProfit(item, item.product);
+      } else if (itemType === 'SCANNER') {
+        scannerRevenue += revenue;
+        scannerProfit += calcItemProfit(item, item.product);
+      } else if (itemType === 'THIRD_PARTY') {
+        outsourcedRevenue += revenue;
+        outsourcedProfit += calcItemProfit(item, item.product);
       } else {
         servicesRevenue += revenue;
-        servicesProfit += revenue;
+        servicesProfit += calcItemProfit(item, item.product);
       }
     }
     return {
       partsProfit: roundMoney(partsProfit),
       servicesProfit: roundMoney(servicesProfit),
+      scannerProfit: roundMoney(scannerProfit),
+      outsourcedProfit: roundMoney(outsourcedProfit),
       partsRevenue: roundMoney(partsRevenue),
       servicesRevenue: roundMoney(servicesRevenue),
+      scannerRevenue: roundMoney(scannerRevenue),
+      outsourcedRevenue: roundMoney(outsourcedRevenue),
     };
   }
 
@@ -1140,6 +1205,8 @@ export class ReportsService {
       resultado: report.financial.result,
       lucro_pecas: report.financial.partsProfit,
       lucro_servicos: report.financial.servicesProfit,
+      lucro_scanner: report.financial.scannerProfit,
+      lucro_terceirizado: report.financial.outsourcedProfit,
       lucro_bruto: report.financial.grossProfit,
       despesas_pagas: report.financial.expenses,
       lucro_total: report.financial.totalProfit,

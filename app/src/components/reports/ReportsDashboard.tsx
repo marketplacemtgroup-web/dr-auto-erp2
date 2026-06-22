@@ -126,7 +126,12 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
   ];
 
   const expenses = report.financial.expenses ?? report.financial.expense ?? 0;
-  const grossProfit = report.financial.grossProfit ?? report.financial.partsProfit + report.financial.servicesProfit;
+  const grossProfit =
+    report.financial.grossProfit ??
+    report.financial.partsProfit +
+      report.financial.servicesProfit +
+      (report.financial.scannerProfit ?? 0) +
+      (report.financial.outsourcedProfit ?? 0);
 
   return (
     <div id="reports-bi-dashboard" className="reports-bi-dashboard">
@@ -201,7 +206,7 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
                   }}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3 text-[13px] content-center">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 text-[13px] content-center">
                 <div className="rounded-xl border border-[#E2E8F0] p-4">
                   <p className="text-[#64748B]">Lucro pecas</p>
                   <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.partsProfit)}</p>
@@ -209,6 +214,14 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
                 <div className="rounded-xl border border-[#E2E8F0] p-4">
                   <p className="text-[#64748B]">Lucro servicos</p>
                   <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.servicesProfit)}</p>
+                </div>
+                <div className="rounded-xl border border-[#E2E8F0] p-4">
+                  <p className="text-[#64748B]">Lucro scanner</p>
+                  <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.scannerProfit ?? 0)}</p>
+                </div>
+                <div className="rounded-xl border border-[#E2E8F0] p-4">
+                  <p className="text-[#64748B]">Lucro terceirizado</p>
+                  <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.outsourcedProfit ?? 0)}</p>
                 </div>
                 <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
                   <p className="text-[#991B1B]">Despesas pagas</p>
@@ -291,7 +304,7 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
       {tab === "financial" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ReportSection title="Resumo de lucro" className="lg:col-span-2" period={period} token={token}>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-[13px]">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 text-[13px]">
               <div className="rounded-xl border border-[#E2E8F0] p-4">
                 <p className="text-[#64748B]">Faturamento</p>
                 <p className="text-lg font-bold text-[#16A34A]">{formatMoney(report.financial.revenue)}</p>
@@ -303,6 +316,14 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
               <div className="rounded-xl border border-[#E2E8F0] p-4">
                 <p className="text-[#64748B]">Lucro servicos</p>
                 <p className="text-lg font-bold">{formatMoney(report.financial.servicesProfit)}</p>
+              </div>
+              <div className="rounded-xl border border-[#E2E8F0] p-4">
+                <p className="text-[#64748B]">Lucro scanner</p>
+                <p className="text-lg font-bold">{formatMoney(report.financial.scannerProfit ?? 0)}</p>
+              </div>
+              <div className="rounded-xl border border-[#E2E8F0] p-4">
+                <p className="text-[#64748B]">Lucro terceirizado</p>
+                <p className="text-lg font-bold">{formatMoney(report.financial.outsourcedProfit ?? 0)}</p>
               </div>
               <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
                 <p className="text-[#991B1B]">Despesas pagas</p>
@@ -331,11 +352,13 @@ export default function ReportsDashboard({ report, period, token, isLoading }: P
               </ResponsiveContainer>
             </div>
           </ReportSection>
-          <ReportSection title="Lucro pecas x servicos" period={period} token={token} exportType="profit-margin" exportFile="margem-por-os.csv">
+          <ReportSection title="Lucro por categoria" period={period} token={token} exportType="profit-margin" exportFile="margem-por-os.csv">
             <ReportInteractivePie
               data={[
                 { name: "Pecas", value: report.financial.partsProfit, key: "parts" },
                 { name: "Servicos", value: report.financial.servicesProfit, key: "services" },
+                { name: "Scanner", value: report.financial.scannerProfit ?? 0, key: "scanner" },
+                { name: "Terceirizado", value: report.financial.outsourcedProfit ?? 0, key: "outsourced" },
               ].filter((r) => r.value > 0)}
             />
             <div className="mt-3 space-y-1 text-[12px] text-[#64748B] text-center">

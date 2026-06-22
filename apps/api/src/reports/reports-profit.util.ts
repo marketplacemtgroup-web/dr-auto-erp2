@@ -1,4 +1,5 @@
-import { Prisma, ServiceOrderItemType, ServiceOrderStatus } from '@prisma/client';
+import { Prisma, ServiceOrderStatus } from '@prisma/client';
+import type { ServiceOrderItemTypeValue } from '../common/item-type.util';
 
 /** OS com serviço concluído — lucro reconhecido (mesma base do financeiro). */
 export const PROFIT_RECOGNIZED_STATUSES: ServiceOrderStatus[] = [
@@ -8,7 +9,7 @@ export const PROFIT_RECOGNIZED_STATUSES: ServiceOrderStatus[] = [
 ];
 
 type ItemLike = {
-  itemType: ServiceOrderItemType;
+  itemType: ServiceOrderItemTypeValue | string;
   unitPrice: Prisma.Decimal | number;
   quantity: number;
   discount: Prisma.Decimal | number;
@@ -33,6 +34,9 @@ export function calcItemProfit(item: ItemLike, product?: ProductCostLike) {
   const revenue = itemRevenue(item);
   if (item.itemType === 'PART') {
     return revenue - itemPartUnitCost(item, product) * item.quantity;
+  }
+  if (item.itemType === 'THIRD_PARTY' && item.unitCost != null) {
+    return revenue - Number(item.unitCost) * item.quantity;
   }
   return revenue;
 }

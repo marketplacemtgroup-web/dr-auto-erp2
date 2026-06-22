@@ -11,6 +11,12 @@ import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/shar
 import { api, type QuoteLineRow, type ServiceOrderItemRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import {
+  itemTypeLabel,
+  isCommissionEligibleItemType,
+  SERVICE_ORDER_ITEM_TYPE_OPTIONS,
+  type ServiceOrderItemType,
+} from "../../lib/itemType";
+import {
   lineApprovalLabel,
   lineApprovalVariant,
   osStatusLabel,
@@ -261,7 +267,7 @@ export default function ServiceOrderDetailPage() {
   const [supplementUnlocked, setSupplementUnlocked] = useState(false);
   const [itemForm, setItemForm] = useState({
     description: "",
-    itemType: "SERVICE" as "SERVICE" | "PART",
+    itemType: "SERVICE" as ServiceOrderItemType,
     quantity: "1",
     unitPrice: "",
     productId: "",
@@ -1167,7 +1173,7 @@ export default function ServiceOrderDetailPage() {
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
                     <td className="px-4 py-3">{item.description}</td>
                     <td className="px-4 py-3 text-[#64748B]">
-                      {item.itemType === "PART" ? "Peça" : "Serviço"}
+                      {itemTypeLabel(item.itemType)}
                     </td>
                     <td className="px-4 py-3 text-right">{item.quantity}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
@@ -1183,10 +1189,12 @@ export default function ServiceOrderDetailPage() {
                     <td className="px-4 py-3 text-[#64748B] text-xs">
                       {item.itemType === "SERVICE"
                         ? item.executor?.name ?? os.executionBy?.name ?? "—"
-                        : item.soldBy?.name ?? "—"}
+                        : item.itemType === "PART"
+                          ? item.soldBy?.name ?? "—"
+                          : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-[#64748B]">
-                      {item.expectedCommission != null
+                      {isCommissionEligibleItemType(item.itemType) && item.expectedCommission != null
                         ? formatMoney(item.expectedCommission)
                         : "—"}
                     </td>
@@ -1307,7 +1315,7 @@ export default function ServiceOrderDetailPage() {
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
                     <td className="px-4 py-3">{item.description}</td>
                     <td className="px-4 py-3 text-[#64748B]">
-                      {item.itemType === "PART" ? "Peça" : "Serviço"}
+                      {itemTypeLabel(item.itemType)}
                     </td>
                     <td className="px-4 py-3 text-right">{item.quantity}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
@@ -1317,10 +1325,12 @@ export default function ServiceOrderDetailPage() {
                     <td className="px-4 py-3 text-xs text-[#64748B]">
                       {item.itemType === "SERVICE"
                         ? item.executor?.name ?? os.executionBy?.name ?? "—"
-                        : [item.soldBy?.name, item.appliedBy?.name].filter(Boolean).join(" / ") || "—"}
+                        : item.itemType === "PART"
+                          ? [item.soldBy?.name, item.appliedBy?.name].filter(Boolean).join(" / ") || "—"
+                          : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-[#64748B]">
-                      {item.expectedCommission != null
+                      {isCommissionEligibleItemType(item.itemType) && item.expectedCommission != null
                         ? formatMoney(item.expectedCommission)
                         : "—"}
                     </td>
@@ -1475,12 +1485,15 @@ export default function ServiceOrderDetailPage() {
               onChange={(e) =>
                 setItemForm((f) => ({
                   ...f,
-                  itemType: e.target.value as "SERVICE" | "PART",
+                  itemType: e.target.value as ServiceOrderItemType,
                 }))
               }
             >
-              <option value="SERVICE">Serviço</option>
-              <option value="PART">Peça</option>
+              {SERVICE_ORDER_ITEM_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </FormField>
         )}

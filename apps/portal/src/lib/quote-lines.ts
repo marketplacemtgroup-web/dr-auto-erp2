@@ -9,7 +9,7 @@ export function sumQuoteLines(lines: QuoteLineRow[]) {
 }
 
 export type QuoteLineGroup = {
-  key: "SERVICE" | "PART" | "THIRD_PARTY";
+  key: "SERVICE" | "PART" | "SCANNER" | "THIRD_PARTY";
   label: string;
   lines: QuoteLineRow[];
   subtotal: number;
@@ -19,16 +19,19 @@ export function groupQuoteLines(lines: QuoteLineRow[]): QuoteLineGroup[] {
   const groups: QuoteLineGroup[] = [
     { key: "SERVICE", label: "Serviços", lines: [], subtotal: 0 },
     { key: "PART", label: "Peças", lines: [], subtotal: 0 },
-    { key: "THIRD_PARTY", label: "Terceiros", lines: [], subtotal: 0 },
+    { key: "SCANNER", label: "Scanner", lines: [], subtotal: 0 },
+    { key: "THIRD_PARTY", label: "Terceirizado", lines: [], subtotal: 0 },
   ];
 
   for (const line of lines) {
     const group =
       line.lineType === "PART"
         ? groups[1]
-        : line.lineType === "THIRD_PARTY"
+        : line.lineType === "SCANNER"
           ? groups[2]
-          : groups[0];
+          : line.lineType === "THIRD_PARTY"
+            ? groups[3]
+            : groups[0];
     group.lines.push(line);
     group.subtotal += quoteLineTotal(line);
   }

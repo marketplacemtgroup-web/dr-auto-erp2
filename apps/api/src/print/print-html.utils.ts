@@ -60,12 +60,16 @@ export function quoteStatusLabel(status: string): string {
 
 export function lineTypeLabel(lineType: string): string {
   if (lineType === 'PART') return 'Peca';
-  if (lineType === 'THIRD_PARTY') return 'Terceiro';
+  if (lineType === 'SCANNER') return 'Scanner';
+  if (lineType === 'THIRD_PARTY') return 'Terceirizado';
   return 'Servico';
 }
 
 export function itemTypeLabel(itemType: string): string {
-  return itemType === 'PART' ? 'Peca' : 'Servico';
+  if (itemType === 'PART') return 'Peca';
+  if (itemType === 'SCANNER') return 'Scanner';
+  if (itemType === 'THIRD_PARTY') return 'Terceirizado';
+  return 'Servico';
 }
 
 type CustomerAddress = {

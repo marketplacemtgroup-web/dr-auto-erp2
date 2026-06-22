@@ -98,10 +98,10 @@ type PrintLine = {
   total: number;
 };
 
+import { itemTypeLabel } from "../../lib/itemType";
+
 function lineTypeLabel(lineType: string) {
-  if (lineType === "PART") return "Peça";
-  if (lineType === "THIRD_PARTY") return "Terceiro";
-  return "Serviço";
+  return itemTypeLabel(lineType);
 }
 
 function buildPrintLines(quote: QuotePrintData): PrintLine[] {
@@ -118,7 +118,7 @@ function buildPrintLines(quote: QuotePrintData): PrintLine[] {
 
   return (quote.serviceOrder.items ?? []).map((item) => ({
     description: item.description,
-    tipo: item.itemType === "PART" ? "Peça" : "Serviço",
+    tipo: itemTypeLabel(item.itemType),
     quantity: item.quantity,
     unitPrice: Number(item.unitPrice),
     total: Number(item.unitPrice) * item.quantity,
