@@ -35,10 +35,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.lib.PortalDateTime
 import com.example.lib.PortalStatus
-import com.example.lib.QuoteLineHelper
+import com.example.lib.QuotePriceHelper
 import com.example.types.*
 import com.example.ui.components.*
-import com.example.ui.theme.ThemeMode
 import com.example.viewmodels.PortalViewModel
 
 // --- INTENT INTEGRATIONS ---
@@ -102,7 +101,7 @@ fun LoginScreen(
         ) {
             PortalBrandLogo(
                 modifier = Modifier
-                    .height(72.dp)
+                    .height(PortalBranding.LogoHeightLogin)
                     .padding(bottom = 8.dp),
                 logoUrl = brandingLogo,
             )
@@ -224,16 +223,17 @@ fun HomeScreen(
     onNavigateToSupport: () -> Unit,
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToAppointments: () -> Unit = {},
-    onToggleTheme: () -> Unit = {},
-    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    onNavigateToPrices: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val dashboard by viewModel.dashboard.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val initialLoadComplete by viewModel.initialLoadComplete.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
+    val quoteRespondingId by viewModel.quoteRespondingId.collectAsState()
     var actingQuoteId by remember { mutableStateOf<String?>(null) }
 
     val unreadCount = notifications.count { !it.read }
@@ -258,7 +258,7 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    PortalBrandLogo(modifier = Modifier.height(32.dp))
+                    PortalBrandLogo(modifier = Modifier.height(PortalBranding.LogoHeightTopBar))
                 },
                 actions = {
                     BadgedBox(
@@ -276,13 +276,6 @@ fun HomeScreen(
                             )
                         }
                     }
-                    IconButton(onClick = onToggleTheme) {
-                        Icon(
-                            imageVector = if (themeMode == ThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = "Alternar tema",
-                            tint = BrandPalette.SlateGray
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
@@ -296,43 +289,26 @@ fun HomeScreen(
             ) {
                 OfflineBanner(isOffline = isOffline)
 
-                if (isLoading && dashboard == null) {
-                    LoadingScreen()
+                if (dashboard == null) {
+                    if (isLoading || isRefreshing || !initialLoadComplete) {
+                        LoadingScreen()
+                    } else {
+                        ErrorState(
+                            message = errorMessage ?: "Não foi possível carregar as informações do seu portal.",
+                            onRetry = { viewModel.loadAllData() }
+                        )
+                    }
                     return@Column
                 }
 
-                val currentData = dashboard
-                if (currentData == null) {
-                    ErrorState(
-                        message = errorMessage ?: "Não foi possível carregar as informações do seu portal.",
-                        onRetry = { viewModel.loadAllData() }
-                    )
-                    return@Column
-                }
+                val currentData = dashboard!!
 
                 val clientName = currentData.customer.name.substringBefore(" ")
                 val quotes = currentData.quotes
                 val activeOs = currentData.serviceOrders.find { PortalStatus.isInProgress(it.status) }
-                val showBudgetShortcut = activeOs != null &&
-                    PortalStatus.isAwaitingApproval(activeOs.status) &&
-                    PortalStatus.hasPendingQuote(quotes, activeOs.id)
-                val pendingQuoteForActiveOs = activeOs?.let { os ->
-                    quotes.find { q -> q.serviceOrder?.id == os.id && PortalStatus.quoteNeedsResponse(q) }
-                }
-
                 val quickItems = listOf(
                     Triple("Minhas OS", Icons.Default.Assignment, onNavigateToHistory),
-                    Triple(
-                        if (showBudgetShortcut) "Aprovar Orçamento" else "Preços",
-                        Icons.Default.Calculate,
-                        {
-                            when {
-                                pendingQuoteForActiveOs != null -> onNavigateToQuoteDetails(pendingQuoteForActiveOs.id)
-                                showBudgetShortcut -> onNavigateToOrderDetails(activeOs!!.id)
-                                else -> onNavigateToHistory()
-                            }
-                        }
-                    ),
+                    Triple("Preços", Icons.Default.Calculate, onNavigateToPrices),
                     Triple("Agendar", Icons.Default.Event, onNavigateToAppointments),
                     Triple("Notificações", Icons.Default.Notifications, onNavigateToNotifications),
                 )
@@ -460,7 +436,7 @@ fun HomeScreen(
                         }
                     }
 
-                    pendingQuotes(quotes).forEach { quote ->
+                    viewModel.visiblePendingQuotes(quotes).forEach { quote ->
                         item {
                             Text(
                                 text = "AÇÃO NECESSÁRIA",
@@ -474,14 +450,18 @@ fun HomeScreen(
                             BudgetCard(
                                 quote = quote,
                                 onClick = { onNavigateToQuoteDetails(quote.id) },
-                                isActing = actingQuoteId == quote.id,
+                                isActing = actingQuoteId == quote.id || quoteRespondingId == quote.id,
                                 onApprove = {
                                     actingQuoteId = quote.id
-                                    viewModel.approveQuote(quote.id, null, null) { actingQuoteId = null }
+                                    viewModel.approveQuote(quote.id, null, null) {
+                                        actingQuoteId = null
+                                    }
                                 },
                                 onReject = {
                                     actingQuoteId = quote.id
-                                    viewModel.rejectQuote(quote.id, null) { actingQuoteId = null }
+                                    viewModel.rejectQuote(quote.id, null) {
+                                        actingQuoteId = null
+                                    }
                                 },
                             )
                         }
@@ -505,8 +485,206 @@ fun HomeScreen(
     }
 }
 
-private fun pendingQuotes(quotes: List<PortalQuoteRow>) =
-    quotes.filter { PortalStatus.quoteNeedsResponse(it) }
+
+// ==========================================
+// PREÇOS — detalhamento aprovado vs pendente
+// ==========================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PricesScreen(
+    viewModel: PortalViewModel,
+    onBack: () -> Unit,
+    onNavigateToQuote: (String) -> Unit,
+) {
+    val dashboard by viewModel.dashboard.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    val quotes = dashboard?.quotes ?: emptyList()
+    val activeOs = dashboard?.serviceOrders?.find { PortalStatus.isInProgress(it.status) }
+    val relevantQuotes = QuotePriceHelper.relevantQuotes(quotes, activeOs?.id)
+    val combined = QuotePriceHelper.breakdownForQuotes(relevantQuotes)
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Preços do orçamento") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = BrandPalette.DeepBlue,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                ),
+            )
+        },
+    ) { innerPadding ->
+        PortalBackground {
+            if (relevantQuotes.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EmptyState(
+                        message = "Nenhum orçamento com itens para exibir.",
+                        icon = Icons.Default.Calculate,
+                    )
+                }
+                return@PortalBackground
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(vertical = 16.dp),
+            ) {
+                item {
+                    AppCard {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Resumo geral", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            if (isRefreshing) {
+                                Text("Atualizando...", fontSize = 12.sp, color = BrandPalette.TextSecondary)
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            PriceSummaryRow("Total aprovado", combined.approvedTotal, Color(0xFF15803D))
+                            PriceSummaryRow("Aguardando sua resposta", combined.pendingTotal, Color(0xFFD97706))
+                            PriceSummaryRow("Total do orçamento", combined.grandTotal, BrandPalette.SlateGray)
+                        }
+                    }
+                }
+
+                item {
+                    PriceCategoryCard(
+                        title = "Serviços",
+                        totals = combined.services,
+                        lines = relevantQuotes.flatMap { q ->
+                            q.lines.filter { it.lineType.uppercase() == "SERVICE" }
+                        },
+                    )
+                }
+
+                item {
+                    PriceCategoryCard(
+                        title = "Peças",
+                        totals = combined.parts,
+                        lines = relevantQuotes.flatMap { q ->
+                            q.lines.filter { it.lineType.uppercase() != "SERVICE" }
+                        },
+                    )
+                }
+
+                items(relevantQuotes) { quote ->
+                    val breakdown = QuotePriceHelper.breakdown(quote.lines)
+                    AppCard(modifier = Modifier.clickable { onNavigateToQuote(quote.id) }) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    "Orçamento #${quote.number ?: "—"}",
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                StatusBadge(
+                                    status = quote.status,
+                                    label = PortalStatus.quoteStatusLabel(quote.status),
+                                )
+                            }
+                            Text(
+                                text = "OS #${quote.serviceOrder?.number ?: "—"}",
+                                fontSize = 12.sp,
+                                color = BrandPalette.TextSecondary,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Aprovado: R$ %.2f • Pendente: R$ %.2f".format(
+                                    breakdown.approvedTotal,
+                                    breakdown.pendingTotal,
+                                ),
+                                fontSize = 13.sp,
+                                color = BrandPalette.SlateGray,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PriceSummaryRow(label: String, amount: Double, color: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, color = BrandPalette.TextSecondary, fontSize = 14.sp)
+        Text(
+            "R$ %.2f".format(amount),
+            fontWeight = FontWeight.Bold,
+            color = color,
+            fontSize = 15.sp,
+        )
+    }
+}
+
+@Composable
+private fun PriceCategoryCard(
+    title: String,
+    totals: QuotePriceHelper.CategoryTotals,
+    lines: List<com.example.types.PortalQuoteLine>,
+) {
+    AppCard {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            PriceSummaryRow("Aprovado", totals.approved, Color(0xFF15803D))
+            PriceSummaryRow("Aguardando aprovação", totals.pending, Color(0xFFD97706))
+            if (totals.rejected > 0) {
+                PriceSummaryRow("Recusado", totals.rejected, BrandPalette.StatusErrorText)
+            }
+            if (lines.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = BrandPalette.BorderGray)
+                Spacer(modifier = Modifier.height(8.dp))
+                lines.forEach { line ->
+                    val amount = QuotePriceHelper.lineTotal(line)
+                    val statusLabel = when (line.approved) {
+                        true -> "Aprovado"
+                        false -> "Recusado"
+                        else -> "Pendente"
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(line.description, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(statusLabel, fontSize = 11.sp, color = BrandPalette.TextSecondary)
+                        }
+                        Text(
+                            "R$ %.2f".format(amount),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 
 // ==========================================
@@ -869,26 +1047,16 @@ fun BudgetScreen(
     val dashboard by viewModel.dashboard.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
+    val quoteRespondingId by viewModel.quoteRespondingId.collectAsState()
+    val isResponding = quoteRespondingId == quoteId
 
     // Dialogs States
     var showApproveDialog by remember { mutableStateOf(false) }
     var showRejectDialog by remember { mutableStateOf(false) }
-
-    // Approve selective lines states
-    val lineApprovals = remember { mutableStateMapOf<String, Boolean>() }
+    var responseSubmitted by remember { mutableStateOf(false) }
 
     LaunchedEffect(quoteId) {
         viewModel.loadQuoteDetails(quoteId)
-    }
-
-    // Auto-populate selective lines approvals map
-    LaunchedEffect(quote) {
-        quote?.lines?.forEach { line ->
-            // Initialize: if already responded, keep it. Otherwise default to approved (true)
-            if (lineApprovals[line.id] == null) {
-                lineApprovals[line.id] = line.approved ?: true
-            }
-        }
     }
 
     Scaffold(
@@ -930,7 +1098,7 @@ fun BudgetScreen(
                 return@Scaffold
             }
 
-            val isPending = currentQuote.status.uppercase() == "PENDING"
+            val isPending = PortalStatus.quoteNeedsResponse(currentQuote) && !responseSubmitted
             var selectedTab by remember { mutableIntStateOf(0) }
             val photos = currentQuote.photos?.map { it.url } ?: emptyList()
             val org = dashboard?.organization
@@ -944,7 +1112,7 @@ fun BudgetScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PortalBrandLogo(
-                            modifier = Modifier.height(40.dp),
+                            modifier = Modifier.height(PortalBranding.LogoHeightDetailHeader),
                             logoUrl = org?.logoUrl,
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -1037,31 +1205,15 @@ fun BudgetScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFFEF3C7))
-                                    .border(1.dp, Color(0xFFFCD34D), RoundedCornerShape(12.dp))
+                                    .background(Color(0xFFECFEFF))
+                                    .border(1.dp, Color(0xFF67E8F9), RoundedCornerShape(12.dp))
                                     .padding(14.dp)
                             ) {
-                                Row {
-                                    Icon(
-                                        imageVector = Icons.Default.Warning,
-                                        contentDescription = null,
-                                        tint = Color(0xFFD97706),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = "Aprovação Parcial Disponível",
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = Color(0xFF92400E)
-                                        )
-                                        Text(
-                                            text = "Selecione apenas os itens que deseja aprovar na lista abaixo antes de confirmar.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFFB45309)
-                                        )
-                                    }
-                                }
+                                Text(
+                                    text = "Revise os itens abaixo e aprove ou recuse o orçamento completo.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF0E7490),
+                                )
                             }
                         }
                     }
@@ -1080,16 +1232,6 @@ fun BudgetScreen(
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (isPending) {
-                                    Checkbox(
-                                        checked = lineApprovals[line.id] ?: true,
-                                        onCheckedChange = { isChecked ->
-                                            lineApprovals[line.id] = isChecked
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                }
-
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = line.description,
@@ -1133,14 +1275,32 @@ fun BudgetScreen(
                 }
                 }
 
-                if (isPending) {
+                if (isPending || isResponding) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(BrandPalette.CardBg)
                             .padding(16.dp)
                     ) {
-                        Divider(color = BrandPalette.BorderGray, thickness = 1.dp)
+                        if (isResponding) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    "Enviando sua resposta...",
+                                    fontWeight = FontWeight.Medium,
+                                    color = BrandPalette.TextSecondary,
+                                )
+                            }
+                        } else {
+                        HorizontalDivider(color = BrandPalette.BorderGray, thickness = 1.dp)
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1178,6 +1338,7 @@ fun BudgetScreen(
                                 Text("Aprovar", fontWeight = FontWeight.Bold)
                             }
                         }
+                        }
                     }
                 }
             }
@@ -1195,10 +1356,8 @@ fun BudgetScreen(
             title = { Text("Confirmar Aprovação") },
             text = {
                 Column {
-                    val approvedCount = lineApprovals.values.count { it }
-                    val totalLines = lineApprovals.size
                     Text(
-                        text = "Você está prestes a aprovar $approvedCount de $totalLines itens deste orçamento. Tem certeza?",
+                        text = "Você está prestes a aprovar este orçamento por completo. Tem certeza?",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1214,17 +1373,13 @@ fun BudgetScreen(
                 TextButton(
                     onClick = {
                         showApproveDialog = false
+                        responseSubmitted = true
                         viewModel.approveQuote(
                             quoteId = quoteId,
-                            lineIdsAndApprovals = QuoteLineHelper.buildSelectionsPayload(
-                                quote?.lines ?: emptyList(),
-                                lineApprovals,
-                            ),
+                            lineIdsAndApprovals = null,
                             comment = customComment.ifEmpty { null }
-                        ) { success ->
-                            if (success) {
-                                onBack()
-                            }
+                        ) {
+                            onBack()
                         }
                     }
                 ) {
@@ -1262,13 +1417,12 @@ fun BudgetScreen(
                 TextButton(
                     onClick = {
                         showRejectDialog = false
+                        responseSubmitted = true
                         viewModel.rejectQuote(
                             quoteId = quoteId,
                             comment = customComment.ifEmpty { null }
-                        ) { success ->
-                            if (success) {
-                                onBack()
-                            }
+                        ) {
+                            onBack()
                         }
                     }
                 ) {
@@ -1335,7 +1489,7 @@ fun SupportScreen(
             // Organization Brand Avatar Bubble
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(PortalBranding.LogoAvatarBubble)
                     .clip(CircleShape)
                     .background(BrandPalette.DeepBlue),
                 contentAlignment = Alignment.Center
@@ -1433,34 +1587,6 @@ fun SupportScreen(
                     }
                 }
 
-                // Email Contact Card
-                if (!org.email.isNullOrEmpty()) {
-                    AppCard {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = null,
-                                tint = BrandPalette.DeepBlue,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = "E-mail de Contato",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = BrandPalette.SlateGray
-                                )
-                                Text(text = org.email, color = Color.Gray)
-                            }
-                        }
-                    }
-                }
-
                 // Address Location Card
                 if (!org.address.isNullOrEmpty()) {
                     AppCard {
@@ -1531,6 +1657,38 @@ fun SupportScreen(
                             style = MaterialTheme.typography.bodyMedium.copy(color = Color.DarkGray),
                             lineHeight = 20.sp
                         )
+                    }
+                }
+
+                // Desenvolvedor do aplicativo (último card)
+                AppCard {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = null,
+                            tint = BrandPalette.DeepBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = "DESENVOLVIDO POR MAXXTECH SISTEMAS",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = BrandPalette.SlateGray
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "DESENVOLVEDOR RESPONSAVEL - RICARDO SOARES 19993131702",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodySmall,
+                                lineHeight = 18.sp
+                            )
+                        }
                     }
                 }
             }

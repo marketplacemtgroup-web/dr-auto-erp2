@@ -283,6 +283,15 @@ export default function ServiceOrderDetailPage() {
     !!id,
   );
 
+  const serviceOrderQueryKey = ["service-order", id ?? "", token] as const;
+
+  const applyServiceOrderUpdate = (updated: NonNullable<typeof os>) => {
+    queryClient.setQueryData(serviceOrderQueryKey, updated);
+    void queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+    void queryClient.invalidateQueries({ queryKey: ["quotes"] });
+    void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
+  };
+
   const { data: products } = useApiQuery(["products-all"], (t) => api.products(t));
   const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
   const { data: activeEmployees } = useApiQuery(["employees-active"], (t) => api.employees(t, { status: "ACTIVE" }));
@@ -421,8 +430,8 @@ export default function ServiceOrderDetailPage() {
         appliedById: itemForm.appliedById || undefined,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+    onSuccess: (updatedOs) => {
+      applyServiceOrderUpdate(updatedOs);
       setItemDrawer(false);
       resetItemForm();
     },
@@ -446,32 +455,34 @@ export default function ServiceOrderDetailPage() {
 
   const approveQuote = useMutation({
     mutationFn: (quoteId: string) => api.approveQuote(token!, quoteId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["service-order", id] });
+      void queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
     },
   });
 
   const rejectQuote = useMutation({
     mutationFn: (quoteId: string) => api.rejectQuote(token!, quoteId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["service-order", id] });
+      void queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
     },
   });
 
   const saveQuoteMeta = useMutation({
     mutationFn: ({ quoteId, payload }: { quoteId: string; payload: Parameters<typeof api.updateQuote>[2] }) =>
       api.updateQuote(token!, quoteId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["service-order", id] });
+      void queryClient.invalidateQueries({ queryKey: ["quotes"] });
     },
   });
 
   const removeItem = useMutation({
     mutationFn: (itemId: string) => api.removeServiceOrderItem(token!, id!, itemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-order", id] }),
+    onSuccess: (updatedOs) => applyServiceOrderUpdate(updatedOs),
   });
 
   const deleteOs = useMutation({

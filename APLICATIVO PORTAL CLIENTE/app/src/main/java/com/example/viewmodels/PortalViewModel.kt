@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.lib.ApiErrorMapper
+import com.example.lib.PortalStatus
 import com.example.lib.QuoteLineHelper
 import com.example.services.ApiClient
 import com.example.services.PortalFcmManager
@@ -16,6 +17,7 @@ import com.example.ui.theme.BrandThemeHolder
 import com.example.ui.theme.DynamicBrandColors
 import com.example.ui.theme.ThemeMode
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,11 +68,20 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
+    private val _initialLoadComplete = MutableStateFlow(false)
+    val initialLoadComplete: StateFlow<Boolean> = _initialLoadComplete
+
     private val _appointments = MutableStateFlow<List<PortalAppointment>>(emptyList())
     val appointments: StateFlow<List<PortalAppointment>> = _appointments
 
     private val _appointmentActionLoading = MutableStateFlow(false)
     val appointmentActionLoading: StateFlow<Boolean> = _appointmentActionLoading
+
+    private val _dismissedQuoteIds = MutableStateFlow<Set<String>>(emptySet())
+    val dismissedQuoteIds: StateFlow<Set<String>> = _dismissedQuoteIds
+
+    private val _quoteRespondingId = MutableStateFlow<String?>(null)
+    val quoteRespondingId: StateFlow<String?> = _quoteRespondingId
 
     private val _publicBrandingLogoUrl = MutableStateFlow<String?>(null)
     val publicBrandingLogoUrl: StateFlow<String?> = _publicBrandingLogoUrl
@@ -88,6 +99,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     init {
         loadPublicBranding()
         if (_isLoggedIn.value) {
+            loadFromCache()
             loadAllData()
             startPolling()
             registerPushTokenIfAllowed()
@@ -243,11 +255,15 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         registerPushTokenIfAllowed()
     }
 
+    fun refreshFcmToken() {
+        registerPushTokenIfAllowed()
+    }
+
     fun startPolling() {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (isActive && _isLoggedIn.value) {
-                delay(30_000)
+                delay(20_000)
                 refreshSilently()
             }
         }
@@ -279,6 +295,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _vehicles.value = vehs
 
                 _isOffline.value = false
+                _errorMessage.value = null
             } catch (e: Exception) {
                 Log.e("PortalViewModel", "Error loading data", e)
                 val hadCache = hasCachedDashboard()
@@ -294,6 +311,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 }
             } finally {
                 if (showLoading) _isLoading.value = false
+                _initialLoadComplete.value = true
             }
         }
     }
@@ -314,6 +332,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 notifyTrayForNewInboxItems(notifs)
 
                 _isOffline.value = false
+                _errorMessage.value = null
             } catch (e: Exception) {
                 Log.d("PortalViewModel", "Silent refresh failed", e)
             } finally {
@@ -433,53 +452,100 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun approveQuote(quoteId: String, lineIdsAndApprovals: List<Pair<String, Boolean>>?, comment: String?, onComplete: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _errorMessage.value = null
-            try {
-                val quoteLines = _currentQuote.value?.takeIf { it.id == quoteId }?.lines
-                    ?: _dashboard.value?.quotes?.find { it.id == quoteId }?.lines
-                    ?: emptyList()
-                val resolvedLines = lineIdsAndApprovals
-                    ?: QuoteLineHelper.buildApprovePayload(quoteLines)
-                val approvedLinesList = resolvedLines?.map { ApprovedLine(it.first, it.second) }
-                val request = when {
-                    approvedLinesList.isNullOrEmpty() -> ApproveQuoteRequest(comment = comment)
-                    else -> ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
-                }
-                val updatedQuote = api.approveQuote(quoteId, request)
-                _currentQuote.value = updatedQuote
-                loadAllData(showLoading = false)
-                onComplete(true)
-            } catch (e: Exception) {
-                Log.e("PortalViewModel", "Error approving quote", e)
-                _errorMessage.value = ApiErrorMapper.map(e, "approveQuote")
-                onComplete(false)
-            } finally {
-                _isLoading.value = false
-            }
-        }
+        respondToQuote(quoteId, approve = true, lineIdsAndApprovals, comment, onComplete)
     }
 
     fun rejectQuote(quoteId: String, comment: String?, onComplete: (Boolean) -> Unit) {
+        respondToQuote(quoteId, approve = false, null, comment, onComplete)
+    }
+
+    private fun respondToQuote(
+        quoteId: String,
+        approve: Boolean,
+        lineIdsAndApprovals: List<Pair<String, Boolean>>?,
+        comment: String?,
+        onComplete: (Boolean) -> Unit,
+    ) {
         viewModelScope.launch {
-            _isLoading.value = true
             _errorMessage.value = null
-            try {
-                val request = RejectQuoteRequest(comment = comment)
-                val updatedQuote = api.rejectQuote(quoteId, request)
-                _currentQuote.value = updatedQuote
-                loadAllData(showLoading = false)
-                onComplete(true)
-            } catch (e: Exception) {
-                Log.e("PortalViewModel", "Error rejecting quote", e)
-                _errorMessage.value = "Não foi possível rejeitar o orçamento. Tente novamente."
-                onComplete(false)
-            } finally {
-                _isLoading.value = false
+            _dismissedQuoteIds.value = _dismissedQuoteIds.value + quoteId
+            markQuoteRespondedLocally(quoteId, approve)
+            _quoteRespondingId.value = quoteId
+
+            val apiJob = async {
+                try {
+                    if (approve) {
+                        val quoteLines = _currentQuote.value?.takeIf { it.id == quoteId }?.lines
+                            ?: _dashboard.value?.quotes?.find { it.id == quoteId }?.lines
+                            ?: emptyList()
+                        val resolvedLines = lineIdsAndApprovals
+                            ?: QuoteLineHelper.buildApprovePayload(quoteLines)
+                        val approvedLinesList = resolvedLines?.map { ApprovedLine(it.first, it.second) }
+                        val request = when {
+                            approvedLinesList.isNullOrEmpty() -> ApproveQuoteRequest(comment = comment)
+                            else -> ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
+                        }
+                        val updatedQuote = api.approveQuote(quoteId, request)
+                        _currentQuote.value = updatedQuote
+                    } else {
+                        val updatedQuote = api.rejectQuote(quoteId, RejectQuoteRequest(comment = comment))
+                        _currentQuote.value = updatedQuote
+                    }
+                    true
+                } catch (e: Exception) {
+                    Log.e("PortalViewModel", "Error responding to quote", e)
+                    _errorMessage.value = if (approve) {
+                        ApiErrorMapper.map(e, "approveQuote")
+                    } else {
+                        "Não foi possível recusar o orçamento. Tente novamente."
+                    }
+                    false
+                }
             }
+
+            delay(3_000)
+            loadAllData(showLoading = false)
+            val success = apiJob.await()
+            _quoteRespondingId.value = null
+
+            if (!success) {
+                _dismissedQuoteIds.value = _dismissedQuoteIds.value - quoteId
+            }
+
+            val stillPending = _dashboard.value?.quotes?.any {
+                it.id == quoteId && PortalStatus.quoteNeedsResponse(it)
+            } == true
+            if (!stillPending) {
+                _dismissedQuoteIds.value = _dismissedQuoteIds.value - quoteId
+            }
+
+            onComplete(success)
         }
     }
+
+    private fun markQuoteRespondedLocally(quoteId: String, approve: Boolean) {
+        val dash = _dashboard.value ?: return
+        val newStatus = if (approve) "APPROVED" else "REJECTED"
+        _dashboard.value = dash.copy(
+            quotes = dash.quotes.map { quote ->
+                if (quote.id != quoteId) quote
+                else quote.copy(
+                    status = newStatus,
+                    canRespond = false,
+                    pendingLineCount = 0,
+                    lines = quote.lines.map { line ->
+                        when (line.approved) {
+                            null -> line.copy(approved = approve)
+                            else -> line
+                        }
+                    },
+                )
+            },
+        )
+    }
+
+    fun visiblePendingQuotes(quotes: List<PortalQuoteRow>): List<PortalQuoteRow> =
+        quotes.filter { PortalStatus.quoteNeedsResponse(it) && it.id !in _dismissedQuoteIds.value }
 
     fun approvePublicQuote(token: String, lineIdsAndApprovals: List<Pair<String, Boolean>>?, comment: String?, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
@@ -640,6 +706,10 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _currentQuote.value = null
         _currentServiceOrder.value = null
         _publicQuote.value = null
+        _initialLoadComplete.value = false
+        _errorMessage.value = null
+        _dismissedQuoteIds.value = emptySet()
+        _quoteRespondingId.value = null
         onComplete()
     }
 

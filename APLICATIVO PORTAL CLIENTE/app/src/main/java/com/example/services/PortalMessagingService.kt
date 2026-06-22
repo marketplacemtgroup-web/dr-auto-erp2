@@ -28,8 +28,7 @@ class PortalMessagingService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        super.onMessageReceived(message)
-        Log.d(TAG, "Push received: ${message.notification?.title ?: message.data["title"]}")
+        Log.d(TAG, "Push received (app pode estar fechado): ${message.data["title"] ?: message.notification?.title}")
         PortalNotificationHelper.showFromRemoteMessage(this, message)
     }
 

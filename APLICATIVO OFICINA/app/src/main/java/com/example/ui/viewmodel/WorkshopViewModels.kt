@@ -342,6 +342,17 @@ class ChecklistViewModel : ViewModel() {
         }
     }
 
+    fun saveTextItem(orderId: String, itemId: String, text: String) {
+        viewModelScope.launch {
+            try {
+                val success = repository.updateChecklistTextItem(orderId, itemId, text)
+                if (success) loadChecklist(orderId)
+            } catch (e: Exception) {
+                _actionError.value = e.message
+            }
+        }
+    }
+
     fun uploadPhotoAndUpdate(
         context: Context,
         orderId: String,

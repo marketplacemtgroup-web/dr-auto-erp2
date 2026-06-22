@@ -133,6 +133,10 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 
 4. No ERP, altere o status de uma OS desse cliente.
 
+5. **Teste com app fechado:** force o fechamento do app (remova dos recentes), envie outra notificação pelo ERP e aguarde na bandeja do celular (não precisa abrir o app).
+
+> **Importante:** a API envia push FCM em modo *data-only* com prioridade alta, para o `PortalMessagingService` exibir na bandeja mesmo com o app fechado. Após atualizar a API, faça **redeploy na Vercel**. Se só funcionava com o app aberto, provavelmente era o *polling* interno (a cada ~20s), não o FCM de verdade.
+
 5. Deve chegar notificação na **bandeja** do celular (não só na aba Notificações do app).
 
 ---

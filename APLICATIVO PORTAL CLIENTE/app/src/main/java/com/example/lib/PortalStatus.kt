@@ -42,16 +42,17 @@ object PortalStatus {
         return labels[status.uppercase()] ?: status
     }
 
+    private fun lineNeedsResponse(line: PortalQuoteLine): Boolean =
+        line.approved == null
+
     fun quoteNeedsResponse(quote: PortalQuoteRow): Boolean {
         if (!quote.canRespond) return false
         if (quote.status.uppercase() != "PENDING") return false
+        if (quote.pendingLineCount <= 0) return false
         val lines = quote.lines
         if (lines.isEmpty()) return true
         return lines.any { lineNeedsResponse(it) }
     }
-
-    private fun lineNeedsResponse(line: PortalQuoteLine): Boolean =
-        line.approved == null || line.approved == false
 
     fun hasPendingQuote(quotes: List<PortalQuoteRow>, serviceOrderId: String): Boolean =
         quotes.any { q ->

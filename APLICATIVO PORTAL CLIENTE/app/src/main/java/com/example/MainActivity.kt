@@ -13,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +51,7 @@ sealed class Screen {
     object ProfileSupport : Screen()
     object ProfilePrivacy : Screen()
     object Appointments : Screen()
+    object Prices : Screen()
 }
 
 fun parseDeepLink(uri: Uri?): Screen? {
@@ -90,18 +90,12 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val brandColors by viewModel.brandColors.collectAsState()
-            val themeMode by viewModel.themeMode.collectAsState()
-            val isSystemDark = isSystemInDarkTheme()
             val notificationNav by remember { derivedStateOf { pendingNotificationNav } }
 
-            LaunchedEffect(themeMode, isSystemDark) {
-                viewModel.syncThemeWithSystem(isSystemDark)
-            }
+            val darkTheme = false
 
-            val darkTheme = when (themeMode) {
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-                ThemeMode.SYSTEM -> isSystemDark
+            LaunchedEffect(Unit) {
+                viewModel.setThemeMode(ThemeMode.LIGHT)
             }
 
             CompositionLocalProvider(LocalDynamicBrand provides brandColors) {
@@ -157,7 +151,8 @@ fun PortalAppShell(
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
-    val themeMode by viewModel.themeMode.collectAsState()
+    val initialLoadComplete by viewModel.initialLoadComplete.collectAsState()
+    val dashboard by viewModel.dashboard.collectAsState()
 
     var pushPermissionGranted by remember {
         mutableStateOf(PortalNotificationPermission.isGranted(activity))
@@ -182,6 +177,7 @@ fun PortalAppShell(
     val backStack = remember { mutableStateListOf<Screen>() }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var splashDone by remember { mutableStateOf(false) }
+    var loadTimeout by remember { mutableStateOf(false) }
     var pendingDeepLink by remember { mutableStateOf(initialDeepLink) }
 
     LaunchedEffect(activity.intent?.data) {
@@ -189,12 +185,19 @@ fun PortalAppShell(
     }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(2600)
+        kotlinx.coroutines.delay(1200)
         splashDone = true
     }
 
-    LaunchedEffect(splashDone, pendingDeepLink, isLoggedIn) {
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn) return@LaunchedEffect
+        kotlinx.coroutines.delay(10000)
+        loadTimeout = true
+    }
+
+    LaunchedEffect(splashDone, pendingDeepLink, isLoggedIn, initialLoadComplete, dashboard, loadTimeout) {
         if (!splashDone) return@LaunchedEffect
+        if (isLoggedIn && !initialLoadComplete && dashboard == null && !loadTimeout) return@LaunchedEffect
         when (val link = pendingDeepLink) {
             is Screen.AccessLink -> {
                 pendingDeepLink = null
@@ -448,8 +451,13 @@ fun PortalAppShell(
                         onNavigateToSupport = { navigateTo(Screen.ProfileSupport) },
                         onNavigateToNotifications = { navigateTo(Screen.Notifications) },
                         onNavigateToAppointments = { navigateTo(Screen.Appointments) },
-                        onToggleTheme = { viewModel.toggleThemeMode() },
-                        themeMode = themeMode,
+                        onNavigateToPrices = { navigateTo(Screen.Prices) },
+                    )
+
+                    is Screen.Prices -> PricesScreen(
+                        viewModel = viewModel,
+                        onBack = goBack,
+                        onNavigateToQuote = { navigateTo(Screen.QuoteDetails(it)) },
                     )
 
                     is Screen.Appointments -> AppointmentScreen(
@@ -490,8 +498,6 @@ fun PortalAppShell(
                             backStack.clear()
                             currentScreen = Screen.Login
                         },
-                        onToggleTheme = { viewModel.toggleThemeMode() },
-                        themeMode = themeMode,
                     )
 
                     is Screen.ProfileData -> ProfileDataScreen(viewModel = viewModel, onBack = goBack)

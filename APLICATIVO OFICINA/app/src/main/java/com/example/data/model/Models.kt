@@ -87,6 +87,7 @@ data class ChecklistPhoto(
     val label: String,
     val category: String = "",
     val isRequired: Boolean = true,
+    val isTextOnly: Boolean = false,
     var photoUri: String? = null,
     var attachmentId: String? = null,
     var status: PhotoChecklistStatus = PhotoChecklistStatus.PENDING,

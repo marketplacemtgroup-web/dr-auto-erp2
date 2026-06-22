@@ -35,6 +35,7 @@ import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ChecklistViewModel
 import com.example.util.AppPermissions
+import com.example.util.ChecklistTemplate
 import com.example.util.PhotoCapture
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -120,7 +121,7 @@ fun PhotoChecklistScreen(
         }
     }
 
-    val completedCount = photosList.count { it.status != PhotoChecklistStatus.PENDING }
+    val completedCount = photosList.count { ChecklistTemplate.isComplete(it) }
     val totalCount = photosList.size
     val progressPercent = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0.0f
 
@@ -208,20 +209,29 @@ fun PhotoChecklistScreen(
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         items(photosList) { item ->
-                            ChecklistItemCard(
-                                item = item,
-                                onCameraClick = {
-                                    activeCameraItem = item
-                                    observationText = item.observation
-                                    capturedUri = item.photoUri?.let { Uri.parse(it) }
-                                },
-                                onStatusChange = { newStatus ->
-                                    viewModel.updatePhotoItem(orderId, item.id, newStatus, item.observation, item.photoUri)
-                                },
-                                onObservationChange = { observation ->
-                                    viewModel.updatePhotoItem(orderId, item.id, item.status, observation, item.photoUri)
-                                }
-                            )
+                            if (item.isTextOnly) {
+                                ChecklistTextItemCard(
+                                    item = item,
+                                    onSave = { text ->
+                                        viewModel.saveTextItem(orderId, item.id, text)
+                                    },
+                                )
+                            } else {
+                                ChecklistItemCard(
+                                    item = item,
+                                    onCameraClick = {
+                                        activeCameraItem = item
+                                        observationText = item.observation
+                                        capturedUri = item.photoUri?.let { Uri.parse(it) }
+                                    },
+                                    onStatusChange = { newStatus ->
+                                        viewModel.updatePhotoItem(orderId, item.id, newStatus, item.observation, item.photoUri)
+                                    },
+                                    onObservationChange = { observation ->
+                                        viewModel.updatePhotoItem(orderId, item.id, item.status, observation, item.photoUri)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -399,6 +409,74 @@ fun PhotoChecklistScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ChecklistTextItemCard(
+    item: ChecklistPhoto,
+    onSave: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var draft by remember(item.id, item.observation) { mutableStateOf(item.observation) }
+    val isComplete = draft.isNotBlank()
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = BorderStroke(1.dp, Graphite),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(if (isComplete) SuccessGreen else CrimsonRed, CircleShape),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite),
+                    )
+                }
+                Text(
+                    text = "TEXTO",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = PremiumGold,
+                        fontSize = 8.sp,
+                    ),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = ChecklistTemplate.textPlaceholder(item.label),
+                style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            InputField(
+                value = draft,
+                onValueChange = { draft = it },
+                label = item.label,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AppButton(
+                text = "Salvar",
+                onClick = { onSave(draft) },
+                enabled = draft.isNotBlank(),
+                isSecondary = true,
+            )
         }
     }
 }

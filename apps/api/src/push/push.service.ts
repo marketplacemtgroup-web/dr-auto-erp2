@@ -96,7 +96,13 @@ export class PushService {
       }
     }
 
-    await this.sendFcmToVehicle(vehicleId, payload, inbox?.serviceOrderId, inbox?.quoteId);
+    await this.sendFcmToVehicle(
+      vehicleId,
+      payload,
+      inbox?.serviceOrderId,
+      inbox?.quoteId,
+      inbox?.type,
+    );
 
     const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY');
     const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY');
@@ -153,6 +159,7 @@ export class PushService {
     payload: { title: string; body: string; url?: string },
     serviceOrderId?: string,
     quoteId?: string,
+    type?: string,
   ) {
     const serviceAccountJson = this.resolveFirebaseServiceAccountJson();
     if (!serviceAccountJson) {
@@ -175,27 +182,21 @@ export class PushService {
           credential: admin.credential.cert(JSON.parse(serviceAccountJson) as ServiceAccount),
         });
       }
-      const data: Record<string, string> = {};
-      if (payload.url) data.url = payload.url;
-      if (serviceOrderId) data.serviceOrderId = serviceOrderId;
-      if (quoteId) data.quoteId = quoteId;
-      if (payload.title) data.title = payload.title;
-      if (payload.body) data.body = payload.body;
-
       for (const row of tokens) {
         await admin.messaging().send({
           token: row.token,
-          notification: { title: payload.title, body: payload.body },
-          data: Object.keys(data).length ? data : undefined,
+          // Data-only + alta prioridade: onMessageReceived roda com app fechado e exibe na bandeja.
+          data: {
+            title: payload.title,
+            body: payload.body,
+            ...(payload.url ? { url: payload.url } : {}),
+            ...(serviceOrderId ? { serviceOrderId } : {}),
+            ...(quoteId ? { quoteId } : {}),
+            ...(type ? { type } : {}),
+          },
           android: {
             priority: 'high',
-            notification: {
-              channelId: 'portal_alerts',
-              sound: 'default',
-              priority: 'high',
-              defaultSound: true,
-              defaultVibrateTimings: true,
-            },
+            ttl: 86_400,
           },
         });
       }

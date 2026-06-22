@@ -8,6 +8,7 @@ import com.example.data.model.*
 import com.example.data.service.ApiException
 import com.example.data.service.HttpClient
 import com.example.data.service.SessionManager
+import com.example.util.ChecklistTemplate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -193,6 +194,31 @@ object WorkshopRepository {
         true
     }
 
+    suspend fun updateChecklistTextItem(
+        orderId: String,
+        itemId: String,
+        text: String,
+    ): Boolean = apiCall {
+        val current = api.getServiceOrder(orderId)
+        val items = current.checklistItems.orEmpty().map { item ->
+            if (item.id == itemId) {
+                ChecklistItemUpdateDto(
+                    id = item.id,
+                    result = null,
+                    notes = text.trim().ifBlank { null },
+                )
+            } else {
+                ChecklistItemUpdateDto(
+                    id = item.id,
+                    result = item.result,
+                    notes = item.notes,
+                )
+            }
+        }
+        api.updateChecklist(orderId, UpdateChecklistRequest(items))
+        true
+    }
+
     suspend fun uploadChecklistPhoto(
         context: Context,
         orderId: String,
@@ -317,7 +343,13 @@ object WorkshopRepository {
 
     suspend fun completeChecklist(orderId: String): Boolean = apiCall {
         val current = api.getServiceOrder(orderId)
-        val pending = current.checklistItems.orEmpty().any { it.result == null }
+        val pending = current.checklistItems.orEmpty().any { item ->
+            if (ChecklistTemplate.isTextOnly(item.label)) {
+                item.notes.isNullOrBlank()
+            } else {
+                item.result == null
+            }
+        }
         if (pending) {
             throw IllegalStateException("Conclua todos os itens do checklist antes de finalizar")
         }

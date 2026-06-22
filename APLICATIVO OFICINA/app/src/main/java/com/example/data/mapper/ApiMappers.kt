@@ -2,6 +2,7 @@ package com.example.data.mapper
 
 import com.example.data.api.*
 import com.example.data.model.*
+import com.example.util.ChecklistTemplate
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -99,6 +100,8 @@ object ApiMappers {
                 status = PhotoChecklistStatus.fromApi(item.result),
                 observation = item.notes.orEmpty(),
                 isUploaded = photo != null,
+                isRequired = !ChecklistTemplate.isTextOnly(item.label),
+                isTextOnly = ChecklistTemplate.isTextOnly(item.label),
             )
         }
     }

@@ -24,10 +24,8 @@ import androidx.compose.ui.unit.sp
 import com.example.Screen
 import com.example.lib.PortalDateTime
 import com.example.lib.PortalStatus
-import com.example.lib.QuoteLineHelper
 import com.example.types.*
 import com.example.ui.components.*
-import com.example.ui.theme.ThemeMode
 import com.example.viewmodels.PortalViewModel
 import kotlinx.coroutines.delay
 
@@ -40,7 +38,6 @@ private val splashMessages = listOf(
 @Composable
 fun SplashScreen(viewModel: PortalViewModel) {
     var msgIndex by remember { mutableIntStateOf(0) }
-    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -49,17 +46,13 @@ fun SplashScreen(viewModel: PortalViewModel) {
         }
     }
 
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) viewModel.loadAllData(showLoading = false)
-    }
-
     PortalBackground {
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            PortalBrandLogo(modifier = Modifier.height(80.dp))
+            PortalBrandLogo(modifier = Modifier.height(PortalBranding.LogoHeightSplash))
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Portal do Cliente",
@@ -236,8 +229,6 @@ fun ProfileHubScreen(
     viewModel: PortalViewModel,
     onNavigate: (Screen) -> Unit,
     onLogout: () -> Unit,
-    onToggleTheme: () -> Unit,
-    themeMode: ThemeMode,
 ) {
     val dashboard by viewModel.dashboard.collectAsState()
     val sessionName = viewModel.getCustomerName()
@@ -257,15 +248,6 @@ fun ProfileHubScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Perfil / Suporte") },
-                actions = {
-                    IconButton(onClick = onToggleTheme) {
-                        Icon(
-                            imageVector = if (themeMode == ThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = "Alternar tema",
-                            tint = Color.White
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandPalette.DeepBlue,
                     titleContentColor = Color.White,
@@ -502,6 +484,31 @@ fun ProfileHistoryScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfilePrivacyScreen(onBack: () -> Unit) {
+    val sections = listOf(
+        "POLÍTICA DE PRIVACIDADE — PORTAL DO CLIENTE" to
+            "Esta Política de Privacidade descreve como a oficina mecânica responsável pelo atendimento do seu veículo (\"Oficina\") trata os dados pessoais no aplicativo Portal do Cliente, em conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018 — LGPD).",
+        "1. Controlador dos dados" to
+            "O controlador dos dados é a Oficina vinculada ao seu cadastro de cliente, identificada no momento do login e nas comunicações oficiais do portal. Para exercer seus direitos ou esclarecer dúvidas sobre privacidade, utilize os canais de contato informados no aplicativo (telefone, WhatsApp ou e-mail da Oficina).",
+        "2. Dados que coletamos" to
+            "Para autenticação e prestação do serviço, tratamos: CPF do titular do veículo; placa do veículo; nome e dados de contato associados ao cadastro na Oficina; histórico de ordens de serviço, orçamentos, agendamentos e comunicações; fotos, vídeos e documentos liberados pela Oficina para visualização do cliente; token de dispositivo para envio de notificações push (quando autorizado); e registros técnicos de acesso (data, hora e identificadores de sessão), necessários à segurança do sistema.",
+        "3. Finalidades do tratamento" to
+            "Utilizamos seus dados para: permitir login seguro no portal; exibir o status de serviços, orçamentos e histórico do veículo; enviar alertas sobre atualizações da ordem de serviço (incluindo notificações no dispositivo, quando permitidas); viabilizar aprovação ou recusa de orçamentos; registrar agendamentos solicitados pelo cliente; e cumprir obrigações legais e contratuais relacionadas à prestação de serviços automotivos.",
+        "4. Base legal" to
+            "O tratamento fundamenta-se, conforme o caso, na execução de contrato ou de procedimentos preliminares (art. 7º, V, LGPD); no legítimo interesse para segurança, prevenção a fraudes e melhoria do atendimento (art. 7º, IX); no cumprimento de obrigação legal ou regulatória (art. 7º, II); e no consentimento do titular, quando aplicável — por exemplo, para notificações push no celular.",
+        "5. Compartilhamento" to
+            "Seus dados não são vendidos a terceiros. O compartilhamento limita-se a: prestadores de tecnologia que hospedam e operam a plataforma (infraestrutura em nuvem, banco de dados e serviços de notificação), sob contratos de confidencialidade e proteção de dados; e autoridades públicas, quando houver determinação legal.",
+        "6. Armazenamento e segurança" to
+            "Adotamos medidas técnicas e administrativas para proteger os dados contra acesso não autorizado, perda ou alteração indevida, incluindo comunicação criptografada (HTTPS), controle de acesso por autenticação e segregação de ambientes. Os dados são mantidos pelo tempo necessário à prestação do serviço, cumprimento de obrigações legais e resolução de eventuais disputas.",
+        "7. Seus direitos" to
+            "Nos termos da LGPD, você pode solicitar: confirmação da existência de tratamento; acesso aos dados; correção de dados incompletos ou desatualizados; anonimização, bloqueio ou eliminação de dados desnecessários; portabilidade; informação sobre compartilhamentos; revogação do consentimento; e oposição a tratamentos realizados com base em legítimo interesse, quando cabível. As solicitações devem ser feitas diretamente à Oficina.",
+        "8. Notificações no dispositivo" to
+            "O envio de alertas na bandeja do celular depende da permissão concedida pelo usuário nas configurações do aparelho. Você pode desativar as notificações a qualquer momento nas configurações do sistema operacional, sem prejuízo do acesso ao conteúdo pelo aplicativo.",
+        "9. Atualizações" to
+            "Esta política pode ser atualizada para refletir mudanças legais ou funcionais do portal. A versão vigente estará sempre disponível nesta tela do aplicativo.",
+        "10. Contato" to
+            "Para questões sobre privacidade e proteção de dados, entre em contato com a Oficina através dos canais oficiais exibidos na área de suporte do aplicativo.",
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -527,13 +534,26 @@ fun ProfilePrivacyScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                val paragraphs = listOf(
-                    "O portal do cliente utiliza seus dados (CPF e placa do veículo) apenas para autenticação e exibição das ordens de serviço vinculadas ao seu cadastro na oficina.",
-                    "Não compartilhamos suas informações com terceiros, exceto quando necessário para a prestação do serviço automotivo contratado com a oficina.",
-                    "As fotos, vídeos e documentos exibidos no portal são liberados pela oficina e ficam disponíveis somente para o titular do veículo autenticado.",
-                    "Para solicitar exclusão de dados ou esclarecimentos, entre em contato diretamente com a oficina vinculada ao seu cadastro.",
+                sections.forEach { (title, body) ->
+                    Text(
+                        text = title,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandPalette.DeepBlue,
+                        fontSize = 15.sp,
+                    )
+                    Text(
+                        text = body,
+                        color = Color.DarkGray,
+                        lineHeight = 22.sp,
+                        fontSize = 14.sp,
+                    )
+                }
+                Text(
+                    text = "Última atualização: junho de 2026.",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
-                paragraphs.forEach { Text(text = it, color = Color.DarkGray, lineHeight = 22.sp, fontSize = 14.sp) }
             }
         }
     }
@@ -549,18 +569,11 @@ fun PublicQuoteScreen(
     val publicQuote by viewModel.publicQuote.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val lineApprovals = remember { mutableStateMapOf<String, Boolean>() }
     var showApproveDialog by remember { mutableStateOf(false) }
     var showRejectDialog by remember { mutableStateOf(false) }
     var customComment by remember { mutableStateOf("") }
 
     LaunchedEffect(token) { viewModel.loadPublicQuote(token) }
-
-    LaunchedEffect(publicQuote) {
-        publicQuote?.quote?.lines?.forEach { line ->
-            if (lineApprovals[line.id] == null) lineApprovals[line.id] = line.approved ?: true
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -611,18 +624,9 @@ fun PublicQuoteScreen(
                         }
                         items(quote.lines) { line ->
                             AppCard {
-                                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    if (isPending) {
-                                        Checkbox(
-                                            checked = lineApprovals[line.id] ?: true,
-                                            onCheckedChange = { lineApprovals[line.id] = it }
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = line.description, fontWeight = FontWeight.Bold, color = BrandPalette.SlateGray)
-                                        Text(text = "R$ %.2f".format(line.quantity * line.unitPrice), color = Color.Gray, fontSize = 13.sp)
-                                    }
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(text = line.description, fontWeight = FontWeight.Bold, color = BrandPalette.SlateGray)
+                                    Text(text = "R$ %.2f".format(line.quantity * line.unitPrice), color = Color.Gray, fontSize = 13.sp)
                                 }
                             }
                         }
@@ -660,13 +664,7 @@ fun PublicQuoteScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showApproveDialog = false
-                    viewModel.approvePublicQuote(
-                        token,
-                        publicQuote?.quote?.lines?.let { lines ->
-                            QuoteLineHelper.buildSelectionsPayload(lines, lineApprovals)
-                        },
-                        customComment.ifEmpty { null },
-                    ) { }
+                    viewModel.approvePublicQuote(token, null, customComment.ifEmpty { null }) { }
                 }) { Text("Autorizar", fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { showApproveDialog = false }) { Text("Cancelar") } }
