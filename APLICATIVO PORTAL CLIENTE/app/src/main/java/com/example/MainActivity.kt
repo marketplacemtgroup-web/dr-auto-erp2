@@ -1,12 +1,15 @@
 package com.example
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -23,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.services.PortalNotificationHelper
+import com.example.services.PortalNotificationPermission
 import com.example.ui.components.BrandPalette
 import com.example.ui.screens.*
 import com.example.ui.theme.LocalDynamicBrand
@@ -46,6 +51,7 @@ sealed class Screen {
     object ProfileHistory : Screen()
     object ProfileSupport : Screen()
     object ProfilePrivacy : Screen()
+    object Appointments : Screen()
 }
 
 fun parseDeepLink(uri: Uri?): Screen? {
@@ -75,15 +81,18 @@ fun parseDeepLink(uri: Uri?): Screen? {
 
 class MainActivity : ComponentActivity() {
     private val viewModel: PortalViewModel by viewModels()
+    private var pendingNotificationNav by mutableStateOf<NotificationNav?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingNotificationNav = parseNotificationNav(intent)
 
         setContent {
             val brandColors by viewModel.brandColors.collectAsState()
             val themeMode by viewModel.themeMode.collectAsState()
             val isSystemDark = isSystemInDarkTheme()
+            val notificationNav by remember { derivedStateOf { pendingNotificationNav } }
 
             LaunchedEffect(themeMode, isSystemDark) {
                 viewModel.syncThemeWithSystem(isSystemDark)
@@ -101,6 +110,8 @@ class MainActivity : ComponentActivity() {
                         viewModel = viewModel,
                         activity = this,
                         initialDeepLink = parseDeepLink(intent?.data),
+                        pendingNotificationNav = notificationNav,
+                        onNotificationNavConsumed = { pendingNotificationNav = null },
                     )
                 }
             }
@@ -110,7 +121,29 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        pendingNotificationNav = parseNotificationNav(intent)
     }
+}
+
+data class NotificationNav(
+    val target: String,
+    val orderId: String? = null,
+    val quoteId: String? = null,
+)
+
+fun parseNotificationNav(intent: Intent?): NotificationNav? {
+    val target = intent?.getStringExtra(PortalNotificationHelper.EXTRA_NAV_TARGET) ?: return null
+    return NotificationNav(
+        target = target,
+        orderId = intent.getStringExtra(PortalNotificationHelper.EXTRA_ORDER_ID),
+        quoteId = intent.getStringExtra(PortalNotificationHelper.EXTRA_QUOTE_ID),
+    )
+}
+
+fun clearNotificationNavExtras(intent: Intent?) {
+    intent?.removeExtra(PortalNotificationHelper.EXTRA_NAV_TARGET)
+    intent?.removeExtra(PortalNotificationHelper.EXTRA_ORDER_ID)
+    intent?.removeExtra(PortalNotificationHelper.EXTRA_QUOTE_ID)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,10 +152,32 @@ fun PortalAppShell(
     viewModel: PortalViewModel,
     activity: ComponentActivity,
     initialDeepLink: Screen? = null,
+    pendingNotificationNav: NotificationNav? = null,
+    onNotificationNavConsumed: () -> Unit = {},
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+
+    var pushPermissionGranted by remember {
+        mutableStateOf(PortalNotificationPermission.isGranted(activity))
+    }
+
+    val pushPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        pushPermissionGranted = granted
+        if (granted) viewModel.registerPushToken()
+    }
+
+    val requestPushPermission: () -> Unit = {
+        if (PortalNotificationPermission.needsRuntimeRequest()) {
+            pushPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            pushPermissionGranted = true
+            viewModel.registerPushToken()
+        }
+    }
 
     val backStack = remember { mutableStateListOf<Screen>() }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
@@ -176,6 +231,45 @@ fun PortalAppShell(
             backStack.clear()
             currentScreen = Screen.Login
         }
+    }
+
+    LaunchedEffect(isLoggedIn, splashDone, pushPermissionGranted) {
+        if (!splashDone || !isLoggedIn) return@LaunchedEffect
+        pushPermissionGranted = PortalNotificationPermission.isGranted(activity)
+        if (pushPermissionGranted) {
+            viewModel.registerPushToken()
+        } else if (PortalNotificationPermission.needsRuntimeRequest()) {
+            pushPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(pendingNotificationNav, isLoggedIn, splashDone) {
+        val nav = pendingNotificationNav ?: return@LaunchedEffect
+        if (!splashDone || !isLoggedIn) return@LaunchedEffect
+        when (nav.target) {
+            PortalNotificationHelper.NAV_ORDER -> {
+                nav.orderId?.let { orderId ->
+                    backStack.clear()
+                    currentScreen = Screen.OrderDetails(orderId)
+                }
+            }
+            PortalNotificationHelper.NAV_QUOTE -> {
+                nav.quoteId?.let { quoteId ->
+                    backStack.clear()
+                    currentScreen = Screen.QuoteDetails(quoteId)
+                }
+            }
+            PortalNotificationHelper.NAV_APPOINTMENTS -> {
+                backStack.clear()
+                currentScreen = Screen.Appointments
+            }
+            else -> {
+                backStack.clear()
+                currentScreen = Screen.Notifications
+            }
+        }
+        clearNotificationNavExtras(activity.intent)
+        onNotificationNavConsumed()
     }
 
     val navigateTo: (Screen) -> Unit = { screen ->
@@ -352,8 +446,15 @@ fun PortalAppShell(
                         onNavigateToQuoteDetails = { navigateTo(Screen.QuoteDetails(it)) },
                         onNavigateToHistory = { navigateTo(Screen.Orders) },
                         onNavigateToSupport = { navigateTo(Screen.ProfileSupport) },
+                        onNavigateToNotifications = { navigateTo(Screen.Notifications) },
+                        onNavigateToAppointments = { navigateTo(Screen.Appointments) },
                         onToggleTheme = { viewModel.toggleThemeMode() },
                         themeMode = themeMode,
+                    )
+
+                    is Screen.Appointments -> AppointmentScreen(
+                        viewModel = viewModel,
+                        onBack = goBack,
                     )
 
                     is Screen.Orders -> OrdersScreen(
@@ -377,7 +478,9 @@ fun PortalAppShell(
                     is Screen.Notifications -> NotificationsScreen(
                         viewModel = viewModel,
                         onNavigateToOrderDetails = { navigateTo(Screen.OrderDetails(it)) },
-                        onNavigateToQuoteDetails = { navigateTo(Screen.QuoteDetails(it)) }
+                        onNavigateToQuoteDetails = { navigateTo(Screen.QuoteDetails(it)) },
+                        pushPermissionGranted = pushPermissionGranted,
+                        onRequestPushPermission = requestPushPermission,
                     )
 
                     is Screen.Profile -> ProfileHubScreen(

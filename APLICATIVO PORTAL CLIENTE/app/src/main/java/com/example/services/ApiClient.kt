@@ -23,7 +23,11 @@ object ApiClient {
             val sessionManager = SessionManager(context)
 
             val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BODY
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
             }
 
             val okHttpClient = OkHttpClient.Builder()

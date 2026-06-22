@@ -85,6 +85,7 @@ export default function FinancialPage() {
   const [receiveQueue, setReceiveQueue] = useState<FinancialReceiveQueue | null>(null);
   const [queueLoading, setQueueLoading] = useState(false);
   const [chargingOrderId, setChargingOrderId] = useState<string | null>(null);
+  const [deletingOsId, setDeletingOsId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FinancialEntryRow | null>(null);
 
@@ -255,6 +256,23 @@ export default function FinancialPage() {
       void loadEntries(search);
     } finally {
       setChargingOrderId(null);
+    }
+  }
+
+  async function deleteOsFromQueue(order: FinancialReceiveQueueOrder) {
+    if (!token) return;
+    if (!window.confirm(`Excluir OS #${order.number}? Esta ação remove a OS da listagem.`)) {
+      return;
+    }
+    setDeletingOsId(order.serviceOrderId);
+    try {
+      await api.deleteServiceOrder(token, order.serviceOrderId);
+      void loadReceiveQueue();
+      void queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Nao foi possivel excluir a OS");
+    } finally {
+      setDeletingOsId(null);
     }
   }
 
@@ -578,6 +596,15 @@ export default function FinancialPage() {
                                   disabled={chargingOrderId === o.serviceOrderId}
                                   onClick={() => void chargeOrder(o)}
                                 />
+                                <button
+                                  type="button"
+                                  title="Excluir OS"
+                                  disabled={!token || deletingOsId === o.serviceOrderId}
+                                  onClick={() => void deleteOsFromQueue(o)}
+                                  className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </li>
                           ))}

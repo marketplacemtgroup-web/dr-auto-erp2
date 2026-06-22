@@ -16,12 +16,13 @@ import com.example.R
 @Composable
 fun PortalBackground(
     modifier: Modifier = Modifier,
+    showOverlay: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F6F9)),
+            .background(BrandPalette.MetallicSilver),
     ) {
         Image(
             painter = painterResource(R.drawable.bg_oficina_beto),
@@ -30,6 +31,13 @@ fun PortalBackground(
             contentScale = ContentScale.Crop,
             alignment = androidx.compose.ui.Alignment.TopCenter,
         )
+        if (showOverlay) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BrandPalette.MetallicSilver.copy(alpha = 0.88f))
+            )
+        }
         content()
     }
 }
@@ -37,6 +45,7 @@ fun PortalBackground(
 @Composable
 fun PortalBrandLogo(
     modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER") logoUrl: String? = null,
 ) {
     Image(
         painter = painterResource(R.drawable.logo_oficina_beto),

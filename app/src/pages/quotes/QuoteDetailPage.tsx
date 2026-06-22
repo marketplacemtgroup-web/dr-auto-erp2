@@ -35,6 +35,8 @@ export default function QuoteDetailPage() {
     productId: "",
     catalogItemId: "",
   });
+  const [paymentAgreement, setPaymentAgreement] = useState("");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const { data: quote, isLoading, error } = useApiQuery(
     ["quote", id ?? ""],
@@ -53,6 +55,11 @@ export default function QuoteDetailPage() {
       navigate(routes.ordemDeServicoDetalhe(serviceOrderId), { replace: true });
     }
   }, [quote?.status, serviceOrderId, navigate]);
+
+  useEffect(() => {
+    setPaymentAgreement(quote?.paymentAgreement ?? "");
+  }, [quote?.id, quote?.paymentAgreement]);
+
   const canEdit = quote?.status === "PENDING" || quote?.status === "DRAFT";
 
   const invalidate = () => {
@@ -150,8 +157,17 @@ export default function QuoteDetailPage() {
   const saveQuoteMeta = useMutation({
     mutationFn: (payload: Parameters<typeof api.updateQuote>[2]) =>
       api.updateQuote(token!, id!, payload),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setSaveMessage("Orçamento salvo.");
+      window.setTimeout(() => setSaveMessage(null), 3000);
+    },
   });
+
+  const saveQuotePayment = () => {
+    if (!canEdit) return;
+    saveQuoteMeta.mutate({ paymentAgreement });
+  };
 
   async function shareQuoteLink() {
     if (!token || !id || !quote) return;
@@ -313,6 +329,12 @@ export default function QuoteDetailPage() {
         serviço é liberada automaticamente.
       </div>
 
+      {saveMessage && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {saveMessage}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 mb-5">
         <FormField label="Pagamento combinado">
           <p className="text-xs text-[#94A3B8] mb-2">
@@ -321,16 +343,23 @@ export default function QuoteDetailPage() {
           <textarea
             className={`${inputClass} min-h-[72px] py-2`}
             placeholder="Ex.: 50% à vista e 50% na entrega, PIX, 3x no cartão..."
-            defaultValue={quote.paymentAgreement ?? ""}
+            value={paymentAgreement}
             disabled={!canEdit}
-            onBlur={(e) => {
-              if (!canEdit) return;
-              if (e.target.value !== (quote.paymentAgreement ?? "")) {
-                saveQuoteMeta.mutate({ paymentAgreement: e.target.value });
-              }
-            }}
+            onChange={(e) => setPaymentAgreement(e.target.value)}
           />
         </FormField>
+        {canEdit && (
+          <div className="flex justify-end pt-4 mt-2 border-t border-[#F1F5F9]">
+            <button
+              type="button"
+              disabled={saveQuoteMeta.isPending}
+              onClick={saveQuotePayment}
+              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-lg bg-[#0F3D4C] text-white text-sm font-medium hover:bg-[#0a2d38] disabled:opacity-50"
+            >
+              {saveQuoteMeta.isPending ? "Salvando..." : "Salvar orçamento"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">

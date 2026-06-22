@@ -4,6 +4,7 @@ export const CHECKLIST_CATEGORY_LABELS: Record<string, string> = {
   external: "Externo",
   internal: "Interno",
   mechanical: "Mecânico",
+  tires: "Pneus",
 };
 
 export const CHECKLIST_RESULT_LABELS: Record<ChecklistResult, string> = {
@@ -31,7 +32,7 @@ export function checklistResultVariant(
 export function groupChecklistByCategory<
   T extends { category: string; sortOrder?: number },
 >(items: T[]) {
-  const order = ["external", "internal", "mechanical"];
+  const order = ["external", "internal", "tires", "mechanical"];
   const groups = new Map<string, T[]>();
   for (const item of items) {
     const list = groups.get(item.category) ?? [];

@@ -7,6 +7,7 @@ import { UpdateQuoteDto } from './dto/update-quote.dto';
 import { ApproveLinesDto } from './dto/approve-lines.dto';
 import { QuotesSyncService } from './quotes-sync.service';
 import { EventsService } from '../events/events.service';
+import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
 import { notDeleted } from '../common/soft-delete';
 import { CAR_CHECKLIST_TEMPLATE } from '../service-orders/checklist-template';
 import { ServiceOrdersService } from '../service-orders/service-orders.service';
@@ -28,6 +29,7 @@ export class QuotesService {
     private readonly prisma: PrismaService,
     private readonly quotesSync: QuotesSyncService,
     private readonly events: EventsService,
+    private readonly portalNotify: PortalCustomerNotifyService,
     @Inject(forwardRef(() => ServiceOrdersService))
     private readonly serviceOrders: ServiceOrdersService,
   ) {}
@@ -138,6 +140,7 @@ export class QuotesService {
 
     if (status === 'PENDING') {
       await this.quotesSync.syncForServiceOrder(organizationId, quote.serviceOrderId);
+      await this.portalNotify.notifyQuotePending(quote.id, 'new');
       return this.findOne(organizationId, quote.id);
     }
     return quote;
@@ -182,6 +185,7 @@ export class QuotesService {
         data: { status: 'AWAITING_APPROVAL' },
       });
       await this.quotesSync.syncForServiceOrder(organizationId, dto.serviceOrderId!);
+      await this.portalNotify.notifyQuotePending(quote.id, 'new');
       return this.findOne(organizationId, quote.id);
     }
 
@@ -523,6 +527,8 @@ export class QuotesService {
 
   async update(organizationId: string, id: string, dto: UpdateQuoteDto) {
     const existing = await this.findOne(organizationId, id);
+    const becamePending =
+      dto.status === 'PENDING' && existing.status !== 'PENDING';
     const updated = await this.prisma.quote.update({
       where: { id },
       data: {
@@ -540,6 +546,9 @@ export class QuotesService {
     });
     if (dto.status === 'PENDING' || updated.status === 'PENDING') {
       await this.quotesSync.syncForServiceOrder(organizationId, existing.serviceOrderId);
+      if (becamePending) {
+        await this.portalNotify.notifyQuotePending(id, 'new');
+      }
       return this.findOne(organizationId, id);
     }
     return updated;

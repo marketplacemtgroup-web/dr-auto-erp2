@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   FileText,
   Car,
@@ -17,6 +18,8 @@ import RevenueChart from "../components/RevenueChart";
 import ServicesChart from "../components/ServicesChart";
 import PaymentMethodsChart from "../components/PaymentMethodsChart";
 import AlertsPanel from "../components/AlertsPanel";
+import PreventiveMaintenancePanel from "../components/PreventiveMaintenancePanel";
+import MaintenanceAlertModal from "../components/MaintenanceAlertModal";
 import { useDashboardKpis } from "../hooks/useDashboardKpis";
 import { usePermissions } from "../hooks/usePermissions";
 import NavButton from "../components/NavButton";
@@ -32,6 +35,7 @@ function sparkline(value: number) {
 }
 
 export default function DashboardPage() {
+  const [maintenanceAlertDismissed, setMaintenanceAlertDismissed] = useState(false);
   const user = useAuthUser();
   const organizationName = useAuthStore((s) => s.session?.organizationName);
   const { canViewFinancialDashboard } = usePermissions();
@@ -248,6 +252,8 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <PreventiveMaintenancePanel />
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
         <ServiceOrdersTable />
         <PendingQuotes />
@@ -275,6 +281,10 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {!maintenanceAlertDismissed && (
+        <MaintenanceAlertModal onDismiss={() => setMaintenanceAlertDismissed(true)} />
+      )}
     </main>
   );
 }

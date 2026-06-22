@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.lib.PortalDateTime
+import com.example.lib.PortalStatus
 import com.example.types.*
 import com.example.ui.components.*
 import com.example.ui.theme.ThemeMode
@@ -66,29 +68,12 @@ fun launchGoogleMaps(context: Context, address: String) {
     context.startActivity(intent)
 }
 
-// --- MASKS ---
-fun formatCpfOnChange(input: String): String {
-    val digits = input.filter { it.isDigit() }
-    val sb = StringBuilder()
-    for (i in digits.indices) {
-        if (i == 3 || i == 6) sb.append(".")
-        if (i == 9) sb.append("-")
-        sb.append(digits[i])
-        if (sb.length >= 14) break
-    }
-    return sb.toString()
-}
+// --- INPUT FILTERS (sem máscara: só dígitos / alfanumérico) ---
+fun filterCpfInput(input: String): String =
+    input.filter { it.isDigit() }.take(11)
 
-fun formatPlateOnChange(input: String): String {
-    val clean = input.replace("[^a-zA-Z0-9]".toRegex(), "").uppercase()
-    val sb = StringBuilder()
-    for (i in clean.indices) {
-        if (i == 3) sb.append("-")
-        sb.append(clean[i])
-        if (sb.length >= 8) break
-    }
-    return sb.toString()
-}
+fun filterPlateInput(input: String): String =
+    input.replace("[^a-zA-Z0-9]".toRegex(), "").uppercase().take(7)
 
 
 // ==========================================
@@ -103,6 +88,7 @@ fun LoginScreen(
     var plate by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val brandingLogo by viewModel.publicBrandingLogoUrl.collectAsState()
 
     PortalBackground {
         Column(
@@ -116,7 +102,8 @@ fun LoginScreen(
             PortalBrandLogo(
                 modifier = Modifier
                     .height(72.dp)
-                    .padding(bottom = 8.dp)
+                    .padding(bottom = 8.dp),
+                logoUrl = brandingLogo,
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -141,7 +128,7 @@ fun LoginScreen(
 
             // Login card
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = BrandPalette.CardBg),
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -160,9 +147,9 @@ fun LoginScreen(
 
                     InputField(
                         value = cpf,
-                        onValueChange = { cpf = formatCpfOnChange(it) },
+                        onValueChange = { cpf = filterCpfInput(it) },
                         label = "CPF",
-                        placeholder = "000.000.000-00",
+                        placeholder = "00000000000",
                         leadingIcon = Icons.Default.Person,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         testTag = "login_cpf_input"
@@ -172,9 +159,9 @@ fun LoginScreen(
 
                     InputField(
                         value = plate,
-                        onValueChange = { plate = formatPlateOnChange(it) },
+                        onValueChange = { plate = filterPlateInput(it) },
                         label = "Placa do Veículo",
-                        placeholder = "ABC-1D23",
+                        placeholder = "ABC1D23",
                         leadingIcon = Icons.Default.DirectionsCar,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         testTag = "login_plate_input"
@@ -234,6 +221,8 @@ fun HomeScreen(
     onNavigateToQuoteDetails: (String) -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSupport: () -> Unit,
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToAppointments: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
     themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
@@ -241,6 +230,12 @@ fun HomeScreen(
     val dashboard by viewModel.dashboard.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+    var actingQuoteId by remember { mutableStateOf<String?>(null) }
+
+    val unreadCount = notifications.count { !it.read }
 
     Scaffold(
         floatingActionButton = {
@@ -261,8 +256,25 @@ fun HomeScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text("") },
+                title = {
+                    PortalBrandLogo(modifier = Modifier.height(32.dp))
+                },
                 actions = {
+                    BadgedBox(
+                        badge = {
+                            if (unreadCount > 0) {
+                                Badge { Text(unreadCount.toString()) }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = onNavigateToNotifications) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notificações",
+                                tint = BrandPalette.SlateGray
+                            )
+                        }
+                    }
                     IconButton(onClick = onToggleTheme) {
                         Icon(
                             imageVector = if (themeMode == ThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
@@ -275,187 +287,225 @@ fun HomeScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(BrandPalette.MetallicSilver)
-        ) {
-            OfflineBanner(isOffline = isOffline)
-
-            if (isLoading && dashboard == null) {
-                LoadingScreen()
-                return@Scaffold
-            }
-
-            val currentData = dashboard
-            if (currentData == null) {
-                ErrorState(
-                    message = "Não foi possível carregar as informações do seu portal.",
-                    onRetry = { viewModel.loadAllData() }
-                )
-                return@Scaffold
-            }
-
-            val clientName = currentData.customer.name.substringBefore(" ")
-            val companyName = currentData.organization.name
-
-            LazyColumn(
+        PortalBackground(showOverlay = true) {
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                    .padding(innerPadding)
             ) {
-                // Header Welcome
-                item {
-                    Column {
-                        Text(
-                            text = "Olá, $clientName!",
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                color = Color.Gray,
-                                fontWeight = FontWeight.SemiBold
+                OfflineBanner(isOffline = isOffline)
+
+                if (isLoading && dashboard == null) {
+                    LoadingScreen()
+                    return@Column
+                }
+
+                val currentData = dashboard
+                if (currentData == null) {
+                    ErrorState(
+                        message = errorMessage ?: "Não foi possível carregar as informações do seu portal.",
+                        onRetry = { viewModel.loadAllData() }
+                    )
+                    return@Column
+                }
+
+                val clientName = currentData.customer.name.substringBefore(" ")
+                val quotes = currentData.quotes
+                val activeOs = currentData.serviceOrders.find { PortalStatus.isInProgress(it.status) }
+                val showBudgetShortcut = activeOs != null &&
+                    PortalStatus.isAwaitingApproval(activeOs.status) &&
+                    PortalStatus.hasPendingQuote(quotes, activeOs.id)
+                val pendingQuoteForActiveOs = activeOs?.let { os ->
+                    quotes.find { q -> q.serviceOrder?.id == os.id && PortalStatus.quoteNeedsResponse(q) }
+                }
+
+                val quickItems = listOf(
+                    Triple("Minhas OS", Icons.Default.Assignment, onNavigateToHistory),
+                    Triple(
+                        if (showBudgetShortcut) "Aprovar Orçamento" else "Preços",
+                        Icons.Default.Calculate,
+                        {
+                            when {
+                                pendingQuoteForActiveOs != null -> onNavigateToQuoteDetails(pendingQuoteForActiveOs.id)
+                                showBudgetShortcut -> onNavigateToOrderDetails(activeOs!!.id)
+                                else -> onNavigateToHistory()
+                            }
+                        }
+                    ),
+                    Triple("Agendar", Icons.Default.Event, onNavigateToAppointments),
+                    Triple("Notificações", Icons.Default.Notifications, onNavigateToNotifications),
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp)
+                ) {
+                    item {
+                        Column {
+                            Text(
+                                text = "Olá, $clientName",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    color = BrandPalette.SlateGray
+                                )
                             )
-                        )
-                        SectionHeader(
-                            title = companyName,
-                            subtitle = currentData.organization.portalWelcome ?: "Seu veículo bem cuidado sempre."
-                        )
-                    }
-                }
-
-                // Active Vehicle
-                item {
-                    Text(
-                        text = "MEU VEÍCULO",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Gray,
-                            letterSpacing = 1.sp
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    VehicleCard(vehicle = currentData.vehicle)
-                }
-
-                // Active Service Order (In progress)
-                item {
-                    Text(
-                        text = "SERVIÇO EM ANDAMENTO",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Gray,
-                            letterSpacing = 1.sp
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    val activeOs = currentData.serviceOrders.find { os ->
-                        os.status.uppercase() != "FINISHED" &&
-                        os.status.uppercase() != "DELIVERED" &&
-                        os.status.uppercase() != "CANCELLED"
+                            Text(
+                                text = currentData.organization.portalWelcome ?: "Bem-vindo(a) ao seu portal",
+                                style = MaterialTheme.typography.bodySmall.copy(color = BrandPalette.TextSecondary),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            if (isRefreshing) {
+                                Text(
+                                    text = "Atualizando...",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = BrandPalette.TextSecondary),
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+                        }
                     }
 
-                    if (activeOs != null) {
-                        OrderCard(
-                            order = activeOs,
-                            vehicle = currentData.vehicle,
-                            onClick = { onNavigateToOrderDetails(activeOs.id) }
-                        )
-                    } else {
-                        EmptyState(
-                            message = "Não encontramos uma OS ativa para este veículo.",
-                            icon = Icons.Default.CheckCircle
-                        )
+                    if (errorMessage != null) {
+                        item {
+                            AppCard {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(text = errorMessage ?: "", color = BrandPalette.StatusErrorText, fontSize = 14.sp)
+                                    TextButton(onClick = { viewModel.loadAllData() }) {
+                                        Text("Tentar novamente")
+                                    }
+                                }
+                            }
+                        }
                     }
-                }
 
-                // Budgets Section (Quotes pending)
-                val pendingQuote = currentData.quotes.find { it.status.uppercase() == "PENDING" }
-                if (pendingQuote != null) {
                     item {
                         Text(
-                            text = "AÇÃO NECESSÁRIA",
+                            text = "MEU VEÍCULO",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC2410C),
+                                color = BrandPalette.TextSecondary,
                                 letterSpacing = 1.sp
                             )
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        BudgetCard(
-                            quote = pendingQuote,
-                            onClick = { onNavigateToQuoteDetails(pendingQuote.id) }
-                        )
+                        VehicleCard(vehicle = currentData.vehicle)
                     }
-                }
 
-                // Navigation Shortcuts Grid
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onNavigateToHistory() }
-                                .border(1.dp, BrandPalette.BorderGray, RoundedCornerShape(12.dp))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Assignment,
-                                    contentDescription = null,
-                                    tint = BrandPalette.SparkBlue,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Minhas OS",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = BrandPalette.SlateGray
-                                )
+                    currentData.upcomingAppointment?.let { appt ->
+                        item {
+                            AppCard {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Próximo agendamento", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(
+                                        text = PortalDateTime.formatDate(appt.scheduledAt),
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                    Text(
+                                        text = "Status: ${appt.status}",
+                                        fontSize = 12.sp,
+                                        color = BrandPalette.TextSecondary,
+                                    )
+                                }
                             }
                         }
+                    }
 
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onNavigateToSupport() }
-                                .border(1.dp, BrandPalette.BorderGray, RoundedCornerShape(12.dp))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContactSupport,
-                                    contentDescription = null,
-                                    tint = BrandPalette.SparkBlue,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Suporte",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = BrandPalette.SlateGray
-                                )
+                    if (currentData.maintenanceReminders.isNotEmpty()) {
+                        item {
+                            AppCard {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Manutenção preventiva", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    currentData.maintenanceReminders.forEach { reminder ->
+                                        val label = if (reminder.type == "OIL_CHANGE") "Troca de óleo" else "Revisão"
+                                        Text(
+                                            text = "$label — OS #${reminder.serviceOrderNumber}",
+                                            fontSize = 13.sp,
+                                            modifier = Modifier.padding(top = 4.dp),
+                                        )
+                                    }
+                                    TextButton(onClick = onNavigateToAppointments) {
+                                        Text("Agendar revisão")
+                                    }
+                                }
                             }
                         }
+                    }
+
+                    item {
+                        Text(
+                            text = "SERVIÇO EM ANDAMENTO",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = BrandPalette.TextSecondary,
+                                letterSpacing = 1.sp
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        if (activeOs != null) {
+                            OrderCard(
+                                order = activeOs,
+                                vehicle = currentData.vehicle,
+                                onClick = { onNavigateToOrderDetails(activeOs.id) }
+                            )
+                        } else {
+                            EmptyState(
+                                message = "Não encontramos uma OS ativa para este veículo.",
+                                icon = Icons.Default.CheckCircle
+                            )
+                        }
+                    }
+
+                    pendingQuotes(quotes).forEach { quote ->
+                        item {
+                            Text(
+                                text = "AÇÃO NECESSÁRIA",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFC2410C),
+                                    letterSpacing = 1.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            BudgetCard(
+                                quote = quote,
+                                onClick = { onNavigateToQuoteDetails(quote.id) },
+                                isActing = actingQuoteId == quote.id,
+                                onApprove = {
+                                    actingQuoteId = quote.id
+                                    viewModel.approveQuote(quote.id, null, null) { actingQuoteId = null }
+                                },
+                                onReject = {
+                                    actingQuoteId = quote.id
+                                    viewModel.rejectQuote(quote.id, null) { actingQuoteId = null }
+                                },
+                            )
+                        }
+                    }
+
+                    item {
+                        Text(
+                            text = "SERVIÇOS RÁPIDOS",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = BrandPalette.TextSecondary,
+                                letterSpacing = 1.sp
+                            ),
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        QuickServiceGrid(items = quickItems)
                     }
                 }
             }
         }
     }
 }
+
+private fun pendingQuotes(quotes: List<PortalQuoteRow>) =
+    quotes.filter { PortalStatus.quoteNeedsResponse(it) }
 
 
 // ==========================================
@@ -520,7 +570,31 @@ fun OrderDetailsScreen(
 
             // Find associated vehicle
             val vehicle = dashboard?.vehicle
+            var selectedTab by remember { mutableIntStateOf(0) }
+            val allPhotos = remember(currentOrder) {
+                val fromGallery = currentOrder.photos?.map { it.url } ?: emptyList()
+                val fromChecklist = currentOrder.checklistItems?.mapNotNull { it.photoUrl } ?: emptyList()
+                fromGallery + fromChecklist
+            }
 
+            DetailTabRow(
+                tabs = listOf("Resumo", "Fotos"),
+                selectedIndex = selectedTab,
+                onTabSelected = { selectedTab = it },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                badgeCounts = listOf(0, allPhotos.size),
+            )
+
+            if (selectedTab == 1) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    PhotoGalleryGrid(photos = allPhotos)
+                }
+            } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -544,7 +618,7 @@ fun OrderDetailsScreen(
                                         color = BrandPalette.SlateGray
                                     )
                                     Text(
-                                        text = "Abertura: ${currentOrder.createdAt.substringBefore("T")}",
+                                        text = "Abertura: ${PortalDateTime.formatDate(currentOrder.createdAt)}",
                                         style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
                                     )
                                 }
@@ -556,7 +630,7 @@ fun OrderDetailsScreen(
 
                             if (vehicle != null) {
                                 Text(
-                                    text = "Veículo: ${vehicle.brand} ${vehicle.model} (${vehicle.color})",
+                                    text = "Veículo: ${vehicle.displayName} (${vehicle.color ?: ""})",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                     color = BrandPalette.TextDark
                                 )
@@ -718,7 +792,7 @@ fun OrderDetailsScreen(
                                         text = when (item.result.uppercase()) {
                                             "OK" -> "Regular"
                                             "ATTENTION" -> "Atenção"
-                                            "DAMAGED" -> "A Variado"
+                                            "DAMAGED" -> "Avariado"
                                             else -> "N/A"
                                         },
                                         style = MaterialTheme.typography.labelSmall.copy(
@@ -757,31 +831,7 @@ fun OrderDetailsScreen(
                     }
                 }
 
-                // Attachments / Photos Gallery
-                val photos = currentOrder.photos ?: emptyList()
-                if (photos.isNotEmpty()) {
-                    item {
-                        SectionHeader(title = "Galeria de Fotos")
-                    }
-                    item {
-                        AppCard {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                photos.forEach { url ->
-                                    AsyncImage(
-                                        model = url,
-                                        contentDescription = "Foto do serviço",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(200.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color.LightGray)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                }
-                            }
-                        }
-                    }
-                }
+                // Fotos na aba dedicada
 
                 // Action associated quote
                 val localQuoteId = dashboard?.quotes?.find { it.serviceOrder?.id == orderId }?.id
@@ -796,6 +846,7 @@ fun OrderDetailsScreen(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -814,6 +865,7 @@ fun BudgetScreen(
 ) {
     val context = LocalContext.current
     val quote by viewModel.currentQuote.collectAsState()
+    val dashboard by viewModel.dashboard.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
 
@@ -848,7 +900,7 @@ fun BudgetScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandPalette.DeepBlue,
+                    containerColor = Color(0xFF0F3D4C),
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -878,9 +930,52 @@ fun BudgetScreen(
             }
 
             val isPending = currentQuote.status.uppercase() == "PENDING"
+            var selectedTab by remember { mutableIntStateOf(0) }
+            val photos = currentQuote.photos?.map { it.url } ?: emptyList()
+            val org = dashboard?.organization
 
             Column(modifier = Modifier.fillMaxSize()) {
-                // Main content
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF0F3D4C))
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PortalBrandLogo(
+                            modifier = Modifier.height(40.dp),
+                            logoUrl = org?.logoUrl,
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(text = org?.name ?: "Orçamento", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Orçamento #${currentQuote.number ?: "—"}",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+
+                DetailTabRow(
+                    tabs = listOf("Orçamento", "Fotos"),
+                    selectedIndex = selectedTab,
+                    onTabSelected = { selectedTab = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    badgeCounts = listOf(0, photos.size),
+                )
+
+                if (selectedTab == 1) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        PhotoGalleryGrid(photos = photos)
+                    }
+                } else {
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -899,7 +994,7 @@ fun BudgetScreen(
                                 ) {
                                     Column {
                                         Text(
-                                            text = "Orçamento #${currentQuote.number}",
+                                            text = "Orçamento #${currentQuote.number ?: "—"}",
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                             color = BrandPalette.SlateGray
                                         )
@@ -1035,13 +1130,13 @@ fun BudgetScreen(
                         }
                     }
                 }
+                }
 
-                // Bottom response triggers (visible only if PENDING)
                 if (isPending) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.White)
+                            .background(BrandPalette.CardBg)
                             .padding(16.dp)
                     ) {
                         Divider(color = BrandPalette.BorderGray, thickness = 1.dp)
@@ -1187,127 +1282,6 @@ fun BudgetScreen(
 
 
 // ==========================================
-// 5. SERVICE HISTORY SCREEN
-// ==========================================
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ServiceHistoryScreen(
-    viewModel: PortalViewModel,
-    onNavigateToOrderDetails: (String) -> Unit,
-    onBack: () -> Unit
-) {
-    val dashboard by viewModel.dashboard.collectAsState()
-    val isOffline by viewModel.isOffline.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Histórico de Serviços") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandPalette.DeepBlue,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(BrandPalette.MetallicSilver)
-        ) {
-            OfflineBanner(isOffline = isOffline)
-
-            if (isLoading && dashboard == null) {
-                LoadingScreen()
-                return@Scaffold
-            }
-
-            val serviceHistories = dashboard?.serviceOrders?.filter {
-                val s = it.status.uppercase()
-                s == "FINISHED" || s == "DELIVERED" || s == "CANCELLED" || s == "ENTREGUE" || s == "FINALIZADA" || s == "CANCELADA"
-            } ?: emptyList()
-
-            if (serviceHistories.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    EmptyState(
-                        message = "Você ainda não possui serviços finalizados ou históricos salvos.",
-                        icon = Icons.Default.FolderOpen
-                    )
-                }
-                return@Scaffold
-            }
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
-            ) {
-                items(serviceHistories) { item ->
-                    AppCard(
-                        modifier = Modifier.clickable { onNavigateToOrderDetails(item.id) }
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.TaskAlt,
-                                        contentDescription = null,
-                                        tint = BrandPalette.StatusSuccessText,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "OS #${item.number}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = BrandPalette.SlateGray
-                                    )
-                                }
-                                StatusBadge(status = item.status, label = item.statusLabel)
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Divider(color = BrandPalette.BorderGray)
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Text(
-                                text = "Finalizado em: ${item.updatedAt.substringBefore("T")}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray
-                            )
-
-                            if (item.totalAmount != null && item.totalAmount > 0) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Valor Total: R$ %.2f".format(item.totalAmount),
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Black,
-                                        color = BrandPalette.DeepBlue
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-// ==========================================
 // 6. SUPPORT SCREEN
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1362,15 +1336,7 @@ fun SupportScreen(
                     .background(BrandPalette.DeepBlue),
                 contentAlignment = Alignment.Center
             ) {
-                if (!org.logoUrl.isNullOrEmpty()) {
-                    AsyncImage(
-                        model = com.example.lib.PortalBranding.resolveLogoUrl(org.logoUrl),
-                        contentDescription = "Logo",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    PortalBrandLogo(modifier = Modifier.fillMaxSize(0.85f))
-                }
+                PortalBrandLogo(modifier = Modifier.fillMaxSize(0.85f))
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1571,273 +1537,6 @@ fun SupportScreen(
 
 
 // ==========================================
-// 7. PROFILE SCREEN
-// ==========================================
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ProfileScreen(
-    viewModel: PortalViewModel,
-    onLogout: () -> Unit
-) {
-    val dashboard by viewModel.dashboard.collectAsState()
-    val vehicles by viewModel.vehicles.collectAsState()
-    var showVehicleSwitcherBySheet by remember { mutableStateOf(false) }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Meu Perfil") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandPalette.DeepBlue,
-                    titleContentColor = Color.White
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(BrandPalette.MetallicSilver)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            val user = dashboard?.customer
-            if (user == null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    EmptyState(message = "Informações do perfil carregando...")
-                }
-                return@Scaffold
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // User Initials bubble
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(CircleShape)
-                    .background(
-                        androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors = listOf(BrandPalette.SparkBlue, BrandPalette.DeepBlue)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                val words = user.name.split(" ")
-                val initials = if (words.size >= 2) {
-                    "${words[0].first()}${words[1].first()}".uppercase()
-                } else {
-                    words[0].take(2).uppercase()
-                }
-                Text(
-                    text = initials,
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = user.name,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-                color = BrandPalette.SlateGray
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Personal data Card
-                AppCard {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "DADOS CADASTRAIS",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Gray,
-                                letterSpacing = 1.sp
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Text(
-                            text = "CPF do Titular",
-                            style = MaterialTheme.typography.labelMedium.copy(color = Color.Gray)
-                        )
-                        val document = user.document ?: ""
-                        val maskedCpf = if (document.length == 11) {
-                            "***.${document.substring(3, 6)}.${document.substring(6, 9)}-**"
-                        } else document
-                        Text(
-                            text = maskedCpf,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = BrandPalette.SlateGray
-                        )
-
-                        if (!user.phone.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Text(
-                                text = "Telefone celular",
-                                style = MaterialTheme.typography.labelMedium.copy(color = Color.Gray)
-                            )
-                            Text(
-                                text = user.phone,
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = BrandPalette.SlateGray
-                            )
-                        }
-                    }
-                }
-
-                // Active Vehicle switcher shortcut
-                AppCard {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "VEÍCULO ATIVO NA SESSÃO",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Gray,
-                                letterSpacing = 1.sp
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        dashboard?.vehicle?.let { activeVeh ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "${activeVeh.brand} ${activeVeh.model}",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                    Text(
-                                        text = "Placa: ${activeVeh.plate.uppercase()}",
-                                        style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
-                                    )
-                                }
-                                LicensePlateView(plate = activeVeh.plate)
-                            }
-                        }
-
-                        // Vehicle switch button list
-                        if (vehicles.size > 1) {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Button(
-                                onClick = { showVehicleSwitcherBySheet = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = BrandPalette.SparkBlue.copy(alpha = 0.12f),
-                                    contentColor = BrandPalette.SparkBlue
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(imageVector = Icons.Default.Sync, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Alternar Veículo (${vehicles.size})", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-
-                // Logout button
-                Button(
-                    onClick = {
-                        viewModel.logout { onLogout() }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandPalette.StatusErrorBg,
-                        contentColor = BrandPalette.StatusErrorText
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.ExitToApp, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Sair da Sessão",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(32.dp))
-        }
-    }
-
-    // Dynamic vehicle list Switch drawer/popup
-    if (showVehicleSwitcherBySheet) {
-        AlertDialog(
-            onDismissRequest = { showVehicleSwitcherBySheet = false },
-            title = { Text("Selecione o Veículo") },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    vehicles.forEach { veh ->
-                        val isActive = veh.id == dashboard?.vehicle?.id
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isActive) BrandPalette.SparkBlue.copy(alpha = 0.1f) else Color.Transparent
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isActive) BrandPalette.SparkBlue else BrandPalette.BorderGray,
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .clickable {
-                                    showVehicleSwitcherBySheet = false
-                                    viewModel.switchVehicle(veh.id) {
-                                        // Auto reloads
-                                    }
-                                }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "${veh.brand} ${veh.model}",
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isActive) BrandPalette.DeepBlue else BrandPalette.SlateGray
-                                )
-                                Text(text = veh.plate.uppercase(), color = Color.Gray, fontSize = 12.sp)
-                            }
-                            if (isActive) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = BrandPalette.SparkBlue
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showVehicleSwitcherBySheet = false }) {
-                    Text("Fechar")
-                }
-            }
-        )
-    }
-}
-
-
-// ==========================================
 // 8. NOTIFICATIONS SCREEN
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1845,7 +1544,9 @@ fun ProfileScreen(
 fun NotificationsScreen(
     viewModel: PortalViewModel,
     onNavigateToOrderDetails: (String) -> Unit,
-    onNavigateToQuoteDetails: (String) -> Unit
+    onNavigateToQuoteDetails: (String) -> Unit,
+    pushPermissionGranted: Boolean = true,
+    onRequestPushPermission: () -> Unit = {},
 ) {
     val notifications by viewModel.notifications.collectAsState()
     val isOffline by viewModel.isOffline.collectAsState()
@@ -1881,6 +1582,29 @@ fun NotificationsScreen(
         ) {
             OfflineBanner(isOffline = isOffline)
 
+            if (!pushPermissionGranted) {
+                AppCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Ative as notificações",
+                            fontWeight = FontWeight.Bold,
+                            color = BrandPalette.SlateGray
+                        )
+                        Text(
+                            text = "Receba avisos quando sua OS ou orçamento for atualizado.",
+                            fontSize = 13.sp,
+                            color = BrandPalette.TextSecondary,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        AppButton(
+                            text = "Permitir notificações",
+                            onClick = onRequestPushPermission,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
             if (isLoading && notifications.isEmpty()) {
                 LoadingScreen()
                 return@Scaffold
@@ -1905,7 +1629,7 @@ fun NotificationsScreen(
             ) {
                 items(notifications) { notif ->
                     AppCard(
-                        backgroundColor = if (notif.read) Color.White else Color(0xFFF0F7FF) // Unread pale blue gradient highlight matches PWA
+                        backgroundColor = if (notif.read) BrandPalette.CardBg else Color(0xFFF0F7FF)
                     ) {
                         Column(
                             modifier = Modifier
@@ -1953,7 +1677,7 @@ fun NotificationsScreen(
                                     )
                                 }
                                 Text(
-                                    text = notif.createdAt.substringBefore("T") + " " + notif.createdAt.substringAfter("T").substring(0, 5),
+                                    text = PortalDateTime.formatDateTime(notif.createdAt),
                                     style = MaterialTheme.typography.labelSmall.copy(color = Color.Gray)
                                 )
                             }

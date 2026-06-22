@@ -32,6 +32,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.lib.PortalDateTime
+import com.example.lib.PortalStatus
 import com.example.types.*
 import com.example.ui.theme.LocalDynamicBrand
 
@@ -46,6 +49,8 @@ object BrandPalette {
         @Composable get() = LocalDynamicBrand.current.surfaceBg
     val TextDark: Color
         @Composable get() = LocalDynamicBrand.current.textDark
+    val TextSecondary: Color
+        @Composable get() = LocalDynamicBrand.current.textSecondary
     val BorderGray: Color
         @Composable get() = LocalDynamicBrand.current.border
     val CardBg: Color
@@ -268,7 +273,7 @@ fun VehicleCard(vehicle: Vehicle, modifier: Modifier = Modifier) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${vehicle.brand.uppercase()} ${vehicle.model}",
+                    text = vehicle.displayName,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = BrandPalette.SlateGray
@@ -286,8 +291,8 @@ fun VehicleCard(vehicle: Vehicle, modifier: Modifier = Modifier) {
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Cor: ${vehicle.color ?: "N/D"} • Ano: ${vehicle.year ?: "N/D"}",
-                        style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
+                        text = "Cor: ${vehicle.color ?: "N/D"} • Ano: ${vehicle.displayYear}",
+                        style = MaterialTheme.typography.bodySmall.copy(color = BrandPalette.TextSecondary)
                     )
                 }
                 if (vehicle.currentKm != null && vehicle.currentKm > 0) {
@@ -302,14 +307,31 @@ fun VehicleCard(vehicle: Vehicle, modifier: Modifier = Modifier) {
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
-            LicensePlateView(plate = vehicle.plate)
+            Column(horizontalAlignment = Alignment.End) {
+                LicensePlateView(plate = vehicle.plate)
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(BrandPalette.StatusSuccessBg)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Em dia",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = BrandPalette.StatusSuccessText
+                        )
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
 fun OrderCard(
-    order: ServiceOrder,
+    order: ServiceOrderListItem,
     vehicle: Vehicle? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -336,11 +358,11 @@ fun OrderCard(
                         )
                     )
                     Text(
-                        text = "Abertura: ${order.createdAt.substringBefore("T")}",
+                        text = "Abertura: ${PortalDateTime.formatDate(order.createdAt)}",
                         style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
                     )
                 }
-                StatusBadge(status = order.status, label = order.statusLabel)
+                StatusBadge(status = order.status, label = PortalStatus.osStatusLabel(order.status))
             }
             Spacer(modifier = Modifier.height(12.dp))
             Divider(color = BrandPalette.BorderGray)
@@ -348,7 +370,7 @@ fun OrderCard(
             
             if (vehicle != null) {
                 Text(
-                    text = "${vehicle.brand} ${vehicle.model} (${vehicle.color ?: ""})",
+                    text = "${vehicle.displayName} (${vehicle.color ?: ""})",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                     color = BrandPalette.SlateGray
                 )
@@ -381,7 +403,7 @@ fun OrderCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Previsão: ${order.estimatedAt.substringBefore("T")}",
+                        text = "Previsão: ${PortalDateTime.formatDate(order.estimatedAt)}",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = BrandPalette.DeepBlue,
                             fontWeight = FontWeight.Bold
@@ -417,10 +439,19 @@ fun OrderCard(
 fun BudgetCard(
     quote: PortalQuoteRow,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onApprove: (() -> Unit)? = null,
+    onReject: (() -> Unit)? = null,
+    isActing: Boolean = false,
 ) {
+    val isPending = quote.status.uppercase() == "PENDING" && PortalStatus.quoteNeedsResponse(quote)
     AppCard(
-        modifier = modifier.clickable { onClick() }
+        modifier = modifier
+            .then(
+                if (isPending) Modifier.border(1.dp, Color(0x80FBBF24), RoundedCornerShape(12.dp))
+                else Modifier
+            )
+            .clickable { onClick() }
     ) {
         Column(
             modifier = Modifier
@@ -441,7 +472,7 @@ fun BudgetCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Orçamento #${quote.number}",
+                        text = "Orçamento #${quote.number ?: "—"}",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = BrandPalette.SlateGray
@@ -449,13 +480,7 @@ fun BudgetCard(
                     )
                 }
                 
-                // Quote status
-                val statusLabel = when (quote.status.uppercase()) {
-                    "PENDING" -> "Pendente"
-                    "APPROVED" -> "Aprovado"
-                    "REJECTED" -> "Recusado"
-                    else -> quote.status
-                }
+                val statusLabel = PortalStatus.quoteStatusLabel(quote.status)
                 StatusBadge(status = quote.status, label = statusLabel)
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -484,40 +509,60 @@ fun BudgetCard(
             }
             
             Spacer(modifier = Modifier.height(14.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (quote.status.uppercase() == "PENDING") {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFFFEF3C7))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
+            if (isPending && onApprove != null && onReject != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onReject,
+                        enabled = !isActing,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandPalette.StatusErrorText)
+                    ) { Text("Recusar", fontSize = 12.sp) }
+                    Button(
+                        onClick = onApprove,
+                        enabled = !isActing,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+                    ) { Text("Aprovar", fontSize = 12.sp) }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isPending) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFFFEF3C7))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "AÇÃO NECESSÁRIA",
+                                color = Color(0xFFB45309),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "AÇÃO NECESSÁRIA",
-                            color = Color(0xFFB45309),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                            text = if (isPending) "Responder Orçamento" else "Visualizar",
+                            color = BrandPalette.SparkBlue,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = BrandPalette.SparkBlue
                         )
                     }
-                } else {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (quote.status.uppercase() == "PENDING") "Responder Orçamento" else "Visualizar",
-                        color = BrandPalette.SparkBlue,
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = BrandPalette.SparkBlue
-                    )
                 }
             }
         }
@@ -562,7 +607,7 @@ fun TimelineItemView(
                     color = BrandPalette.SlateGray
                 )
                 Text(
-                    text = history.createdAt.substringBefore("T") + " " + history.createdAt.substringAfter("T").substring(0, 5),
+                    text = PortalDateTime.formatDateTime(history.createdAt),
                     style = MaterialTheme.typography.labelSmall.copy(color = Color.Gray)
                 )
             }
@@ -586,11 +631,142 @@ fun TimelineItemView(
 }
 
 @Composable
+fun QuickServiceGrid(
+    items: List<Triple<String, ImageVector, () -> Unit>>,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        items.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                row.forEach { (title, icon, onClick) ->
+                    AppCard(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onClick)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = BrandPalette.SparkBlue,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BrandPalette.SlateGray
+                                ),
+                                textAlign = TextAlign.Center,
+                                fontSize = 12.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+                }
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailTabRow(
+    tabs: List<String>,
+    selectedIndex: Int,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    badgeCounts: List<Int>? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(BrandPalette.CardBg)
+            .border(1.dp, BrandPalette.BorderGray, RoundedCornerShape(12.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        tabs.forEachIndexed { index, label ->
+            val selected = selectedIndex == index
+            val badge = badgeCounts?.getOrNull(index) ?: 0
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) BrandPalette.DeepBlue else Color.Transparent)
+                    .clickable { onTabSelected(index) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (selected) Color.White else BrandPalette.TextSecondary
+                    )
+                    if (badge > 0) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (selected) Color.White.copy(alpha = 0.25f) else BrandPalette.DeepBlue)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = badge.toString(),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) Color.White else Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhotoGalleryGrid(photos: List<String>, modifier: Modifier = Modifier) {
+    if (photos.isEmpty()) {
+        EmptyState(message = "Nenhuma foto disponível.", icon = Icons.Default.PhotoLibrary)
+        return
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        photos.forEach { url ->
+            AppCard {
+                AsyncImage(
+                    model = com.example.lib.PortalBranding.resolveMediaUrl(url),
+                    contentDescription = "Foto",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun LoadingScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(BrandPalette.MetallicSilver),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -604,7 +780,7 @@ fun LoadingScreen() {
                 text = "Carregando...",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
-                    color = Color.Gray
+                    color = BrandPalette.TextSecondary
                 )
             )
         }
@@ -620,7 +796,7 @@ fun ErrorState(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(BrandPalette.MetallicSilver)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {

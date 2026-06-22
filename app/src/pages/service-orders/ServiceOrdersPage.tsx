@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Printer } from "lucide-react";
+import { ExternalLink, Printer, Trash2 } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ModuleFilters, { FilterSelect } from "../../components/modules/ModuleFilters";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DateTimeField from "../../components/modules/DateTimeField";
+import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import { fromDatetimeLocalValue } from "../../lib/datetimeLocal";
 import VehicleSearchSelect from "../../components/vehicles/VehicleSearchSelect";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
-import { api } from "../../lib/api";
+import { api, type ServiceOrderRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { osStatusLabel, osStatusToVariant } from "../../lib/service-order-status";
@@ -53,6 +54,7 @@ export default function ServiceOrdersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [viewTab, setViewTab] = useState<ViewTab>("ativas");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceOrderRow | null>(null);
   const [form, setForm] = useState({
     vehicleId: "",
     status: "RECEIVED",
@@ -81,6 +83,14 @@ export default function ServiceOrdersPage() {
       setDrawerOpen(false);
       setForm({ vehicleId: "", status: "RECEIVED", estimatedAt: "", complaint: "" });
       navigate(routes.ordemDeServicoDetalhe(os.id));
+    },
+  });
+
+  const deleteOs = useMutation({
+    mutationFn: (id: string) => api.deleteServiceOrder(token!, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+      setDeleteTarget(null);
     },
   });
 
@@ -245,6 +255,7 @@ export default function ServiceOrdersPage() {
           error={error}
           emptyMessage="Nenhuma OS em andamento."
           onRowClick={(os) => openOs(os.id)}
+          onDelete={(os) => setDeleteTarget(os)}
         />
         ) : (
           <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
@@ -321,6 +332,14 @@ export default function ServiceOrdersPage() {
                               <Printer size={14} />
                               Imprimir
                             </button>
+                            <button
+                              type="button"
+                              title="Excluir OS"
+                              onClick={() => setDeleteTarget(os)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -381,6 +400,16 @@ export default function ServiceOrdersPage() {
           />
         </FormField>
       </FormDrawer>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Excluir OS"
+        message={`Excluir OS #${deleteTarget?.number}? A OS sera removida da listagem.`}
+        confirmLabel="Excluir"
+        loading={deleteOs.isPending}
+        onConfirm={() => deleteTarget && deleteOs.mutate(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

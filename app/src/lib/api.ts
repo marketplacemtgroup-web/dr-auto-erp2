@@ -758,6 +758,10 @@ export interface ServiceOrderDetail extends ServiceOrderRow {
   quoteBy?: EmployeeMini | null;
   executionBy?: EmployeeMini | null;
   finalizedBy?: EmployeeMini | null;
+  revisionIntervalKm?: number | null;
+  revisionIntervalMonths?: number | null;
+  oilChangeIntervalKm?: number | null;
+  oilChangeIntervalMonths?: number | null;
   items: ServiceOrderItemRow[];
   quotes: Array<{
     id: string;
@@ -1242,6 +1246,10 @@ export const api = {
       quoteById: string | null;
       executionById: string | null;
       finalizedById: string | null;
+      revisionIntervalKm: number | null;
+      revisionIntervalMonths: number | null;
+      oilChangeIntervalKm: number | null;
+      oilChangeIntervalMonths: number | null;
     }>,
   ) =>
     request<ServiceOrderDetail>(
@@ -1995,6 +2003,27 @@ export const api = {
   deleteAppointment: (token: string, id: string) =>
     request<{ ok: boolean }>(`/appointments/${id}`, { method: "DELETE" }, token),
 
+  maintenanceReminders: (
+    token: string,
+    filter?: "overdue" | "upcoming" | "all",
+  ) => {
+    const q = filter ? `?filter=${filter}` : "";
+    return request<MaintenanceReminderRow[]>(`/maintenance-reminders${q}`, { method: "GET" }, token);
+  },
+
+  maintenanceMonthOverdue: (token: string) =>
+    request<MaintenanceReminderRow[]>(`/maintenance-reminders/month-overdue`, { method: "GET" }, token),
+
+  updateMaintenanceReminder: (
+    token: string,
+    id: string,
+    status: "COMPLETED" | "DISMISSED" | "ACTIVE",
+  ) =>
+    request<MaintenanceReminderRow>(`/maintenance-reminders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }, token),
+
   teamStats: (token: string) =>
     request<TeamStats>("/team/stats", { method: "GET" }, token),
 
@@ -2520,6 +2549,7 @@ export interface AppointmentRow {
   scheduledAt: string;
   durationMinutes: number;
   status: string;
+  source?: string;
   bay: string | null;
   notes: string | null;
   serviceOrderId: string | null;
@@ -2532,6 +2562,27 @@ export interface AppointmentRow {
   };
   mechanic?: { id: string; user: { name: string } } | null;
   serviceOrder?: { id: string; number: number; status: string } | null;
+}
+
+export interface MaintenanceReminderRow {
+  id: string;
+  type: "REVISION" | "OIL_CHANGE";
+  intervalKm: number | null;
+  intervalMonths: number | null;
+  baselineKm: number;
+  baselineDate: string;
+  dueKm: number | null;
+  dueDate: string | null;
+  status: string;
+  isOverdue?: boolean;
+  isUpcoming?: boolean;
+  vehicle: {
+    id: string;
+    plate: string;
+    currentKm: number | null;
+    customer: { id: string; name: string };
+  };
+  serviceOrder: { id: string; number: number; status?: string };
 }
 
 export interface OrganizationMemberRow {

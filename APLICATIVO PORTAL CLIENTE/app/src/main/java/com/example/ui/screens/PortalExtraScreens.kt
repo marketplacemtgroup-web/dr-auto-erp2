@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.Screen
+import com.example.lib.PortalDateTime
 import com.example.lib.PortalStatus
 import com.example.types.*
 import com.example.ui.components.*
@@ -440,8 +441,8 @@ fun ProfileVehiclesScreen(viewModel: PortalViewModel, onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text(text = "${veh.brand} ${veh.model}", fontWeight = FontWeight.Bold, color = BrandPalette.SlateGray)
-                                if (!veh.year.isNullOrEmpty()) Text(text = "Ano ${veh.year}", fontSize = 12.sp, color = Color.Gray)
+                                Text(text = veh.displayName, fontWeight = FontWeight.Bold, color = BrandPalette.SlateGray)
+                                if (veh.year != null) Text(text = "Ano ${veh.displayYear}", fontSize = 12.sp, color = Color.Gray)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 LicensePlateView(plate = veh.plate)
                             }
@@ -597,12 +598,12 @@ fun PublicQuoteScreen(
                                     Text(text = data.organizationName, fontWeight = FontWeight.Bold, color = BrandPalette.SlateGray)
                                     Text(text = data.customerName, color = Color.Gray, fontSize = 13.sp)
                                     Text(
-                                        text = "${data.vehicle.brand} ${data.vehicle.model} • ${data.vehicle.plate}",
+                                        text = "${data.vehicle.displayName} • ${data.vehicle.plate}",
                                         color = Color.Gray,
                                         fontSize = 13.sp
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Text(text = "Orçamento #${quote.number}", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                                    Text(text = "Orçamento #${quote.number ?: "—"}", fontWeight = FontWeight.Black, fontSize = 18.sp)
                                     Text(text = "R$ %.2f".format(quote.amount), fontWeight = FontWeight.Bold, color = BrandPalette.DeepBlue, fontSize = 22.sp)
                                 }
                             }
@@ -679,6 +680,223 @@ fun PublicQuoteScreen(
                 }) { Text("Confirmar", color = BrandPalette.StatusErrorText) }
             },
             dismissButton = { TextButton(onClick = { showRejectDialog = false }) { Text("Voltar") } }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppointmentScreen(
+    viewModel: PortalViewModel,
+    onBack: () -> Unit,
+    onNavigateToAppointment: () -> Unit = {},
+) {
+    val appointments by viewModel.appointments.collectAsState()
+    val dashboard by viewModel.dashboard.collectAsState()
+    val isLoading by viewModel.appointmentActionLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+
+    var notes by remember { mutableStateOf("") }
+    var selectedDateMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var selectedHour by remember { mutableIntStateOf(9) }
+    var selectedMinute by remember { mutableIntStateOf(0) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadAppointments()
+    }
+
+    fun buildIso(): String {
+        val localDate = java.time.Instant.ofEpochMilli(selectedDateMillis)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toLocalDate()
+        return java.time.ZonedDateTime.of(
+            localDate,
+            java.time.LocalTime.of(selectedHour, selectedMinute),
+            java.time.ZoneId.systemDefault(),
+        ).toInstant().toString()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Agendar serviço") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        PortalBackground(showOverlay = true) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Text(
+                        text = "Solicite um horário na oficina. A equipe confirmará o agendamento.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = BrandPalette.TextSecondary),
+                    )
+                }
+
+                dashboard?.maintenanceReminders?.takeIf { it.isNotEmpty() }?.let { reminders ->
+                    item {
+                        AppCard {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Manutenções preventivas",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                )
+                                reminders.forEach { reminder ->
+                                    val label = if (reminder.type == "OIL_CHANGE") "Troca de óleo" else "Revisão"
+                                    val due = listOfNotNull(
+                                        reminder.dueKm?.let { "$it km" },
+                                        PortalDateTime.formatDate(reminder.dueDate),
+                                    ).joinToString(" · ")
+                                    Text(
+                                        text = "$label — OS #${reminder.serviceOrderNumber}${if (due.isNotBlank()) " · $due" else ""}",
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(top = 6.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    AppCard {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("Novo agendamento", fontWeight = FontWeight.Bold)
+                            OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("pt", "BR"))
+                                        .format(java.util.Date(selectedDateMillis))
+                                )
+                            }
+                            OutlinedButton(onClick = { showTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(String.format("%02d:%02d", selectedHour, selectedMinute))
+                            }
+                            OutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                label = { Text("Observações") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2,
+                            )
+                            Button(
+                                onClick = {
+                                    viewModel.createAppointment(buildIso(), notes) { ok ->
+                                        if (ok) {
+                                            successMessage = "Agendamento solicitado! Aguarde confirmação da oficina."
+                                            notes = ""
+                                        }
+                                    }
+                                },
+                                enabled = !isLoading,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(if (isLoading) "Enviando..." else "Solicitar agendamento")
+                            }
+                        }
+                    }
+                }
+
+                if (successMessage != null) {
+                    item {
+                        Text(successMessage!!, color = BrandPalette.StatusSuccessText, fontSize = 13.sp)
+                    }
+                }
+                if (errorMessage != null) {
+                    item {
+                        Text(errorMessage!!, color = BrandPalette.StatusErrorText, fontSize = 13.sp)
+                    }
+                }
+
+                item {
+                    Text(
+                        "Meus agendamentos",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                if (appointments.isEmpty()) {
+                    item {
+                        Text("Nenhum agendamento recente.", color = BrandPalette.TextSecondary, fontSize = 13.sp)
+                    }
+                } else {
+                    items(appointments, key = { it.id }) { appt ->
+                        AppCard {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(PortalDateTime.formatDateTime(appt.scheduledAt), fontWeight = FontWeight.SemiBold)
+                                    Text("Status: ${appt.status}", fontSize = 12.sp, color = BrandPalette.TextSecondary)
+                                }
+                                if (appt.status == "SCHEDULED" || appt.status == "CONFIRMED") {
+                                    TextButton(
+                                        onClick = { viewModel.cancelAppointment(appt.id) { } },
+                                        enabled = !isLoading,
+                                    ) {
+                                        Text("Cancelar")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { selectedDateMillis = it }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") }
+            },
+        ) {
+            DatePicker(state = state)
+        }
+    }
+
+    if (showTimePicker) {
+        val state = rememberTimePickerState(initialHour = selectedHour, initialMinute = selectedMinute)
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedHour = state.hour
+                    selectedMinute = state.minute
+                    showTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancelar") }
+            },
+            text = { TimePicker(state = state) },
         )
     }
 }

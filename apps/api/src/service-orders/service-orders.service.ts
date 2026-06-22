@@ -13,8 +13,11 @@ import { AttachmentsService } from '../attachments/attachments.service';
 import { AuditService } from '../audit/audit.service';
 import { notDeleted } from '../common/soft-delete';
 import { EventsService } from '../events/events.service';
+import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
 import { FinancialService } from '../financial/financial.service';
 import { CommissionEngineService } from '../team/commission-engine.service';
+import { AppointmentsService } from '../appointments/appointments.service';
+import { MaintenanceRemindersService } from '../maintenance-reminders/maintenance-reminders.service';
 
 /** Fase de orçamento/análise — peças não baixam estoque físico. */
 const QUOTE_PHASE_STATUSES: ServiceOrderStatus[] = [
@@ -85,9 +88,12 @@ export class ServiceOrdersService {
     private readonly stockMovement: StockMovementService,
     private readonly audit: AuditService,
     private readonly events: EventsService,
+    private readonly portalNotify: PortalCustomerNotifyService,
     private readonly attachments: AttachmentsService,
     private readonly financial: FinancialService,
     private readonly commissionEngine: CommissionEngineService,
+    private readonly appointments: AppointmentsService,
+    private readonly maintenanceReminders: MaintenanceRemindersService,
   ) {}
 
   private async previewItemCommission(
@@ -290,8 +296,10 @@ export class ServiceOrdersService {
     const notesChanged =
       dto.customerVisibleNotes !== undefined &&
       dto.customerVisibleNotes !== current.customerVisibleNotes;
+    const statusChanging =
+      dto.status !== undefined && dto.status !== current.status;
 
-    if ((diagnosisChanged || notesChanged) && !(dto.status !== undefined && dto.status !== current.status)) {
+    if ((diagnosisChanged || notesChanged) && !statusChanging) {
       const pushBody = diagnosisChanged
         ? `OS #${current.number} — diagnóstico atualizado`
         : `OS #${current.number} — nova observação da oficina`;
@@ -302,6 +310,34 @@ export class ServiceOrdersService {
         portalNotificationType: 'status',
         serviceOrderId: id,
       });
+    }
+
+    const complaintChanged =
+      dto.complaint !== undefined &&
+      (dto.complaint?.trim() || null) !== (current.complaint?.trim() || null);
+    const entryKmChanged =
+      dto.entryKm !== undefined && dto.entryKm !== current.entryKm;
+    const estimatedAtChanged =
+      dto.estimatedAt !== undefined &&
+      (() => {
+        const next =
+          dto.estimatedAt === null || dto.estimatedAt === undefined
+            ? null
+            : new Date(dto.estimatedAt).getTime();
+        const prev = current.estimatedAt
+          ? new Date(current.estimatedAt).getTime()
+          : null;
+        return next !== prev;
+      })();
+
+    if (!statusChanging && !diagnosisChanged && !notesChanged) {
+      if (complaintChanged) {
+        await this.portalNotify.notifyServiceOrderFieldUpdate(id, 'complaint');
+      } else if (estimatedAtChanged) {
+        await this.portalNotify.notifyServiceOrderFieldUpdate(id, 'estimatedAt');
+      } else if (entryKmChanged) {
+        await this.portalNotify.notifyServiceOrderFieldUpdate(id, 'entryKm');
+      }
     }
 
     const updated = await this.prisma.serviceOrder.update({
@@ -355,6 +391,18 @@ export class ServiceOrdersService {
                 dto.estimatedAt === null ? null : new Date(dto.estimatedAt),
             }
           : {}),
+        ...(dto.revisionIntervalKm !== undefined
+          ? { revisionIntervalKm: dto.revisionIntervalKm ?? null }
+          : {}),
+        ...(dto.revisionIntervalMonths !== undefined
+          ? { revisionIntervalMonths: dto.revisionIntervalMonths ?? null }
+          : {}),
+        ...(dto.oilChangeIntervalKm !== undefined
+          ? { oilChangeIntervalKm: dto.oilChangeIntervalKm ?? null }
+          : {}),
+        ...(dto.oilChangeIntervalMonths !== undefined
+          ? { oilChangeIntervalMonths: dto.oilChangeIntervalMonths ?? null }
+          : {}),
       },
       include: soInclude,
     });
@@ -381,10 +429,41 @@ export class ServiceOrdersService {
         id,
         'OS_FINALIZADA',
       );
+      await this.appointments.completeByServiceOrder(id);
+
+      const soForReminder = await this.prisma.serviceOrder.findFirst({
+        where: { id },
+        include: { vehicle: true },
+      });
+      if (soForReminder) {
+        const hasIntervals =
+          soForReminder.revisionIntervalKm ||
+          soForReminder.revisionIntervalMonths ||
+          soForReminder.oilChangeIntervalKm ||
+          soForReminder.oilChangeIntervalMonths;
+        if (hasIntervals) {
+          const existing = await this.prisma.maintenanceReminder.count({
+            where: { serviceOrderId: id },
+          });
+          if (existing === 0) {
+            await this.maintenanceReminders.createFromServiceOrder(
+              organizationId,
+              soForReminder,
+            );
+          }
+        }
+      }
     }
 
     if (dto.status === 'CANCELLED' && current.status !== 'CANCELLED') {
       await this.commissionEngine.cancelForServiceOrder(organizationId, id);
+    }
+
+    if (dto.entryKm !== undefined && dto.entryKm != null) {
+      await this.prisma.vehicle.update({
+        where: { id: current.vehicleId },
+        data: { currentKm: dto.entryKm },
+      });
     }
 
     return updated;
@@ -411,6 +490,7 @@ export class ServiceOrdersService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+    await this.appointments.cancelByServiceOrder(id);
     await this.audit.log(organizationId, 'service_order.delete', 'service_order', {
       userId,
       metadata: { serviceOrderId: id, number },

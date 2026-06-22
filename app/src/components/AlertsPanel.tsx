@@ -14,11 +14,13 @@ interface Alert {
 interface AlertsPanelProps {
   lowStockParts?: number;
   delayedServices?: number;
+  maintenanceOverdue?: number;
 }
 
 export default function AlertsPanel({
-  lowStockParts = 7,
-  delayedServices = 5,
+  lowStockParts = 0,
+  delayedServices = 0,
+  maintenanceOverdue = 0,
 }: AlertsPanelProps) {
   const alerts: Alert[] = [
     {
@@ -49,9 +51,12 @@ export default function AlertsPanel({
       icon: <User size={16} strokeWidth={1.5} />,
       iconBg: "#EDE9FE",
       iconColor: "#8B5CF6",
-      message: "1 cliente com revisao vencida",
-      link: "Ver cliente",
-      to: routes.clientes,
+      message:
+        maintenanceOverdue > 0
+          ? `${maintenanceOverdue} manutenção(ões) preventiva(s) vencida(s)`
+          : "Nenhuma manutenção preventiva vencida",
+      link: maintenanceOverdue > 0 ? "Ver painel" : "Ver dashboard",
+      to: routes.dashboardHome,
     },
   ];
 

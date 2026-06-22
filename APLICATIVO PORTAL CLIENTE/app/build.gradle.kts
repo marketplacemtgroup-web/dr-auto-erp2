@@ -127,6 +127,14 @@ dependencies {
   "ksp"(libs.moshi.kotlin.codegen)
 }
 
+if (file("google-services.json").exists()) {
+  apply(plugin = "com.google.gms.google-services")
+} else {
+  logger.warn(
+    "google-services.json não encontrado em app/ — push FCM desativado até configurar Firebase. Veja PUSH_SETUP.md",
+  )
+}
+
 fun readEnvProperty(key: String, defaultValue: String): String {
   val props = Properties()
   val envFile = rootProject.file(".env")

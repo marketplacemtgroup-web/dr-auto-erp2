@@ -15,24 +15,25 @@ data class DynamicBrandColors(
     val accent: Color,
     val isDark: Boolean,
 ) {
-    val surfaceBg: Color get() = if (isDark) Color(0xFF0F172A) else Color(0xFFF4F6F9)
-    val cardBg: Color get() = if (isDark) Color(0xFF1E293B) else Color.White
-    val textPrimary: Color get() = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
-    val textSecondary: Color get() = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val surfaceBg: Color get() = if (isDark) Color(0xFF020B1C) else Color(0xFFF4F6F9)
+    val cardBg: Color get() = if (isDark) Color(0xFF081B35) else Color.White
+    val textPrimary: Color get() = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A)
+    val textSecondary: Color get() = if (isDark) Color(0xFFA8B3C7) else Color(0xFF475569)
     val textDark: Color get() = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
-    val border: Color get() = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
-    val navBg: Color get() = if (isDark) Color(0xFF1E293B) else Color.White
+    val border: Color get() = if (isDark) Color(0x33FFFFFF) else Color(0xFFE2E8F0)
+    val navBg: Color get() = if (isDark) Color(0xF206152D) else Color(0xEBFFFFFF)
+    val quoteHeader: Color get() = Color(0xFF0F3D4C)
 
     companion object {
         fun defaults(isDark: Boolean = false) = DynamicBrandColors(
-            primary = Color(0xFF0E7490),
-            accent = Color(0xFF0F3D4C),
+            primary = Color(0xFF0284C7),
+            accent = Color(0xFF0EA5E9),
             isDark = isDark,
         )
 
         fun fromOrganization(org: Organization?, isDark: Boolean): DynamicBrandColors {
-            val primary = parseHexColor(org?.primaryColor) ?: Color(0xFF0E7490)
-            val accent = parseHexColor(org?.accentColor) ?: Color(0xFF0F3D4C)
+            val primary = parseHexColor(org?.primaryColor) ?: Color(0xFF0284C7)
+            val accent = parseHexColor(org?.accentColor) ?: Color(0xFF0EA5E9)
             return DynamicBrandColors(primary = primary, accent = accent, isDark = isDark)
         }
 
@@ -41,8 +42,8 @@ data class DynamicBrandColors(
             accentColor: String?,
             isDark: Boolean,
         ): DynamicBrandColors {
-            val primary = parseHexColor(primaryColor) ?: Color(0xFF0E7490)
-            val accent = parseHexColor(accentColor) ?: Color(0xFF0F3D4C)
+            val primary = parseHexColor(primaryColor) ?: Color(0xFF0284C7)
+            val accent = parseHexColor(accentColor) ?: Color(0xFF0EA5E9)
             return DynamicBrandColors(primary = primary, accent = accent, isDark = isDark)
         }
 

@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Portal do Cliente</string>
+    <string name="notification_channel_name">Atualizações da oficina</string>
+    <string name="notification_channel_description">Status de OS, orçamentos e avisos do portal</string>
+    <string name="notification_permission_title">Ative as notificações</string>
+    <string name="notification_permission_body">Receba avisos na bandeja quando sua OS ou orçamento for atualizado.</string>
+    <string name="notification_permission_action">Ativar</string>
 </resources>

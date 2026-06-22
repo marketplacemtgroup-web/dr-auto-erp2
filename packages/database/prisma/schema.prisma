@@ -171,6 +171,22 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum AppointmentSource {
+  STAFF
+  PORTAL
+}
+
+enum MaintenanceReminderType {
+  REVISION
+  OIL_CHANGE
+}
+
+enum MaintenanceReminderStatus {
+  ACTIVE
+  COMPLETED
+  DISMISSED
+}
+
 enum PaymentMethod {
   CASH
   PIX
@@ -344,6 +360,7 @@ model Organization {
   serviceCatalog ServiceCatalog[]
   stockMovements StockMovement[]
   appointments Appointment[]
+  maintenanceReminders MaintenanceReminder[]
   cashSessions CashRegisterSession[]
   cashMovements CashRegisterMovement[]
   portalAccessTokens PortalAccessToken[]
@@ -596,6 +613,7 @@ model Vehicle {
   pushSubscriptions PushSubscription[]
   portalNotifications PortalNotification[]
   fcmTokens FcmToken[]
+  maintenanceReminders MaintenanceReminder[]
 
   @@unique([organizationId, plate])
   @@index([organizationId])
@@ -630,6 +648,10 @@ model ServiceOrder {
   paymentAgreement     String?              @map("payment_agreement")
   estimatedAt          DateTime?            @map("estimated_at")
   totalAmount          Decimal              @default(0) @map("total_amount") @db.Decimal(12, 2)
+  revisionIntervalKm      Int?              @map("revision_interval_km")
+  revisionIntervalMonths  Int?              @map("revision_interval_months")
+  oilChangeIntervalKm     Int?              @map("oil_change_interval_km")
+  oilChangeIntervalMonths Int?              @map("oil_change_interval_months")
   attachmentsPurgeAt   DateTime?            @map("attachments_purge_at")
   attachmentsPurgedAt  DateTime?            @map("attachments_purged_at")
   deletedAt            DateTime?            @map("deleted_at")
@@ -659,6 +681,7 @@ model ServiceOrder {
   appointment  Appointment?
   financialEntries FinancialEntry[]
   portalAccessTokens PortalAccessToken[]
+  maintenanceReminders MaintenanceReminder[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
@@ -1020,8 +1043,10 @@ model Appointment {
   scheduledAt      DateTime          @map("scheduled_at")
   durationMinutes  Int               @default(60) @map("duration_minutes")
   status           AppointmentStatus @default(SCHEDULED)
+  source           AppointmentSource @default(STAFF)
   bay              String?
   notes            String?
+  requestedNotes   String?           @map("requested_notes")
   serviceOrderId   String?           @unique @map("service_order_id")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
@@ -1034,6 +1059,34 @@ model Appointment {
   @@index([organizationId, scheduledAt])
   @@index([vehicleId])
   @@map("appointments")
+}
+
+model MaintenanceReminder {
+  id               String                    @id @default(cuid())
+  organizationId   String                    @map("organization_id")
+  vehicleId        String                    @map("vehicle_id")
+  serviceOrderId   String                    @map("service_order_id")
+  type             MaintenanceReminderType
+  intervalKm       Int?                      @map("interval_km")
+  intervalMonths   Int?                      @map("interval_months")
+  baselineKm       Int                       @map("baseline_km")
+  baselineDate     DateTime                  @map("baseline_date")
+  dueKm            Int?                      @map("due_km")
+  dueDate          DateTime?                 @map("due_date")
+  status           MaintenanceReminderStatus @default(ACTIVE)
+  lastNotifiedAt   DateTime?                 @map("last_notified_at")
+  completedAt      DateTime?                 @map("completed_at")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([vehicleId])
+  @@index([serviceOrderId])
+  @@map("maintenance_reminders")
 }
 
 model DailyRevenue {

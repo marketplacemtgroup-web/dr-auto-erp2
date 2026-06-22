@@ -14,7 +14,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ApproveLinesDto } from '../quotes/dto/approve-lines.dto';
 import { EventsService } from '../events/events.service';
 import { PushService } from '../push/push.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 import { notDeleted } from '../common/soft-delete';
+import { PortalCreateAppointmentDto } from './dto/portal-create-appointment.dto';
 
 function normalizeDigits(value: string) {
   return (value ?? '').replace(/\D/g, '');
@@ -56,6 +58,7 @@ export class PortalService {
     private readonly events: EventsService,
     private readonly push: PushService,
     private readonly attachments: AttachmentsService,
+    private readonly appointments: AppointmentsService,
   ) {}
 
   private async mapPortalAttachments(
@@ -338,7 +341,8 @@ export class PortalService {
     });
     if (!vehicle) throw new UnauthorizedException();
 
-    const [quotes, serviceOrders, mainBranch] = await Promise.all([
+    const [quotes, serviceOrders, mainBranch, upcomingAppointments, maintenanceReminders] =
+      await Promise.all([
       this.listQuotes(ctx),
       this.prisma.serviceOrder.findMany({
         where: { organizationId: ctx.organizationId, vehicleId: ctx.vehicleId, ...notDeleted },
@@ -358,6 +362,28 @@ export class PortalService {
       this.prisma.branch.findFirst({
         where: { organizationId: ctx.organizationId, isMain: true },
         select: { address: true },
+      }),
+      this.prisma.appointment.findMany({
+        where: {
+          organizationId: ctx.organizationId,
+          vehicleId: ctx.vehicleId,
+          status: { in: ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'] },
+          scheduledAt: { gte: new Date() },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        take: 1,
+      }),
+      this.prisma.maintenanceReminder.findMany({
+        where: {
+          organizationId: ctx.organizationId,
+          vehicleId: ctx.vehicleId,
+          status: 'ACTIVE',
+        },
+        include: {
+          serviceOrder: { select: { id: true, number: true } },
+        },
+        orderBy: [{ dueDate: 'asc' }, { dueKm: 'asc' }],
+        take: 5,
       }),
     ]);
 
@@ -405,6 +431,22 @@ export class PortalService {
       })),
       quotes,
       attachments: await this.mapPortalAttachments(attachments),
+      upcomingAppointment: upcomingAppointments[0]
+        ? {
+            id: upcomingAppointments[0].id,
+            scheduledAt: upcomingAppointments[0].scheduledAt,
+            status: upcomingAppointments[0].status,
+            durationMinutes: upcomingAppointments[0].durationMinutes,
+          }
+        : null,
+      maintenanceReminders: maintenanceReminders.map((r) => ({
+        id: r.id,
+        type: r.type,
+        dueKm: r.dueKm,
+        dueDate: r.dueDate,
+        serviceOrderNumber: r.serviceOrder.number,
+        serviceOrderId: r.serviceOrder.id,
+      })),
     };
   }
 
@@ -1341,5 +1383,67 @@ export class PortalService {
       fcmTokens: tokens,
       pushReady: tokens > 0,
     };
+  }
+
+  async listAppointments(ctx: { organizationId: string; vehicleId: string }) {
+    return this.prisma.appointment.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        vehicleId: ctx.vehicleId,
+        scheduledAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      select: {
+        id: true,
+        scheduledAt: true,
+        durationMinutes: true,
+        status: true,
+        source: true,
+        requestedNotes: true,
+        notes: true,
+      },
+    });
+  }
+
+  async createAppointment(
+    ctx: { organizationId: string; vehicleId: string },
+    dto: PortalCreateAppointmentDto,
+  ) {
+    const appt = await this.appointments.create(ctx.organizationId, {
+      vehicleId: ctx.vehicleId,
+      scheduledAt: dto.scheduledAt,
+      durationMinutes: dto.durationMinutes ?? 60,
+      source: 'PORTAL',
+      requestedNotes: dto.requestedNotes,
+      status: 'SCHEDULED',
+    });
+
+    await this.events.emitOffice(ctx.organizationId, {
+      type: 'appointment.portal',
+      title: 'Novo agendamento pelo portal',
+      message: `Cliente solicitou agendamento para ${new Date(dto.scheduledAt).toLocaleString('pt-BR')}`,
+      metadata: { appointmentId: appt.id, vehicleId: ctx.vehicleId },
+      vehicleId: ctx.vehicleId,
+    });
+
+    return appt;
+  }
+
+  async cancelAppointment(
+    ctx: { organizationId: string; vehicleId: string },
+    id: string,
+  ) {
+    const row = await this.prisma.appointment.findFirst({
+      where: {
+        id,
+        organizationId: ctx.organizationId,
+        vehicleId: ctx.vehicleId,
+      },
+    });
+    if (!row) throw new NotFoundException('Agendamento não encontrado');
+    if (row.serviceOrderId) {
+      throw new BadRequestException('Agendamento já vinculado a uma OS');
+    }
+    return this.appointments.update(ctx.organizationId, id, { status: 'CANCELLED' });
   }
 }

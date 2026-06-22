@@ -6,7 +6,7 @@
  *   node scripts/setup-firebase-fcm.mjs caminho/para/service-account.json
  *   node scripts/setup-firebase-fcm.mjs --base64 caminho/para/service-account.json
  *
- * Firebase Console → Projeto oficinadobeto-portal → Configurações → Contas de serviço
+ * Firebase Console → Projeto oficina-do-beto-campinas → Configurações → Contas de serviço
  * → Gerar nova chave privada (JSON).
  */
 import { readFileSync, existsSync } from 'fs';
@@ -20,7 +20,7 @@ if (!fileArg) {
   console.error(`
 Uso: node scripts/setup-firebase-fcm.mjs <service-account.json> [--base64]
 
-1. Abra https://console.firebase.google.com/project/oficinadobeto-portal/settings/serviceaccounts/adminsdk
+1. Abra https://console.firebase.google.com/project/oficina-do-beto-campinas/settings/serviceaccounts/adminsdk
 2. "Gerar nova chave privada" e salve o JSON
 3. Rode este script com o caminho do arquivo
 `);
@@ -49,7 +49,7 @@ if (missing.length) {
   process.exit(1);
 }
 
-const expectedProjectId = 'oficinadobeto-portal';
+const expectedProjectId = 'oficina-do-beto-campinas';
 if (parsed.project_id !== expectedProjectId) {
   console.warn(
     `Aviso: project_id é "${parsed.project_id}" (esperado ${expectedProjectId}). Confira se o JSON é do projeto certo.`,

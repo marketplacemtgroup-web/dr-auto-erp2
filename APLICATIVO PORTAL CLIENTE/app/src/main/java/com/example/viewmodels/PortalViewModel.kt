@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.lib.ApiErrorMapper
 import com.example.services.ApiClient
 import com.example.services.PortalFcmManager
 import com.example.services.SessionManager
@@ -17,7 +18,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.net.UnknownHostException
 
 class PortalViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager(application)
@@ -59,6 +59,18 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _brandColors = MutableStateFlow(DynamicBrandColors.defaults())
     val brandColors: StateFlow<DynamicBrandColors> = _brandColors
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
+    private val _appointments = MutableStateFlow<List<PortalAppointment>>(emptyList())
+    val appointments: StateFlow<List<PortalAppointment>> = _appointments
+
+    private val _appointmentActionLoading = MutableStateFlow(false)
+    val appointmentActionLoading: StateFlow<Boolean> = _appointmentActionLoading
+
+    private val _publicBrandingLogoUrl = MutableStateFlow<String?>(null)
+    val publicBrandingLogoUrl: StateFlow<String?> = _publicBrandingLogoUrl
 
     private var pollingJob: Job? = null
 
@@ -130,6 +142,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 val branding = api.getPublicBranding()
+                _publicBrandingLogoUrl.value = branding.logoUrl
                 if (_dashboard.value == null) {
                     val isDark = _themeMode.value == ThemeMode.DARK
                     val colors = DynamicBrandColors.fromPublicBranding(
@@ -173,12 +186,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 val response = api.login(LoginRequest(cpf = cleanCpf, plate = cleanPlate))
                 saveSessionAndLoad(response, onSuccess)
             } catch (e: Exception) {
-                Log.e("PortalViewModel", "Login error", e)
-                _errorMessage.value = if (e is UnknownHostException) {
-                    "Sem conexão com a internet."
-                } else {
-                    "Dados inválidos. Confira o CPF e a placa."
-                }
+                _errorMessage.value = ApiErrorMapper.map(e, "login")
             } finally {
                 _isLoading.value = false
             }
@@ -193,12 +201,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 val response = api.accessByToken(token)
                 saveSessionAndLoad(response, onSuccess)
             } catch (e: Exception) {
-                Log.e("PortalViewModel", "Access token error", e)
-                val msg = if (e is UnknownHostException) {
-                    "Sem conexão com a internet."
-                } else {
-                    "Link inválido ou expirado."
-                }
+                val msg = ApiErrorMapper.map(e, "access")
                 _errorMessage.value = msg
                 onError(msg)
             } finally {
@@ -218,8 +221,13 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _isOffline.value = false
         loadAllData(showLoading = true)
         startPolling()
-        PortalFcmManager.registerWithApi(getApplication())
         onSuccess()
+    }
+
+    fun registerPushToken() {
+        viewModelScope.launch {
+            PortalFcmManager.registerWithApi(getApplication())
+        }
     }
 
     fun startPolling() {
@@ -258,9 +266,18 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
                 _isOffline.value = false
             } catch (e: Exception) {
-                Log.e("PortalViewModel", "Error loading data, loading cache", e)
-                _isOffline.value = true
+                Log.e("PortalViewModel", "Error loading data", e)
+                val hadCache = hasCachedDashboard()
                 loadFromCache()
+                if (_dashboard.value == null) {
+                    _isOffline.value = false
+                    _errorMessage.value = ApiErrorMapper.map(e, "dashboard")
+                } else {
+                    _isOffline.value = true
+                    if (!hadCache) {
+                        _errorMessage.value = ApiErrorMapper.map(e, "dashboard")
+                    }
+                }
             } finally {
                 if (showLoading) _isLoading.value = false
             }
@@ -270,6 +287,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     private fun refreshSilently() {
         if (!_isLoggedIn.value) return
         viewModelScope.launch {
+            _isRefreshing.value = true
             try {
                 val dashboardData = api.getDashboard()
                 _dashboard.value = dashboardData
@@ -282,10 +300,15 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
                 _isOffline.value = false
             } catch (e: Exception) {
-                Log.d("PortalViewModel", "Silent refresh failed")
+                Log.d("PortalViewModel", "Silent refresh failed", e)
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
+
+    private fun hasCachedDashboard(): Boolean =
+        !sessionManager.getCachedDashboard().isNullOrEmpty()
 
     private fun loadFromCache() {
         try {
@@ -318,16 +341,9 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _isOffline.value = false
             } catch (e: Exception) {
                 Log.e("PortalViewModel", "Error loading service order details", e)
-                if (e is UnknownHostException) {
-                    _isOffline.value = true
-                    val localOrder = _dashboard.value?.serviceOrders?.find { it.id == soId }
-                    if (localOrder != null) {
-                        _currentServiceOrder.value = localOrder
-                    } else {
-                        _errorMessage.value = "Sem conexão com a internet."
-                    }
-                } else {
-                    _errorMessage.value = "Não foi possível carregar as informações da OS."
+                _errorMessage.value = ApiErrorMapper.map(e, "serviceOrder")
+                if (_dashboard.value?.serviceOrders?.none { it.id == soId } != false) {
+                    _isOffline.value = e is java.net.UnknownHostException
                 }
             } finally {
                 _isLoading.value = false
@@ -345,16 +361,16 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _isOffline.value = false
             } catch (e: Exception) {
                 Log.e("PortalViewModel", "Error loading quote details", e)
-                if (e is UnknownHostException) {
+                if (e is java.net.UnknownHostException) {
                     _isOffline.value = true
                     val localQuote = _dashboard.value?.quotes?.find { it.id == quoteId }
                     if (localQuote != null) {
                         _currentQuote.value = localQuote
                     } else {
-                        _errorMessage.value = "Sem conexão com a internet."
+                        _errorMessage.value = ApiErrorMapper.map(e, "quote")
                     }
                 } else {
-                    _errorMessage.value = "Orçamento ainda não disponível."
+                    _errorMessage.value = ApiErrorMapper.map(e, "quote")
                 }
             } finally {
                 _isLoading.value = false
@@ -370,8 +386,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 _publicQuote.value = api.getPublicQuote(token)
             } catch (e: Exception) {
-                Log.e("PortalViewModel", "Error loading public quote", e)
-                _errorMessage.value = "Link inválido ou expirado."
+                _errorMessage.value = ApiErrorMapper.map(e, "publicQuote")
             } finally {
                 _isLoading.value = false
             }
@@ -384,14 +399,17 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             _errorMessage.value = null
             try {
                 val approvedLinesList = lineIdsAndApprovals?.map { ApprovedLine(it.first, it.second) }
-                val request = ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
+                val request = when {
+                    approvedLinesList.isNullOrEmpty() -> ApproveQuoteRequest(comment = comment)
+                    else -> ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
+                }
                 val updatedQuote = api.approveQuote(quoteId, request)
                 _currentQuote.value = updatedQuote
                 loadAllData(showLoading = false)
                 onComplete(true)
             } catch (e: Exception) {
                 Log.e("PortalViewModel", "Error approving quote", e)
-                _errorMessage.value = "Não foi possível aprovar o orçamento. Tente novamente."
+                _errorMessage.value = ApiErrorMapper.map(e, "approveQuote")
                 onComplete(false)
             } finally {
                 _isLoading.value = false
@@ -424,7 +442,10 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             _isLoading.value = true
             try {
                 val approvedLinesList = lineIdsAndApprovals?.map { ApprovedLine(it.first, it.second) }
-                val request = ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
+                val request = when {
+                    approvedLinesList.isNullOrEmpty() -> ApproveQuoteRequest(comment = comment)
+                    else -> ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
+                }
                 val updated = api.approvePublicQuote(token, request)
                 _publicQuote.value = _publicQuote.value?.copy(quote = updated)
                 onComplete(true)
@@ -500,6 +521,63 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 sessionManager.cacheNotifications(notificationsAdapter.toJson(_notifications.value))
             } catch (e: Exception) {
                 Log.e("PortalViewModel", "Error marking all read", e)
+            }
+        }
+    }
+
+    fun loadAppointments() {
+        viewModelScope.launch {
+            try {
+                _appointments.value = api.getAppointments()
+            } catch (e: Exception) {
+                Log.e("PortalViewModel", "Error loading appointments", e)
+                _errorMessage.value = ApiErrorMapper.map(e, "appointments")
+            }
+        }
+    }
+
+    fun createAppointment(
+        scheduledAtIso: String,
+        requestedNotes: String?,
+        onComplete: (Boolean) -> Unit,
+    ) {
+        viewModelScope.launch {
+            _appointmentActionLoading.value = true
+            try {
+                api.createAppointment(
+                    CreatePortalAppointmentRequest(
+                        scheduledAt = scheduledAtIso,
+                        durationMinutes = 60,
+                        requestedNotes = requestedNotes?.takeIf { it.isNotBlank() },
+                    )
+                )
+                loadAppointments()
+                loadAllData(showLoading = false)
+                onComplete(true)
+            } catch (e: Exception) {
+                Log.e("PortalViewModel", "Error creating appointment", e)
+                _errorMessage.value = ApiErrorMapper.map(e, "createAppointment")
+                onComplete(false)
+            } finally {
+                _appointmentActionLoading.value = false
+            }
+        }
+    }
+
+    fun cancelAppointment(id: String, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _appointmentActionLoading.value = true
+            try {
+                api.cancelAppointment(id, CancelPortalAppointmentRequest())
+                loadAppointments()
+                loadAllData(showLoading = false)
+                onComplete(true)
+            } catch (e: Exception) {
+                Log.e("PortalViewModel", "Error cancelling appointment", e)
+                _errorMessage.value = ApiErrorMapper.map(e, "cancelAppointment")
+                onComplete(false)
+            } finally {
+                _appointmentActionLoading.value = false
             }
         }
     }

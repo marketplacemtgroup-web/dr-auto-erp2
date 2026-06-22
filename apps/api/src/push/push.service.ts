@@ -96,7 +96,7 @@ export class PushService {
       }
     }
 
-    await this.sendFcmToVehicle(vehicleId, payload, inbox?.serviceOrderId);
+    await this.sendFcmToVehicle(vehicleId, payload, inbox?.serviceOrderId, inbox?.quoteId);
 
     const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY');
     const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY');
@@ -152,6 +152,7 @@ export class PushService {
     vehicleId: string,
     payload: { title: string; body: string; url?: string },
     serviceOrderId?: string,
+    quoteId?: string,
   ) {
     const serviceAccountJson = this.resolveFirebaseServiceAccountJson();
     if (!serviceAccountJson) {
@@ -177,6 +178,7 @@ export class PushService {
       const data: Record<string, string> = {};
       if (payload.url) data.url = payload.url;
       if (serviceOrderId) data.serviceOrderId = serviceOrderId;
+      if (quoteId) data.quoteId = quoteId;
       if (payload.title) data.title = payload.title;
       if (payload.body) data.body = payload.body;
 

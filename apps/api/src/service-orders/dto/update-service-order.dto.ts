@@ -105,4 +105,20 @@ export class UpdateServiceOrderDto {
   @IsString()
   @MaxLength(500)
   statusReason?: string;
+
+  @IsOptional()
+  @IsInt()
+  revisionIntervalKm?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  revisionIntervalMonths?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  oilChangeIntervalKm?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  oilChangeIntervalMonths?: number | null;
 }

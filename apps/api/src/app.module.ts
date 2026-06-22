@@ -27,6 +27,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { StorageModule } from './storage/storage.module';
 import { TeamModule } from './team/team.module';
 import { CronModule } from './cron/cron.module';
+import { MaintenanceRemindersModule } from './maintenance-reminders/maintenance-reminders.module';
 import { PrintModule } from './print/print.module';
 import { SharedModule } from './shared/shared.module';
 import { EscalasModule } from './escalas/escalas.module';
@@ -68,6 +69,7 @@ import { ColaboradorAppModule } from './colaborador-app/colaborador-app.module';
     PontoModule,
     SolicitacoesFuncionariosModule,
     ColaboradorAppModule,
+    MaintenanceRemindersModule,
     CronModule,
     PrintModule,
   ],

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, QuoteLineType, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
 
 const SUPPLEMENT_OS_STATUSES: ServiceOrderStatus[] = [
   'IN_PROGRESS',
@@ -11,7 +12,10 @@ const SUPPLEMENT_OS_STATUSES: ServiceOrderStatus[] = [
 /** Mantém orçamento alinhado aos itens da OS para o portal do cliente. */
 @Injectable()
 export class QuotesSyncService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly portalNotify: PortalCustomerNotifyService,
+  ) {}
 
   private async nextQuoteNumber(organizationId: string) {
     const last = await this.prisma.quote.findFirst({
@@ -29,6 +33,25 @@ export class QuotesSyncService {
 
   private lineTotal(line: { unitPrice: Prisma.Decimal; quantity: number; discount: Prisma.Decimal }) {
     return Number(line.unitPrice) * line.quantity - Number(line.discount);
+  }
+
+  private pendingLineChanged(
+    existing: {
+      description: string;
+      quantity: number;
+      unitPrice: Prisma.Decimal;
+      discount: Prisma.Decimal;
+      approved: boolean | null;
+    },
+    item: { description: string; quantity: number; unitPrice: Prisma.Decimal; discount: Prisma.Decimal },
+  ) {
+    if (existing.approved !== null) return false;
+    return (
+      existing.description !== item.description ||
+      existing.quantity !== item.quantity ||
+      Number(existing.unitPrice) !== Number(item.unitPrice) ||
+      Number(existing.discount) !== Number(item.discount)
+    );
   }
 
   async hasPendingLines(quoteId: string) {
@@ -56,6 +79,7 @@ export class QuotesSyncService {
     const existingLines = await this.prisma.quoteLine.findMany({
       where: { quoteId },
     });
+    const hadLinesBefore = existingLines.length > 0;
     const byItemId = new Map(
       existingLines
         .filter((l) => l.serviceOrderItemId)
@@ -72,6 +96,9 @@ export class QuotesSyncService {
       });
     }
 
+    let addedPendingLines = 0;
+    let modifiedPendingLines = 0;
+
     for (let idx = 0; idx < items.length; idx++) {
       const item = items[idx];
       const existing = byItemId.get(item.id);
@@ -86,11 +113,13 @@ export class QuotesSyncService {
       };
 
       if (existing) {
+        if (this.pendingLineChanged(existing, item)) modifiedPendingLines++;
         await this.prisma.quoteLine.update({
           where: { id: existing.id },
           data: lineData,
         });
       } else {
+        addedPendingLines++;
         await this.prisma.quoteLine.create({
           data: {
             organizationId,
@@ -110,12 +139,29 @@ export class QuotesSyncService {
     });
 
     const hasPending = lines.some((l) => l.approved === null);
-    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
-    if (quote?.status === 'APPROVED' && hasPending) {
+    const quoteBeforeReopen = await this.prisma.quote.findUnique({ where: { id: quoteId } });
+    let reopenedToPending = false;
+    if (quoteBeforeReopen?.status === 'APPROVED' && hasPending) {
       await this.prisma.quote.update({
         where: { id: quoteId },
         data: { status: 'PENDING' },
       });
+      reopenedToPending = true;
+    }
+
+    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
+    if (quote?.status !== 'PENDING') return;
+
+    if (reopenedToPending) {
+      await this.portalNotify.notifyQuotePending(quoteId, 'supplement');
+      return;
+    }
+
+    const hasLineChanges =
+      (addedPendingLines > 0 && hadLinesBefore) || modifiedPendingLines > 0;
+    if (hasLineChanges) {
+      const kind = (await this.isSupplementQuote(quoteId)) ? 'supplement' : 'updated';
+      await this.portalNotify.notifyQuotePending(quoteId, kind);
     }
   }
 
@@ -126,6 +172,7 @@ export class QuotesSyncService {
     organizationId: string,
     quoteId: string,
     userId?: string,
+    options?: { notify?: boolean },
   ) {
     const quote = await this.prisma.quote.findFirst({
       where: { id: quoteId, organizationId },
@@ -173,6 +220,10 @@ export class QuotesSyncService {
       }),
     ]);
 
+    if (options?.notify !== false) {
+      await this.portalNotify.notifyQuotePending(quoteId, 'supplement');
+    }
+
     return quoteId;
   }
 
@@ -194,7 +245,7 @@ export class QuotesSyncService {
 
     const approved = so.quotes.find((q) => q.status === 'APPROVED');
     if (approved) {
-      await this.reopenForSupplement(organizationId, approved.id);
+      await this.reopenForSupplement(organizationId, approved.id, undefined, { notify: false });
     }
   }
 
@@ -243,6 +294,7 @@ export class QuotesSyncService {
         }),
       ]);
       await this.syncQuoteLines(draft.id, serviceOrderId, organizationId);
+      await this.portalNotify.notifyQuotePending(draft.id, 'new');
       return draft.id;
     }
 
@@ -250,7 +302,7 @@ export class QuotesSyncService {
       await this.syncQuoteLines(approved.id, serviceOrderId, organizationId);
       const hasPending = await this.hasPendingLines(approved.id);
       if (hasPending) {
-        await this.reopenForSupplement(organizationId, approved.id);
+        await this.reopenForSupplement(organizationId, approved.id, undefined, { notify: false });
       }
       return approved.id;
     }
@@ -279,6 +331,7 @@ export class QuotesSyncService {
     ]);
 
     await this.syncQuoteLines(quote.id, serviceOrderId, organizationId);
+    await this.portalNotify.notifyQuotePending(quote.id, 'new');
     return quote.id;
   }
 

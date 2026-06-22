@@ -84,4 +84,18 @@ interface PortalApi {
     suspend fun registerFcmToken(
         @Body request: FcmRegisterRequest
     ): ResponseBody
+
+    @GET("portal/appointments")
+    suspend fun getAppointments(): List<PortalAppointment>
+
+    @POST("portal/appointments")
+    suspend fun createAppointment(
+        @Body request: CreatePortalAppointmentRequest
+    ): PortalAppointment
+
+    @PATCH("portal/appointments/{id}")
+    suspend fun cancelAppointment(
+        @Path("id") id: String,
+        @Body request: CancelPortalAppointmentRequest
+    ): PortalAppointment
 }

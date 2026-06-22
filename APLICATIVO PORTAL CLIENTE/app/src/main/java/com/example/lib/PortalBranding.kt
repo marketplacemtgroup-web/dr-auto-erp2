@@ -4,11 +4,10 @@ object PortalBranding {
     const val APP_NAME = "OFICINA DO BETO"
     const val APP_TAGLINE = "Portal do Cliente"
 
-    /** Logo local (apps/portal/public/branding/logo.png) */
-    const val LOCAL_LOGO_PATH = "/branding/logo.png"
+    /** Logo oficial do portal (apps/portal/public/logo-oficinadobeto.png). */
+    const val LOCAL_LOGO_PATH = "/logo-oficinadobeto.png"
 
-    /** Fallback quando a API não retorna logoUrl */
-    fun defaultLogoUrl(): String = "https://oficina-beto-portal.vercel.app/branding/logo.png"
+    fun defaultLogoUrl(): String = resolveMediaUrl(LOCAL_LOGO_PATH)
 
     fun resolveLogoUrl(apiLogoUrl: String?): String {
         val trimmed = apiLogoUrl?.trim()
@@ -27,5 +26,8 @@ object PortalBranding {
         return "$base${if (path.startsWith("/")) path else "/$path"}"
     }
 
-    private val legacyLogoUrls = setOf("/logo-wtecmotors.png")
+    private val legacyLogoUrls = setOf(
+        "/logo-wtecmotors.png",
+        "/branding/logo.png",
+    )
 }

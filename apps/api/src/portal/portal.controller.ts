@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApproveLinesDto } from '../quotes/dto/approve-lines.dto';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { PortalLoginDto } from './dto/portal-login.dto';
+import { PortalCreateAppointmentDto } from './dto/portal-create-appointment.dto';
 import { PortalJwtGuard } from './portal.guard';
 import { PortalService } from './portal.service';
 
@@ -157,5 +158,33 @@ export class PortalController {
   @UseGuards(PortalJwtGuard)
   pushStatus(@CurrentUser() user: { vehicleId: string }) {
     return this.portalService.getPushStatus(user);
+  }
+
+  @Get('appointments')
+  @UseGuards(PortalJwtGuard)
+  listAppointments(@CurrentUser() user: { organizationId: string; vehicleId: string }) {
+    return this.portalService.listAppointments(user);
+  }
+
+  @Post('appointments')
+  @UseGuards(PortalJwtGuard)
+  createAppointment(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Body() dto: PortalCreateAppointmentDto,
+  ) {
+    return this.portalService.createAppointment(user, dto);
+  }
+
+  @Patch('appointments/:id')
+  @UseGuards(PortalJwtGuard)
+  cancelAppointment(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Param('id') id: string,
+    @Body() body: { status?: string },
+  ) {
+    if (body.status === 'CANCELLED') {
+      return this.portalService.cancelAppointment(user, id);
+    }
+    throw new BadRequestException('Ação não permitida');
   }
 }

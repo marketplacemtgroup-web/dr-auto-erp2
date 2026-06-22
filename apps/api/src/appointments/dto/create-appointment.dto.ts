@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { AppointmentStatus } from '@prisma/client';
+import { AppointmentSource, AppointmentStatus } from '@prisma/client';
 
 export class CreateAppointmentDto {
   @IsString()
@@ -30,4 +30,12 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsEnum(AppointmentSource)
+  source?: AppointmentSource;
+
+  @IsOptional()
+  @IsString()
+  requestedNotes?: string;
 }

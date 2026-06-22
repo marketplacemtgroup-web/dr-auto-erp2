@@ -27,12 +27,30 @@ data class Customer(
 data class Vehicle(
     val id: String,
     val plate: String,
-    val brand: String,
-    val model: String,
-    val year: String? = null,
+    val brand: String? = null,
+    val model: String? = null,
+    val year: Int? = null,
     val color: String? = null,
     val currentKm: Int? = null,
     val vehicleKind: String? = null
+) {
+    val displayName: String
+        get() = listOfNotNull(brand, model).joinToString(" ").ifBlank { "Veículo" }
+
+    val displayYear: String
+        get() = year?.toString() ?: "N/D"
+}
+
+@JsonClass(generateAdapter = true)
+data class ServiceOrderListItem(
+    val id: String,
+    val number: Int,
+    val status: String,
+    val totalAmount: Double? = 0.0,
+    val complaint: String? = null,
+    val estimatedAt: String? = null,
+    val updatedAt: String,
+    val createdAt: String
 )
 
 @JsonClass(generateAdapter = true)
@@ -57,6 +75,18 @@ data class ServiceOrderStatusHistory(
 )
 
 @JsonClass(generateAdapter = true)
+data class PortalPhoto(
+    val order: Int = 0,
+    val label: String = "",
+    val description: String? = null,
+    val result: String? = null,
+    val url: String,
+    val mimeType: String? = null,
+    val source: String? = null,
+    val createdAt: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class ChecklistItem(
     val category: String,
     val label: String,
@@ -72,7 +102,7 @@ data class ServiceOrderAttachment(
     val mimeType: String,
     val url: String,
     val category: String? = null,
-    val createdAt: String
+    val createdAt: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -91,7 +121,7 @@ data class ServiceOrder(
     val items: List<ServiceOrderItem>? = null,
     val timeline: List<ServiceOrderStatusHistory>? = null,
     val checklistItems: List<ChecklistItem>? = null,
-    val photos: List<String>? = null
+    val photos: List<PortalPhoto>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -116,14 +146,14 @@ data class PortalQuoteLine(
 @JsonClass(generateAdapter = true)
 data class PortalQuoteRow(
     val id: String,
-    val number: Int,
+    val number: Int? = null,
     val status: String, // 'PENDING', 'APPROVED', 'REJECTED'
     val amount: Double,
     val canRespond: Boolean,
     val isSupplement: Boolean,
     val pendingLineCount: Int,
     val lines: List<PortalQuoteLine> = emptyList(),
-    val photos: List<String>? = null,
+    val photos: List<PortalPhoto>? = null,
     val serviceOrder: ServiceOrderSummary? = null
 )
 
@@ -140,13 +170,56 @@ data class PortalNotification(
 )
 
 @JsonClass(generateAdapter = true)
+data class PortalAppointment(
+    val id: String,
+    val scheduledAt: String,
+    val durationMinutes: Int = 60,
+    val status: String,
+    val source: String? = null,
+    val requestedNotes: String? = null,
+    val notes: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class PortalUpcomingAppointment(
+    val id: String,
+    val scheduledAt: String,
+    val status: String,
+    val durationMinutes: Int = 60,
+)
+
+@JsonClass(generateAdapter = true)
+data class PortalMaintenanceReminder(
+    val id: String,
+    val type: String,
+    val dueKm: Int? = null,
+    val dueDate: String? = null,
+    val serviceOrderNumber: Int,
+    val serviceOrderId: String,
+)
+
+@JsonClass(generateAdapter = true)
 data class PortalDashboard(
     val organization: Organization,
     val customer: Customer,
     val vehicle: Vehicle,
-    val serviceOrders: List<ServiceOrder> = emptyList(),
+    val serviceOrders: List<ServiceOrderListItem> = emptyList(),
     val quotes: List<PortalQuoteRow> = emptyList(),
-    val attachments: List<ServiceOrderAttachment> = emptyList()
+    val attachments: List<ServiceOrderAttachment> = emptyList(),
+    val upcomingAppointment: PortalUpcomingAppointment? = null,
+    val maintenanceReminders: List<PortalMaintenanceReminder> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class CreatePortalAppointmentRequest(
+    val scheduledAt: String,
+    val durationMinutes: Int = 60,
+    val requestedNotes: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CancelPortalAppointmentRequest(
+    val status: String = "CANCELLED",
 )
 
 @JsonClass(generateAdapter = true)

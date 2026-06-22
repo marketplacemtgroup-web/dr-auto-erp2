@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, Upload, X } from "lucide-react";
@@ -6,7 +6,7 @@ import StatusBadge from "../../components/StatusBadge";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DateTimeField from "../../components/modules/DateTimeField";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
-import { fromDatetimeLocalValue, isoDatesEqual, splitDatetimeLocal, toDatetimeLocalValue } from "../../lib/datetimeLocal";
+import { fromDatetimeLocalValue, toDatetimeLocalValue } from "../../lib/datetimeLocal";
 import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/share/ShareLinkDialog";
 import { api, type QuoteLineRow, type ServiceOrderItemRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
@@ -50,6 +50,156 @@ const CHECKLIST_RESULT_OPTIONS = [
   { value: "DAMAGED", label: "Avariado" },
   { value: "NA", label: "N/A" },
 ] as const;
+
+const CHECKLIST_TEXT_ONLY_LABELS = new Set([
+  "Quantidade de combustível",
+  "KM",
+]);
+
+const MAINTENANCE_INTERVAL_OPTIONS = [
+  { value: "none", label: "Nenhum" },
+  { value: "5000_km", label: "5.000 km" },
+  { value: "10000_km", label: "10.000 km" },
+  { value: "12_months", label: "12 meses" },
+] as const;
+
+function encodeMaintenanceInterval(
+  km: number | null | undefined,
+  months: number | null | undefined,
+): string {
+  if (months === 12) return "12_months";
+  if (km === 5000) return "5000_km";
+  if (km === 10000) return "10000_km";
+  return "none";
+}
+
+function decodeMaintenanceInterval(value: string): {
+  km: number | null;
+  months: number | null;
+} {
+  if (value === "5000_km") return { km: 5000, months: null };
+  if (value === "10000_km") return { km: 10000, months: null };
+  if (value === "12_months") return { km: null, months: 12 };
+  return { km: null, months: null };
+}
+
+type DadosFormState = {
+  status: string;
+  estimatedAt: string;
+  complaint: string;
+  diagnosis: string;
+  internalNotes: string;
+  entryKm: string;
+  bay: string;
+  customerVisibleNotes: string;
+  paymentAgreement: string;
+  revisionInterval: string;
+  oilChangeInterval: string;
+};
+
+type EquipeFormState = {
+  generalResponsibleId: string;
+  checklistById: string;
+  diagnosisById: string;
+  quoteById: string;
+  executionById: string;
+  finalizedById: string;
+};
+
+type ChecklistDraftItem = { result: string; notes: string };
+
+function buildDadosForm(os: {
+  status: string;
+  estimatedAt: string | null;
+  complaint: string | null;
+  diagnosis: string | null;
+  internalNotes: string | null;
+  entryKm?: number | null;
+  bay?: string | null;
+  customerVisibleNotes?: string | null;
+  paymentAgreement?: string | null;
+  revisionIntervalKm?: number | null;
+  revisionIntervalMonths?: number | null;
+  oilChangeIntervalKm?: number | null;
+  oilChangeIntervalMonths?: number | null;
+}): DadosFormState {
+  return {
+    status: os.status,
+    estimatedAt: toDatetimeLocalValue(os.estimatedAt),
+    complaint: os.complaint ?? "",
+    diagnosis: os.diagnosis ?? "",
+    internalNotes: os.internalNotes ?? "",
+    entryKm: os.entryKm != null ? String(os.entryKm) : "",
+    bay: os.bay ?? "",
+    customerVisibleNotes: os.customerVisibleNotes ?? "",
+    paymentAgreement: os.paymentAgreement ?? "",
+    revisionInterval: encodeMaintenanceInterval(os.revisionIntervalKm, os.revisionIntervalMonths),
+    oilChangeInterval: encodeMaintenanceInterval(os.oilChangeIntervalKm, os.oilChangeIntervalMonths),
+  };
+}
+
+function buildEquipeForm(os: {
+  generalResponsible?: { id: string } | null;
+  checklistBy?: { id: string } | null;
+  diagnosisBy?: { id: string } | null;
+  quoteBy?: { id: string } | null;
+  executionBy?: { id: string } | null;
+  finalizedBy?: { id: string } | null;
+}): EquipeFormState {
+  return {
+    generalResponsibleId: os.generalResponsible?.id ?? "",
+    checklistById: os.checklistBy?.id ?? "",
+    diagnosisById: os.diagnosisBy?.id ?? "",
+    quoteById: os.quoteBy?.id ?? "",
+    executionById: os.executionBy?.id ?? "",
+    finalizedById: os.finalizedBy?.id ?? "",
+  };
+}
+
+function dadosFormToPayload(form: DadosFormState): Parameters<typeof api.updateServiceOrder>[2] {
+  const revision = decodeMaintenanceInterval(form.revisionInterval);
+  const oil = decodeMaintenanceInterval(form.oilChangeInterval);
+  return {
+    status: form.status,
+    estimatedAt: form.estimatedAt ? fromDatetimeLocalValue(form.estimatedAt) : null,
+    complaint: form.complaint,
+    diagnosis: form.diagnosis,
+    internalNotes: form.internalNotes,
+    entryKm: form.entryKm ? Number(form.entryKm) : undefined,
+    bay: form.bay,
+    customerVisibleNotes: form.customerVisibleNotes,
+    paymentAgreement: form.paymentAgreement,
+    revisionIntervalKm: revision.km,
+    revisionIntervalMonths: revision.months,
+    oilChangeIntervalKm: oil.km,
+    oilChangeIntervalMonths: oil.months,
+  };
+}
+
+function FormSaveBar({
+  onSave,
+  loading,
+  disabled,
+  label = "Salvar",
+}: {
+  onSave: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-[#F1F5F9]">
+      <button
+        type="button"
+        disabled={disabled || loading}
+        onClick={onSave}
+        className="inline-flex items-center gap-1.5 h-10 px-5 rounded-lg bg-[#0F3D4C] text-white text-sm font-medium hover:bg-[#0a2d38] disabled:opacity-50"
+      >
+        {loading ? "Salvando..." : label}
+      </button>
+    </div>
+  );
+}
 
 type OsQuote = {
   id: string;
@@ -121,8 +271,11 @@ export default function ServiceOrderDetailPage() {
     appliedById: "",
   });
 
-  const [estimatedAtLocal, setEstimatedAtLocal] = useState("");
-  const estimatedSyncSkipRef = useRef(true);
+  const [dadosForm, setDadosForm] = useState<DadosFormState | null>(null);
+  const [equipeForm, setEquipeForm] = useState<EquipeFormState | null>(null);
+  const [checklistDraft, setChecklistDraft] = useState<Record<string, ChecklistDraftItem>>({});
+  const [quotePaymentAgreement, setQuotePaymentAgreement] = useState("");
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   const { data: os, isLoading, error } = useApiQuery(
     ["service-order", id ?? ""],
@@ -138,9 +291,16 @@ export default function ServiceOrderDetailPage() {
 
   useEffect(() => {
     if (!os) return;
-    estimatedSyncSkipRef.current = true;
-    setEstimatedAtLocal(toDatetimeLocalValue(os.estimatedAt));
-  }, [os?.id, os?.estimatedAt]);
+    setDadosForm(buildDadosForm(os));
+    setEquipeForm(buildEquipeForm(os));
+    const draft: Record<string, ChecklistDraftItem> = {};
+    for (const item of os.checklistItems ?? []) {
+      draft[item.id] = { result: item.result ?? "", notes: item.notes ?? "" };
+    }
+    setChecklistDraft(draft);
+    const activeQ = getActiveQuote(os.quotes);
+    setQuotePaymentAgreement(activeQ?.paymentAgreement ?? "");
+  }, [os?.id, os?.updatedAt]);
 
   useEffect(() => {
     if (!os) return;
@@ -180,39 +340,27 @@ export default function ServiceOrderDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service-order", id] });
       queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+      setSaveSuccessMessage("Alterações salvas.");
+      window.setTimeout(() => setSaveSuccessMessage(null), 3000);
     },
   });
 
-  const osEstimatedRef = useRef<string | null>(null);
-  osEstimatedRef.current = os?.estimatedAt ?? null;
+  const saveDados = () => {
+    if (!dadosForm) return;
+    saveMeta.mutate(dadosFormToPayload(dadosForm));
+  };
 
-  const commitEstimatedAt = useCallback(
-    (local: string) => {
-      const nextIso = local ? fromDatetimeLocalValue(local) : null;
-      if (!isoDatesEqual(nextIso, osEstimatedRef.current)) {
-        saveMeta.mutate({ estimatedAt: nextIso });
-      }
-    },
-    [saveMeta],
-  );
-
-  const estimatedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!os || !estimatedAtLocal) return;
-    if (estimatedSyncSkipRef.current) {
-      estimatedSyncSkipRef.current = false;
-      return;
-    }
-    const { date } = splitDatetimeLocal(estimatedAtLocal);
-    if (!date) return;
-    if (estimatedDebounceRef.current) clearTimeout(estimatedDebounceRef.current);
-    estimatedDebounceRef.current = setTimeout(() => {
-      commitEstimatedAt(estimatedAtLocal);
-    }, 600);
-    return () => {
-      if (estimatedDebounceRef.current) clearTimeout(estimatedDebounceRef.current);
-    };
-  }, [estimatedAtLocal, os?.id, commitEstimatedAt]);
+  const saveEquipe = () => {
+    if (!equipeForm) return;
+    saveMeta.mutate({
+      generalResponsibleId: equipeForm.generalResponsibleId || null,
+      checklistById: equipeForm.checklistById || null,
+      diagnosisById: equipeForm.diagnosisById || null,
+      quoteById: equipeForm.quoteById || null,
+      executionById: equipeForm.executionById || null,
+      finalizedById: equipeForm.finalizedById || null,
+    });
+  };
 
   const resetItemForm = () => {
     setEditingItem(null);
@@ -334,8 +482,21 @@ export default function ServiceOrderDetailPage() {
   const saveChecklist = useMutation({
     mutationFn: (items: Array<{ id: string; result?: string | null; notes?: string }>) =>
       api.updateServiceOrderChecklist(token!, id!, items),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-order", id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+      setSaveSuccessMessage("Checklist salvo.");
+      window.setTimeout(() => setSaveSuccessMessage(null), 3000);
+    },
   });
+
+  const submitChecklist = () => {
+    const items = Object.entries(checklistDraft).map(([id, row]) => ({
+      id,
+      result: row.result || null,
+      notes: row.notes || undefined,
+    }));
+    saveChecklist.mutate(items);
+  };
 
   async function handleDeleteAttachment(attachmentId: string) {
     if (!token || !id) return;
@@ -476,6 +637,14 @@ export default function ServiceOrderDetailPage() {
   const canPrintQuote = os.items.length > 0;
   const quotePrintData = buildQuotePrintData(os, activeQuote);
 
+  const saveQuotePayment = () => {
+    if (!activeQuote?.id || !canManageQuote) return;
+    saveQuoteMeta.mutate({
+      quoteId: activeQuote.id,
+      payload: { paymentAgreement: quotePaymentAgreement },
+    });
+  };
+
   return (
     <>
     <main className="px-6 pb-8 print:hidden">
@@ -516,6 +685,14 @@ export default function ServiceOrderDetailPage() {
             <Printer size={16} />
             Imprimir
           </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            title="Excluir OS"
+            className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-[#E2E8F0] text-[#94A3B8] hover:text-[#DC2626] hover:bg-red-50 print:hidden"
+          >
+            <Trash2 size={16} />
+          </button>
           {Number(os.totalAmount) > 0 && token ? (
             <button
               type="button"
@@ -537,6 +714,12 @@ export default function ServiceOrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {saveSuccessMessage && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {saveSuccessMessage}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mb-5 border-b border-[#E2E8F0] print:hidden">
         {(
@@ -565,28 +748,28 @@ export default function ServiceOrderDetailPage() {
         ))}
       </div>
 
-      {tab === "equipe" && (
+      {tab === "equipe" && equipeForm && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 max-w-3xl">
           <h2 className="text-sm font-semibold text-[#1E293B] mb-4">Equipe da OS</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             {(
               [
-                ["generalResponsibleId", "Responsável geral", os.generalResponsible?.id],
-                ["checklistById", "Checklist por", os.checklistBy?.id],
-                ["diagnosisById", "Diagnóstico por", os.diagnosisBy?.id],
-                ["quoteById", "Orçamento por", os.quoteBy?.id],
-                ["executionById", "Execução por", os.executionBy?.id],
-                ["finalizedById", "Finalização por", os.finalizedBy?.id],
+                ["generalResponsibleId", "Responsável geral"],
+                ["checklistById", "Checklist por"],
+                ["diagnosisById", "Diagnóstico por"],
+                ["quoteById", "Orçamento por"],
+                ["executionById", "Execução por"],
+                ["finalizedById", "Finalização por"],
               ] as const
-            ).map(([field, label, current]) => (
+            ).map(([field, label]) => (
               <FormField key={field} label={label}>
                 <select
                   className={selectClass}
-                  value={current ?? ""}
+                  value={equipeForm[field]}
                   onChange={(e) =>
-                    saveMeta.mutate({
-                      [field]: e.target.value || null,
-                    } as Parameters<typeof api.updateServiceOrder>[2])
+                    setEquipeForm((prev) =>
+                      prev ? { ...prev, [field]: e.target.value } : prev,
+                    )
                   }
                 >
                   <option value="">—</option>
@@ -599,17 +782,24 @@ export default function ServiceOrderDetailPage() {
               </FormField>
             ))}
           </div>
+          <FormSaveBar
+            label="Salvar equipe"
+            onSave={saveEquipe}
+            loading={saveMeta.isPending}
+          />
         </div>
       )}
 
-      {tab === "dados" && (
+      {tab === "dados" && dadosForm && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-4">
             <FormField label="Status">
               <select
                 className={selectClass}
-                value={os.status}
-                onChange={(e) => saveMeta.mutate({ status: e.target.value })}
+                value={dadosForm.status}
+                onChange={(e) =>
+                  setDadosForm((prev) => (prev ? { ...prev, status: e.target.value } : prev))
+                }
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
@@ -620,45 +810,39 @@ export default function ServiceOrderDetailPage() {
             </FormField>
             <FormField label="Previsao de entrega">
               <DateTimeField
-                value={estimatedAtLocal}
-                onChange={setEstimatedAtLocal}
-                onCommit={commitEstimatedAt}
+                value={dadosForm.estimatedAt}
+                onChange={(estimatedAt) =>
+                  setDadosForm((prev) => (prev ? { ...prev, estimatedAt } : prev))
+                }
               />
-              {saveMeta.isPending ? (
-                <p className="text-[11px] text-[#64748B] mt-1">Salvando previsão...</p>
-              ) : null}
             </FormField>
             <FormField label="Relato do cliente">
               <textarea
                 className={`${inputClass} min-h-[80px] py-2`}
-                defaultValue={os.complaint ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (os.complaint ?? "")) {
-                    saveMeta.mutate({ complaint: e.target.value });
-                  }
-                }}
+                value={dadosForm.complaint}
+                onChange={(e) =>
+                  setDadosForm((prev) => (prev ? { ...prev, complaint: e.target.value } : prev))
+                }
               />
             </FormField>
             <FormField label="Diagnostico">
               <textarea
                 className={`${inputClass} min-h-[80px] py-2`}
-                defaultValue={os.diagnosis ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (os.diagnosis ?? "")) {
-                    saveMeta.mutate({ diagnosis: e.target.value });
-                  }
-                }}
+                value={dadosForm.diagnosis}
+                onChange={(e) =>
+                  setDadosForm((prev) => (prev ? { ...prev, diagnosis: e.target.value } : prev))
+                }
               />
             </FormField>
             <FormField label="Observacoes internas">
               <textarea
                 className={`${inputClass} min-h-[80px] py-2`}
-                defaultValue={os.internalNotes ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (os.internalNotes ?? "")) {
-                    saveMeta.mutate({ internalNotes: e.target.value });
-                  }
-                }}
+                value={dadosForm.internalNotes}
+                onChange={(e) =>
+                  setDadosForm((prev) =>
+                    prev ? { ...prev, internalNotes: e.target.value } : prev,
+                  )
+                }
               />
             </FormField>
           </div>
@@ -667,31 +851,30 @@ export default function ServiceOrderDetailPage() {
               <input
                 type="number"
                 className={inputClass}
-                defaultValue={os.entryKm ?? ""}
-                onBlur={(e) => {
-                  const v = e.target.value ? Number(e.target.value) : undefined;
-                  if (v !== os.entryKm) saveMeta.mutate({ entryKm: v });
-                }}
+                value={dadosForm.entryKm}
+                onChange={(e) =>
+                  setDadosForm((prev) => (prev ? { ...prev, entryKm: e.target.value } : prev))
+                }
               />
             </FormField>
             <FormField label="Box / elevador">
               <input
                 className={inputClass}
-                defaultValue={os.bay ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (os.bay ?? "")) saveMeta.mutate({ bay: e.target.value });
-                }}
+                value={dadosForm.bay}
+                onChange={(e) =>
+                  setDadosForm((prev) => (prev ? { ...prev, bay: e.target.value } : prev))
+                }
               />
             </FormField>
             <FormField label="Observações visíveis ao cliente">
               <textarea
                 className={`${inputClass} min-h-[60px] py-2`}
-                defaultValue={os.customerVisibleNotes ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (os.customerVisibleNotes ?? "")) {
-                    saveMeta.mutate({ customerVisibleNotes: e.target.value });
-                  }
-                }}
+                value={dadosForm.customerVisibleNotes}
+                onChange={(e) =>
+                  setDadosForm((prev) =>
+                    prev ? { ...prev, customerVisibleNotes: e.target.value } : prev,
+                  )
+                }
               />
             </FormField>
             <FormField label="Pagamento combinado">
@@ -701,14 +884,58 @@ export default function ServiceOrderDetailPage() {
               <textarea
                 className={`${inputClass} min-h-[72px] py-2`}
                 placeholder="Ex.: 50% à vista e 50% na entrega, PIX, 3x no cartão..."
-                defaultValue={os.paymentAgreement ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (os.paymentAgreement ?? "")) {
-                    saveMeta.mutate({ paymentAgreement: e.target.value });
-                  }
-                }}
+                value={dadosForm.paymentAgreement}
+                onChange={(e) =>
+                  setDadosForm((prev) =>
+                    prev ? { ...prev, paymentAgreement: e.target.value } : prev,
+                  )
+                }
               />
             </FormField>
+            <div className="mt-6 pt-6 border-t border-[#F1F5F9]">
+              <p className="text-sm font-semibold text-[#1E293B] mb-1">
+                Manutenção preventiva pós-entrega
+              </p>
+              <p className="text-xs text-[#94A3B8] mb-4">
+                Lembrete após entrega/execução — não é garantia. O sistema avisa a oficina e o cliente.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField label="Revisão do serviço">
+                  <select
+                    className={selectClass}
+                    value={dadosForm.revisionInterval}
+                    onChange={(e) =>
+                      setDadosForm((prev) =>
+                        prev ? { ...prev, revisionInterval: e.target.value } : prev,
+                      )
+                    }
+                  >
+                    {MAINTENANCE_INTERVAL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Troca de óleo">
+                  <select
+                    className={selectClass}
+                    value={dadosForm.oilChangeInterval}
+                    onChange={(e) =>
+                      setDadosForm((prev) =>
+                        prev ? { ...prev, oilChangeInterval: e.target.value } : prev,
+                      )
+                    }
+                  >
+                    {MAINTENANCE_INTERVAL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
@@ -716,6 +943,13 @@ export default function ServiceOrderDetailPage() {
             >
               Excluir esta OS
             </button>
+          </div>
+          <div className="lg:col-span-2">
+            <FormSaveBar
+              label="Salvar dados da OS"
+              onSave={saveDados}
+              loading={saveMeta.isPending}
+            />
           </div>
         </div>
       )}
@@ -858,19 +1092,18 @@ export default function ServiceOrderDetailPage() {
                   <textarea
                     className={`${inputClass} min-h-[72px] py-2`}
                     placeholder="Ex.: 50% à vista e 50% na entrega, PIX, 3x no cartão..."
-                    defaultValue={activeQuote.paymentAgreement ?? ""}
+                    value={quotePaymentAgreement}
                     disabled={!canManageQuote}
-                    onBlur={(e) => {
-                      if (!canManageQuote || !activeQuote.id) return;
-                      if (e.target.value !== (activeQuote.paymentAgreement ?? "")) {
-                        saveQuoteMeta.mutate({
-                          quoteId: activeQuote.id,
-                          payload: { paymentAgreement: e.target.value },
-                        });
-                      }
-                    }}
+                    onChange={(e) => setQuotePaymentAgreement(e.target.value)}
                   />
                 </FormField>
+                {canManageQuote && (
+                  <FormSaveBar
+                    label="Salvar pagamento combinado"
+                    onSave={saveQuotePayment}
+                    loading={saveQuoteMeta.isPending}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -1102,29 +1335,56 @@ export default function ServiceOrderDetailPage() {
             Checklist de entrada do veículo
           </p>
           <div className="divide-y divide-[#F1F5F9]">
-            {(os.checklistItems ?? []).map((item) => (
-              <div key={item.id} className="px-5 py-3 flex flex-wrap gap-3 items-center">
-                <span className="text-sm text-[#1E293B] flex-1 min-w-[200px]">{item.label}</span>
-                <select
-                  className={`${selectClass} w-36`}
-                  value={item.result ?? ""}
-                  onChange={(e) => {
-                    const items = (os.checklistItems ?? []).map((c) =>
-                      c.id === item.id
-                        ? { id: c.id, result: e.target.value || null, notes: c.notes ?? undefined }
-                        : { id: c.id, result: c.result, notes: c.notes ?? undefined },
-                    );
-                    saveChecklist.mutate(items);
-                  }}
-                >
-                  {CHECKLIST_RESULT_OPTIONS.map((o) => (
-                    <option key={o.value || "empty"} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+            {(os.checklistItems ?? []).map((item) => {
+              const isTextOnly = CHECKLIST_TEXT_ONLY_LABELS.has(item.label);
+              const draft = checklistDraft[item.id] ?? {
+                result: item.result ?? "",
+                notes: item.notes ?? "",
+              };
+              return (
+                <div key={item.id} className="px-5 py-3 flex flex-wrap gap-3 items-center">
+                  <span className="text-sm text-[#1E293B] flex-1 min-w-[200px]">{item.label}</span>
+                  {isTextOnly ? (
+                    <input
+                      type="text"
+                      className={`${inputClass} w-48`}
+                      placeholder={item.label === "KM" ? "Ex: 45000" : "Ex: 1/2 tanque"}
+                      value={draft.notes}
+                      onChange={(e) =>
+                        setChecklistDraft((prev) => ({
+                          ...prev,
+                          [item.id]: { ...draft, notes: e.target.value },
+                        }))
+                      }
+                    />
+                  ) : (
+                    <select
+                      className={`${selectClass} w-36`}
+                      value={draft.result}
+                      onChange={(e) =>
+                        setChecklistDraft((prev) => ({
+                          ...prev,
+                          [item.id]: { ...draft, result: e.target.value },
+                        }))
+                      }
+                    >
+                      {CHECKLIST_RESULT_OPTIONS.map((o) => (
+                        <option key={o.value || "empty"} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="px-5 pb-5">
+            <FormSaveBar
+              label="Salvar checklist"
+              onSave={submitChecklist}
+              loading={saveChecklist.isPending}
+            />
           </div>
         </div>
       )}
