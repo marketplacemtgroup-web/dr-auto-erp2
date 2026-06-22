@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, QuoteLineType, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
+import { PortalCustomerNotifyService, type QuoteNotifyKind } from '../events/portal-customer-notify.service';
 
 const SUPPLEMENT_OS_STATUSES: ServiceOrderStatus[] = [
   'IN_PROGRESS',
@@ -157,10 +157,14 @@ export class QuotesSyncService {
       return;
     }
 
-    const hasLineChanges =
-      (addedPendingLines > 0 && hadLinesBefore) || modifiedPendingLines > 0;
+    const hasLineChanges = addedPendingLines > 0 || modifiedPendingLines > 0;
     if (hasLineChanges) {
-      const kind = (await this.isSupplementQuote(quoteId)) ? 'supplement' : 'updated';
+      const kind: QuoteNotifyKind =
+        (await this.isSupplementQuote(quoteId))
+          ? 'supplement'
+          : !hadLinesBefore && addedPendingLines > 0
+            ? 'new'
+            : 'updated';
       await this.portalNotify.notifyQuotePending(quoteId, kind);
     }
   }

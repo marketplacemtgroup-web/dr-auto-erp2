@@ -5,8 +5,10 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.lib.ApiErrorMapper
+import com.example.lib.QuoteLineHelper
 import com.example.services.ApiClient
 import com.example.services.PortalFcmManager
+import com.example.services.PortalNotificationPermission
 import com.example.services.SessionManager
 import com.example.types.*
 import com.example.ui.theme.BrandThemeHolder
@@ -85,6 +87,15 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         if (_isLoggedIn.value) {
             loadAllData()
             startPolling()
+            registerPushTokenIfAllowed()
+        }
+    }
+
+    private fun registerPushTokenIfAllowed() {
+        viewModelScope.launch {
+            if (PortalNotificationPermission.isGranted(getApplication())) {
+                PortalFcmManager.registerWithApi(getApplication())
+            }
         }
     }
 
@@ -221,13 +232,12 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _isOffline.value = false
         loadAllData(showLoading = true)
         startPolling()
+        registerPushTokenIfAllowed()
         onSuccess()
     }
 
     fun registerPushToken() {
-        viewModelScope.launch {
-            PortalFcmManager.registerWithApi(getApplication())
-        }
+        registerPushTokenIfAllowed()
     }
 
     fun startPolling() {
@@ -335,6 +345,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _currentServiceOrder.value = null
             try {
                 val order = api.getServiceOrder(soId)
                 _currentServiceOrder.value = order
@@ -398,7 +409,12 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                val approvedLinesList = lineIdsAndApprovals?.map { ApprovedLine(it.first, it.second) }
+                val quoteLines = _currentQuote.value?.takeIf { it.id == quoteId }?.lines
+                    ?: _dashboard.value?.quotes?.find { it.id == quoteId }?.lines
+                    ?: emptyList()
+                val resolvedLines = lineIdsAndApprovals
+                    ?: QuoteLineHelper.buildApprovePayload(quoteLines)
+                val approvedLinesList = resolvedLines?.map { ApprovedLine(it.first, it.second) }
                 val request = when {
                     approvedLinesList.isNullOrEmpty() -> ApproveQuoteRequest(comment = comment)
                     else -> ApproveQuoteRequest(lines = approvedLinesList, comment = comment)
@@ -441,7 +457,10 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val approvedLinesList = lineIdsAndApprovals?.map { ApprovedLine(it.first, it.second) }
+                val quoteLines = _publicQuote.value?.quote?.lines ?: emptyList()
+                val resolvedLines = lineIdsAndApprovals
+                    ?: QuoteLineHelper.buildApprovePayload(quoteLines)
+                val approvedLinesList = resolvedLines?.map { ApprovedLine(it.first, it.second) }
                 val request = when {
                     approvedLinesList.isNullOrEmpty() -> ApproveQuoteRequest(comment = comment)
                     else -> ApproveQuoteRequest(lines = approvedLinesList, comment = comment)

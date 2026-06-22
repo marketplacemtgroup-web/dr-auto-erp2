@@ -15,6 +15,10 @@ import { ApproveLinesDto } from '../quotes/dto/approve-lines.dto';
 import { EventsService } from '../events/events.service';
 import { PushService } from '../push/push.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import {
+  CAR_CHECKLIST_TEMPLATE,
+  checklistMatchesTemplate,
+} from '../service-orders/checklist-template';
 import { notDeleted } from '../common/soft-delete';
 import { PortalCreateAppointmentDto } from './dto/portal-create-appointment.dto';
 
@@ -92,6 +96,32 @@ export class PortalService {
         };
       }),
     );
+  }
+
+  /** Sincroniza checklist legado (lista longa) com o template atual de 12 itens. */
+  private async ensureChecklistTemplate(organizationId: string, serviceOrderId: string) {
+    const items = await this.prisma.serviceOrderChecklistItem.findMany({
+      where: { serviceOrderId, organizationId },
+      orderBy: { sortOrder: 'asc' },
+      select: { label: true },
+    });
+    const needsSync =
+      items.length === 0 ||
+      !checklistMatchesTemplate(items.map((item) => item.label));
+    if (!needsSync) return;
+
+    await this.prisma.serviceOrderChecklistItem.deleteMany({
+      where: { serviceOrderId, organizationId },
+    });
+    await this.prisma.serviceOrderChecklistItem.createMany({
+      data: CAR_CHECKLIST_TEMPLATE.map((item, idx) => ({
+        organizationId,
+        serviceOrderId,
+        category: item.category,
+        label: item.label,
+        sortOrder: idx,
+      })),
+    });
   }
 
   /** Mesmo slug usado no app Android (ApiMappers.checklistCategorySlug). */
@@ -454,6 +484,8 @@ export class PortalService {
     ctx: { organizationId: string; vehicleId: string },
     serviceOrderId: string,
   ) {
+    await this.ensureChecklistTemplate(ctx.organizationId, serviceOrderId);
+
     const so = await this.prisma.serviceOrder.findFirst({
       where: {
         id: serviceOrderId,
@@ -491,6 +523,7 @@ export class PortalService {
       ...item,
       quantity: Number(item.quantity),
       unitPrice: Number(item.unitPrice),
+      discount: Number(item.discount),
     }));
 
     const timeline =

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.lib.PortalDateTime
 import com.example.lib.PortalStatus
+import com.example.lib.QuoteLineHelper
 import com.example.types.*
 import com.example.ui.components.*
 import com.example.ui.theme.ThemeMode
@@ -779,7 +780,7 @@ fun OrderDetailsScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(
-                                            when (item.result.uppercase()) {
+                                            when (item.result?.uppercase()) {
                                                 "OK" -> BrandPalette.StatusSuccessBg
                                                 "ATTENTION" -> BrandPalette.StatusPendingBg
                                                 "DAMAGED" -> BrandPalette.StatusErrorBg
@@ -789,7 +790,7 @@ fun OrderDetailsScreen(
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = when (item.result.uppercase()) {
+                                        text = when (item.result?.uppercase()) {
                                             "OK" -> "Regular"
                                             "ATTENTION" -> "Atenção"
                                             "DAMAGED" -> "Avariado"
@@ -797,7 +798,7 @@ fun OrderDetailsScreen(
                                         },
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = when (item.result.uppercase()) {
+                                            color = when (item.result?.uppercase()) {
                                                 "OK" -> BrandPalette.StatusSuccessText
                                                 "ATTENTION" -> BrandPalette.StatusPendingText
                                                 "DAMAGED" -> BrandPalette.StatusErrorText
@@ -1215,7 +1216,10 @@ fun BudgetScreen(
                         showApproveDialog = false
                         viewModel.approveQuote(
                             quoteId = quoteId,
-                            lineIdsAndApprovals = lineApprovals.toList(),
+                            lineIdsAndApprovals = QuoteLineHelper.buildSelectionsPayload(
+                                quote?.lines ?: emptyList(),
+                                lineApprovals,
+                            ),
                             comment = customComment.ifEmpty { null }
                         ) { success ->
                             if (success) {

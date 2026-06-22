@@ -1,6 +1,8 @@
 package com.example
 
+import com.example.lib.QuoteLineHelper
 import com.example.services.ApiClient
+import com.example.types.PortalQuoteLine
 import com.example.types.ServiceOrder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -46,5 +48,56 @@ class PortalServiceOrderParsingTest {
         assertNotNull(order)
         assertEquals(1, order!!.photos?.size)
         assertEquals("/uploads/photo1.jpg", order.photos?.first()?.url)
+    }
+
+    @Test
+    fun serviceOrderJson_withNullChecklistResult_parsesSuccessfully() {
+        val json = """
+        {
+          "id": "so-2",
+          "number": 43,
+          "status": "DIAGNOSIS",
+          "statusLabel": "Diagnóstico",
+          "totalAmount": 0,
+          "createdAt": "2026-01-10T08:00:00.000Z",
+          "updatedAt": "2026-01-15T10:00:00.000Z",
+          "items": [
+            {
+              "id": "item-1",
+              "description": "Troca de óleo",
+              "itemType": "SERVICE",
+              "quantity": 1,
+              "unitPrice": 120,
+              "discount": "0"
+            }
+          ],
+          "timeline": [],
+          "checklistItems": [
+            {
+              "category": "Exterior",
+              "label": "Para-choque",
+              "result": null,
+              "notes": null,
+              "photoUrl": null
+            }
+          ],
+          "photos": []
+        }
+        """.trimIndent()
+
+        val order = adapter.fromJson(json)
+        assertNotNull(order)
+        assertEquals(null, order!!.checklistItems?.first()?.result)
+        assertEquals(120.0, order.items?.first()?.unitPrice)
+    }
+
+    @Test
+    fun buildApprovePayload_usesPendingLinesOnly() {
+        val lines = listOf(
+            PortalQuoteLine("l1", "A", "SERVICE", 1.0, 10.0, approved = true),
+            PortalQuoteLine("l2", "B", "PART", 1.0, 20.0, approved = null),
+        )
+        val payload = QuoteLineHelper.buildApprovePayload(lines)
+        assertEquals(listOf("l2" to true), payload)
     }
 }

@@ -90,7 +90,7 @@ data class PortalPhoto(
 data class ChecklistItem(
     val category: String,
     val label: String,
-    val result: String, // 'OK', 'ATTENTION', 'DAMAGED', 'NA'
+    val result: String? = null,
     val notes: String? = null,
     val photoUrl: String? = null
 )

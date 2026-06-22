@@ -49,7 +49,7 @@ if (missing.length) {
   process.exit(1);
 }
 
-const expectedProjectId = 'oficina-do-beto-campinas';
+    const val expectedProjectId = 'oficina-do-beto-campinas';
 if (parsed.project_id !== expectedProjectId) {
   console.warn(
     `Aviso: project_id é "${parsed.project_id}" (esperado ${expectedProjectId}). Confira se o JSON é do projeto certo.`,

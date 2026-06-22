@@ -3,7 +3,7 @@ import { Prisma, ServiceOrderStatus } from '@prisma/client';
 import { QuotesSyncService } from '../quotes/quotes-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockMovementService } from '../products/stock-movement.service';
-import { CAR_CHECKLIST_TEMPLATE } from './checklist-template';
+import { CAR_CHECKLIST_TEMPLATE, checklistMatchesTemplate } from './checklist-template';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import { CreateServiceOrderItemDto } from './dto/create-service-order-item.dto';
 import { UpdateServiceOrderItemDto } from './dto/update-service-order-item.dto';
@@ -212,7 +212,14 @@ export class ServiceOrdersService {
     });
     if (!row) throw new NotFoundException('Ordem de serviço não encontrada');
 
-    if (row.checklistItems.length === 0) {
+    const needsChecklist =
+      row.checklistItems.length === 0 ||
+      !checklistMatchesTemplate(row.checklistItems.map((item) => item.label));
+
+    if (needsChecklist) {
+      await this.prisma.serviceOrderChecklistItem.deleteMany({
+        where: { serviceOrderId: id, organizationId },
+      });
       await this.prisma.serviceOrderChecklistItem.createMany({
         data: CAR_CHECKLIST_TEMPLATE.map((item, idx) => ({
           organizationId,

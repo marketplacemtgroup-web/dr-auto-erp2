@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.example.Screen
 import com.example.lib.PortalDateTime
 import com.example.lib.PortalStatus
+import com.example.lib.QuoteLineHelper
 import com.example.types.*
 import com.example.ui.components.*
 import com.example.ui.theme.ThemeMode
@@ -659,7 +660,13 @@ fun PublicQuoteScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showApproveDialog = false
-                    viewModel.approvePublicQuote(token, lineApprovals.toList(), customComment.ifEmpty { null }) { }
+                    viewModel.approvePublicQuote(
+                        token,
+                        publicQuote?.quote?.lines?.let { lines ->
+                            QuoteLineHelper.buildSelectionsPayload(lines, lineApprovals)
+                        },
+                        customComment.ifEmpty { null },
+                    ) { }
                 }) { Text("Autorizar", fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { showApproveDialog = false }) { Text("Cancelar") } }

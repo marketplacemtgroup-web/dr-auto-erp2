@@ -10,10 +10,11 @@ class LineApprovalDto {
 }
 
 export class ApproveLinesDto {
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LineApprovalDto)
-  lines!: LineApprovalDto[];
+  lines?: LineApprovalDto[];
 
   @IsOptional()
   @IsString()

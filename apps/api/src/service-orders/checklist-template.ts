@@ -21,3 +21,11 @@ export const CHECKLIST_TEXT_ONLY_LABELS = new Set([
   'Quantidade de combustível',
   'KM',
 ]);
+
+const TEMPLATE_LABELS = CAR_CHECKLIST_TEMPLATE.map((item) => item.label);
+
+/** OS antigas podem ter checklist legado (22 itens); detecta divergência do template atual. */
+export function checklistMatchesTemplate(currentLabels: string[]): boolean {
+  if (currentLabels.length !== TEMPLATE_LABELS.length) return false;
+  return TEMPLATE_LABELS.every((label, idx) => currentLabels[idx] === label);
+}
