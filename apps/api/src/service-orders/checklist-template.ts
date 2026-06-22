@@ -2,25 +2,16 @@ export const CAR_CHECKLIST_TEMPLATE: Array<{
   category: string;
   label: string;
 }> = [
-  { category: 'external', label: 'Foto frente' },
+  { category: 'external', label: 'Foto dianteira' },
   { category: 'external', label: 'Foto traseira' },
-  { category: 'external', label: 'Foto lado direito' },
-  { category: 'external', label: 'Foto lado esquerdo' },
-  { category: 'external', label: 'Chassis' },
+  { category: 'external', label: 'Foto lateral direita' },
+  { category: 'external', label: 'Foto lateral esquerda' },
   { category: 'internal', label: 'Painel' },
-  { category: 'tires', label: 'Sulco pneu 1' },
-  { category: 'tires', label: 'Sulco pneu 2' },
-  { category: 'tires', label: 'Sulco pneu 3' },
-  { category: 'tires', label: 'Sulco pneu 4' },
-  { category: 'internal', label: 'Quantidade de combustível' },
-  { category: 'internal', label: 'KM' },
+  { category: 'internal', label: 'Teto' },
 ];
 
 /** Itens preenchidos por texto (notes) em vez de resultado OK/Atenção. */
-export const CHECKLIST_TEXT_ONLY_LABELS = new Set([
-  'Quantidade de combustível',
-  'KM',
-]);
+export const CHECKLIST_TEXT_ONLY_LABELS = new Set<string>();
 
 const TEMPLATE_LABELS = CAR_CHECKLIST_TEMPLATE.map((item) => item.label);
 

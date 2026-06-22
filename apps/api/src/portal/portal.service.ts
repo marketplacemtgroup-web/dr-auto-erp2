@@ -98,7 +98,7 @@ export class PortalService {
     );
   }
 
-  /** Sincroniza checklist legado (lista longa) com o template atual de 12 itens. */
+  /** Sincroniza checklist legado com o template atual (6 fotos). */
   private async ensureChecklistTemplate(organizationId: string, serviceOrderId: string) {
     const items = await this.prisma.serviceOrderChecklistItem.findMany({
       where: { serviceOrderId, organizationId },

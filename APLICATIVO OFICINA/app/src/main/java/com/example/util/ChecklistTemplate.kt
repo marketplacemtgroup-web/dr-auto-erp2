@@ -5,33 +5,20 @@ import com.example.data.model.PhotoChecklistStatus
 
 /** Alinhado a `apps/api/src/service-orders/checklist-template.ts` e ao ERP web. */
 object ChecklistTemplate {
-    val TEXT_ONLY_LABELS = setOf(
-        "Quantidade de combustível",
-        "KM",
-    )
+    val TEXT_ONLY_LABELS = emptySet<String>()
 
     val LABELS = listOf(
-        "Foto frente",
+        "Foto dianteira",
         "Foto traseira",
-        "Foto lado direito",
-        "Foto lado esquerdo",
-        "Chassis",
+        "Foto lateral direita",
+        "Foto lateral esquerda",
         "Painel",
-        "Sulco pneu 1",
-        "Sulco pneu 2",
-        "Sulco pneu 3",
-        "Sulco pneu 4",
-        "Quantidade de combustível",
-        "KM",
+        "Teto",
     )
 
     fun isTextOnly(label: String): Boolean = label in TEXT_ONLY_LABELS
 
-    fun textPlaceholder(label: String): String = when (label) {
-        "KM" -> "Ex: 45000"
-        "Quantidade de combustível" -> "Ex: 1/2 tanque"
-        else -> "Informe o valor"
-    }
+    fun textPlaceholder(label: String): String = "Informe o valor"
 
     fun isComplete(item: ChecklistPhoto): Boolean =
         if (isTextOnly(item.label)) {

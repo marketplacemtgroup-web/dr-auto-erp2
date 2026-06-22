@@ -57,10 +57,7 @@ const CHECKLIST_RESULT_OPTIONS = [
   { value: "NA", label: "N/A" },
 ] as const;
 
-const CHECKLIST_TEXT_ONLY_LABELS = new Set([
-  "Quantidade de combustível",
-  "KM",
-]);
+const CHECKLIST_TEXT_ONLY_LABELS = new Set<string>();
 
 const MAINTENANCE_INTERVAL_OPTIONS = [
   { value: "none", label: "Nenhum" },
