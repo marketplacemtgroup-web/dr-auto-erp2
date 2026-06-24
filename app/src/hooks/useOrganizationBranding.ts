@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { QUERY_STALE_TIME_MS } from "../lib/query-cache";
 import { useAuthStore } from "../stores/authStore";
 
 export function useOrganizationBranding() {
@@ -10,7 +11,7 @@ export function useOrganizationBranding() {
     queryKey: ["organization"],
     queryFn: () => api.organization(token!),
     enabled: !!token,
-    staleTime: 60_000,
+    staleTime: QUERY_STALE_TIME_MS,
   });
 
   useEffect(() => {

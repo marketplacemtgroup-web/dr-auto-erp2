@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { normalizeDashboardKpis } from "../lib/normalizeDashboardKpis";
+import { QUERY_STALE_TIME_MS } from "../lib/query-cache";
 import { useAuthStore } from "../stores/authStore";
 import { usePermissions } from "./usePermissions";
 
@@ -12,8 +13,8 @@ export function useDashboardOperationalKpis() {
     queryFn: async () =>
       normalizeDashboardKpis(await api.dashboardOperationalKpis(token!)),
     enabled: !!token,
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: QUERY_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
     retry: 2,
   });
 }
@@ -26,7 +27,7 @@ export function useDashboardFinancialKpis(enabled = true) {
     queryFn: async () =>
       normalizeDashboardKpis(await api.dashboardFinancialKpis(token!)),
     enabled: enabled && !!token,
-    staleTime: 120_000,
+    staleTime: QUERY_STALE_TIME_MS,
     refetchOnWindowFocus: false,
     retry: 1,
   });

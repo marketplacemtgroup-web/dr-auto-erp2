@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { QUERY_GC_TIME_MS, QUERY_STALE_TIME_MS } from "../lib/query-cache";
 import { useAuthStore } from "../stores/authStore";
 
 export function useAuthToken() {
@@ -15,8 +16,8 @@ export function useApiQuery<T>(
     queryKey: [...key, token],
     queryFn: () => fetcher(token!),
     enabled: enabled && !!token,
-    staleTime: 60_000,
-    gcTime: 5 * 60_000,
+    staleTime: QUERY_STALE_TIME_MS,
+    gcTime: QUERY_GC_TIME_MS,
     retry: 2,
     placeholderData: (prev) => prev,
   });

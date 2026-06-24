@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
 import App from "./App.tsx";
 import { setupChunkReloadHandlers } from "./lib/lazyWithRetry";
+import { QUERY_GC_TIME_MS, QUERY_STALE_TIME_MS } from "./lib/query-cache";
 import { setupPwa } from "./pwa/register";
 
 setupChunkReloadHandlers();
@@ -14,8 +15,8 @@ const queryClient = new QueryClient({
     queries: {
       retry: 0,
       refetchOnWindowFocus: false,
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
+      staleTime: QUERY_STALE_TIME_MS,
+      gcTime: QUERY_GC_TIME_MS,
     },
   },
 });

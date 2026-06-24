@@ -15,6 +15,7 @@ import {
   parseLocalIsoDate,
   type ReportPeriodState,
 } from "../../lib/reportPeriod";
+import { QUERY_STALE_TIME_MS } from "../../lib/query-cache";
 import { useAuthStore } from "../../stores/authStore";
 
 export default function ReportsPage() {
@@ -35,7 +36,7 @@ export default function ReportsPage() {
       return normalizeReportsFull(raw);
     },
     enabled: !!token,
-    staleTime: 120_000,
+    staleTime: QUERY_STALE_TIME_MS,
   });
 
   const revenueChart = useMemo(
