@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import DataTable from "../../components/modules/DataTable";
-import { inputClass, selectClass } from "../../components/modules/FormDrawer";
+import { selectClass } from "../../components/modules/FormDrawer";
 import { api } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { routes } from "../../lib/routes";
@@ -109,9 +109,11 @@ export default function CommissionsPage() {
           {
             key: "amountLabel",
             header: "Valor",
-            align: "right",
+            className: "text-right",
             render: (r) => (
-              <span className="font-medium">{(r as { amountLabel: string }).amountLabel}</span>
+              <span className="font-medium block text-right">
+                {(r as { amountLabel: string }).amountLabel}
+              </span>
             ),
           },
           {

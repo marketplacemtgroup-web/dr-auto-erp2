@@ -101,7 +101,13 @@ export default function EmployeeDetailPage() {
 
   const emp = data as EmployeeRow & {
     commissionRules?: Array<{ baseCalculation: string; percentage: number | string | null }>;
-    generatedCommissions?: Array<{ description: string; commissionAmount: number | string; status: string }>;
+    generatedCommissions?: Array<{
+      description: string;
+      commissionAmount: number | string;
+      status: string;
+      generatedAt?: string;
+      serviceOrder?: { id: string; number: number } | null;
+    }>;
     entries?: Array<{ description: string; amount: number | string; entryType: string; entryDate: string }>;
     actionLogs?: Array<{ description: string; createdAt: string }>;
     paymentConfig?: { paymentType: string; fixedSalary: number | string | null; pixKey: string | null };
@@ -407,15 +413,7 @@ export default function EmployeeDetailPage() {
         <section className="bg-white rounded-xl border border-[#E5E7EB] p-5 lg:col-span-2">
           <h2 className="font-semibold mb-3">Comissões recentes</h2>
           <ul className="text-sm space-y-2">
-            {(
-              emp.generatedCommissions ?? [] as Array<{
-                description: string;
-                commissionAmount: number | string;
-                status: string;
-                generatedAt?: string;
-                serviceOrder?: { id: string; number: number } | null;
-              }>
-            ).map((c, i) => (
+            {(emp.generatedCommissions ?? []).map((c, i) => (
               <li key={i} className="border-b border-[#F3F4F6] pb-2">
                 <div className="flex justify-between gap-2">
                   <span className="font-medium">{c.description}</span>

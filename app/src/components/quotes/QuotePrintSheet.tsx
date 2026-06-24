@@ -106,8 +106,6 @@ type PrintLine = {
   total: number;
 };
 
-import { itemTypeLabel } from "../../lib/itemType";
-
 function buildPrintLines(quote: QuotePrintData): PrintLine[] {
   if (quote.freeTextEnabled && quote.freeTextContent?.trim()) {
     const amount = Number(quote.freeTextAmount ?? quote.amount);
