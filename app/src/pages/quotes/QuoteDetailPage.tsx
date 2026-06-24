@@ -41,6 +41,9 @@ export default function QuoteDetailPage() {
     catalogItemId: "",
   });
   const [paymentAgreement, setPaymentAgreement] = useState("");
+  const [freeTextEnabled, setFreeTextEnabled] = useState(false);
+  const [freeTextContent, setFreeTextContent] = useState("");
+  const [freeTextAmount, setFreeTextAmount] = useState("");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const { data: quote, isLoading, error } = useApiQuery(
@@ -63,7 +66,20 @@ export default function QuoteDetailPage() {
 
   useEffect(() => {
     setPaymentAgreement(quote?.paymentAgreement ?? "");
-  }, [quote?.id, quote?.paymentAgreement]);
+    setFreeTextEnabled(quote?.freeTextEnabled ?? false);
+    setFreeTextContent(quote?.freeTextContent ?? "");
+    setFreeTextAmount(
+      quote?.freeTextAmount != null && quote.freeTextAmount !== ""
+        ? String(quote.freeTextAmount)
+        : "",
+    );
+  }, [
+    quote?.id,
+    quote?.paymentAgreement,
+    quote?.freeTextEnabled,
+    quote?.freeTextContent,
+    quote?.freeTextAmount,
+  ]);
 
   const canEdit = quote?.status === "PENDING" || quote?.status === "DRAFT";
 
@@ -171,7 +187,12 @@ export default function QuoteDetailPage() {
 
   const saveQuotePayment = () => {
     if (!canEdit) return;
-    saveQuoteMeta.mutate({ paymentAgreement });
+    saveQuoteMeta.mutate({
+      paymentAgreement,
+      freeTextEnabled,
+      freeTextContent: freeTextEnabled ? freeTextContent : "",
+      freeTextAmount: freeTextEnabled ? Number(freeTextAmount) || 0 : null,
+    });
   };
 
   async function shareQuoteLink() {
@@ -341,9 +362,54 @@ export default function QuoteDetailPage() {
       )}
 
       <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 mb-5">
-        <FormField label="Pagamento combinado">
+        <div className="mb-5 pb-5 border-b border-[#F1F5F9]">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={freeTextEnabled}
+              disabled={!canEdit}
+              onChange={(e) => setFreeTextEnabled(e.target.checked)}
+            />
+            <span>
+              <span className="text-sm font-medium text-[#1E293B] block">
+                Orçamento em texto livre (sem cadastrar peças no estoque)
+              </span>
+              <span className="text-xs text-[#94A3B8]">
+                Descreva o orçamento em texto e informe um valor fechado. Não movimenta estoque. Se o
+                cliente aprovar, cadastre as peças depois em Compras.
+              </span>
+            </span>
+          </label>
+          {freeTextEnabled && (
+            <div className="mt-4 space-y-3">
+              <FormField label="Descrição do orçamento">
+                <textarea
+                  className={`${inputClass} min-h-[120px] py-2`}
+                  placeholder="Liste peças e serviços necessários..."
+                  value={freeTextContent}
+                  disabled={!canEdit}
+                  onChange={(e) => setFreeTextContent(e.target.value)}
+                />
+              </FormField>
+              <FormField label="Valor fechado (R$)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={inputClass}
+                  placeholder="0,00"
+                  value={freeTextAmount}
+                  disabled={!canEdit}
+                  onChange={(e) => setFreeTextAmount(e.target.value)}
+                />
+              </FormField>
+            </div>
+          )}
+        </div>
+        <FormField label="Forma de Pagamento">
           <p className="text-xs text-[#94A3B8] mb-2">
-            Lembrete do combinado com o cliente. Não registra cobrança no financeiro.
+            Lembrete da forma de pagamento combinada com o cliente. Não registra cobrança no financeiro.
           </p>
           <textarea
             className={`${inputClass} min-h-[72px] py-2`}
@@ -393,13 +459,23 @@ export default function QuoteDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && (
+            {items.length === 0 && !freeTextEnabled && (
               <tr>
                 <td
                   colSpan={canEdit ? 6 : 5}
                   className="px-4 py-8 text-center text-[#94A3B8]"
                 >
-                  Adicione serviços e peças para enviar ao cliente.
+                  Adicione serviços e peças ou use o orçamento em texto livre acima.
+                </td>
+              </tr>
+            )}
+            {items.length === 0 && freeTextEnabled && (
+              <tr>
+                <td
+                  colSpan={canEdit ? 6 : 5}
+                  className="px-4 py-8 text-center text-[#64748B] whitespace-pre-wrap"
+                >
+                  {freeTextContent.trim() || "Preencha a descrição do orçamento em texto livre."}
                 </td>
               </tr>
             )}

@@ -8,7 +8,7 @@ function useAuthPersistHydrated() {
   useEffect(() => {
     setHydrated(useAuthStore.persist.hasHydrated());
     const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-    const fallback = window.setTimeout(() => setHydrated(true), 800);
+    const fallback = window.setTimeout(() => setHydrated(true), 200);
     return () => {
       unsub();
       window.clearTimeout(fallback);

@@ -29,6 +29,7 @@ export const routes = {
   equipeRegrasComissao: "/dashboard/equipe/regras-comissao",
   equipeLancamentos: "/dashboard/equipe/lancamentos",
   equipeFechamentos: "/dashboard/equipe/fechamentos",
+  equipeComissoes: "/dashboard/equipe/comissoes",
   equipeProdutividade: "/dashboard/equipe/produtividade",
   equipeEscalas: "/dashboard/equipe/escalas",
   equipePonto: "/dashboard/equipe/ponto",

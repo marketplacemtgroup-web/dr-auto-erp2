@@ -407,12 +407,28 @@ export default function EmployeeDetailPage() {
         <section className="bg-white rounded-xl border border-[#E5E7EB] p-5 lg:col-span-2">
           <h2 className="font-semibold mb-3">Comissões recentes</h2>
           <ul className="text-sm space-y-2">
-            {(emp.generatedCommissions ?? []).map((c, i) => (
-              <li key={i} className="flex justify-between border-b border-[#F3F4F6] pb-2">
-                <span>{c.description}</span>
-                <span>
-                  {formatMoney(c.commissionAmount)} · {c.status}
-                </span>
+            {(
+              emp.generatedCommissions ?? [] as Array<{
+                description: string;
+                commissionAmount: number | string;
+                status: string;
+                generatedAt?: string;
+                serviceOrder?: { id: string; number: number } | null;
+              }>
+            ).map((c, i) => (
+              <li key={i} className="border-b border-[#F3F4F6] pb-2">
+                <div className="flex justify-between gap-2">
+                  <span className="font-medium">{c.description}</span>
+                  <span>{formatMoney(c.commissionAmount)}</span>
+                </div>
+                <p className="text-xs text-[#6B7280] mt-0.5">
+                  {c.generatedAt
+                    ? new Date(c.generatedAt).toLocaleString("pt-BR")
+                    : "—"}
+                  {c.serviceOrder?.number ? ` · OS #${c.serviceOrder.number}` : ""}
+                  {" · "}
+                  {c.status}
+                </p>
               </li>
             ))}
           </ul>

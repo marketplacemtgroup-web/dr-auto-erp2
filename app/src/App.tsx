@@ -37,6 +37,7 @@ const CommissionRulesPage = lazyWithRetry(() => import("./pages/team/CommissionR
 const TeamEntriesPage = lazyWithRetry(() => import("./pages/team/TeamEntriesPage"));
 const PayrollPage = lazyWithRetry(() => import("./pages/team/PayrollPage"));
 const ProductivityPage = lazyWithRetry(() => import("./pages/team/ProductivityPage"));
+const CommissionsPage = lazyWithRetry(() => import("./pages/team/CommissionsPage"));
 const EscalasPage = lazyWithRetry(() => import("./pages/team/EscalasPage"));
 const PontoPage = lazyWithRetry(() => import("./pages/team/PontoPage"));
 const SolicitacoesPage = lazyWithRetry(() => import("./pages/team/SolicitacoesPage"));
@@ -262,6 +263,14 @@ export default function App() {
               element={
                 <Lazy>
                   <PayrollPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="comissoes"
+              element={
+                <Lazy>
+                  <CommissionsPage />
                 </Lazy>
               }
             />

@@ -713,13 +713,16 @@ export default function ServiceOrderDetailPage() {
               className="h-9 px-3 rounded-lg bg-[#16A34A] text-white text-sm print:hidden"
               onClick={() =>
                 api.financialFromServiceOrder(token, os.id).then((entry) => {
+                  queryClient.invalidateQueries({ queryKey: ["service-order", os.id] });
+                  queryClient.invalidateQueries({ queryKey: ["appointments"] });
+                  queryClient.invalidateQueries({ queryKey: ["financial"] });
                   navigate(routes.financeiro, {
                     state: { tab: "cash", payEntry: entry },
                   });
                 })
               }
             >
-              Gerar recebivel
+              Gerar recebível e entregar
             </button>
           ) : null}
           <div className="text-right">
@@ -765,6 +768,12 @@ export default function ServiceOrderDetailPage() {
       {tab === "equipe" && equipeForm && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 max-w-3xl">
           <h2 className="text-sm font-semibold text-[#1E293B] mb-4">Equipe da OS</h2>
+          {["FINISHED", "DELIVERED", "AWAITING_PAYMENT"].includes(os.status) && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              OS finalizada: ao salvar alterações na equipe, comissões pendentes serão recalculadas
+              automaticamente.
+            </p>
+          )}
           <div className="grid sm:grid-cols-2 gap-4">
             {(
               [
@@ -801,6 +810,20 @@ export default function ServiceOrderDetailPage() {
             onSave={saveEquipe}
             loading={saveMeta.isPending}
           />
+          {["FINISHED", "DELIVERED", "AWAITING_PAYMENT"].includes(os.status) && token && (
+            <button
+              type="button"
+              className="mt-3 h-9 px-3 rounded-lg border border-[#E2E8F0] text-sm text-[#64748B] hover:bg-[#F8FAFC]"
+              onClick={() => {
+                void api.regenerateCommissions(token, os.id).then(() => {
+                  setSaveSuccessMessage("Comissões recalculadas.");
+                  window.setTimeout(() => setSaveSuccessMessage(null), 3000);
+                });
+              }}
+            >
+              Recalcular comissões
+            </button>
+          )}
         </div>
       )}
 
@@ -891,9 +914,9 @@ export default function ServiceOrderDetailPage() {
                 }
               />
             </FormField>
-            <FormField label="Pagamento combinado">
+            <FormField label="Forma de Pagamento">
               <p className="text-xs text-[#94A3B8] mb-2">
-                Lembrete do combinado com o cliente. Não registra cobrança no financeiro.
+                Lembrete da forma de pagamento combinada com o cliente. Não registra cobrança no financeiro.
               </p>
               <textarea
                 className={`${inputClass} min-h-[72px] py-2`}
@@ -1099,7 +1122,7 @@ export default function ServiceOrderDetailPage() {
 
             {activeQuote && (
               <div className="mt-4 pt-4 border-t border-[#F1F5F9]">
-                <FormField label="Pagamento combinado (orçamento)">
+                <FormField label="Forma de Pagamento (orçamento)">
                   <p className="text-xs text-[#94A3B8] mb-2">
                     Lembrete do combinado com o cliente. Não registra cobrança no financeiro.
                   </p>
@@ -1113,7 +1136,7 @@ export default function ServiceOrderDetailPage() {
                 </FormField>
                 {canManageQuote && (
                   <FormSaveBar
-                    label="Salvar pagamento combinado"
+                    label="Salvar forma de pagamento"
                     onSave={saveQuotePayment}
                     loading={saveQuoteMeta.isPending}
                   />

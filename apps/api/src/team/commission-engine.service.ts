@@ -7,6 +7,7 @@ import {
   GeneratedCommissionStatus,
   Prisma,
   ServiceOrderItemType,
+  ServiceOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isCommissionEligibleItemType } from '../common/item-type.util';
@@ -292,5 +293,30 @@ export class CommissionEngineService {
       },
       data: { status: 'CANCELADA' },
     });
+  }
+
+  /** Recalcula comissões pendentes após alteração de equipe em OS fechada. */
+  async regenerateForServiceOrder(organizationId: string, serviceOrderId: string) {
+    await this.prisma.generatedCommission.updateMany({
+      where: {
+        organizationId,
+        serviceOrderId,
+        payrollId: null,
+        status: { in: ['PENDENTE', 'APROVADA'] },
+      },
+      data: { status: 'CANCELADA' },
+    });
+
+    const so = await this.prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, organizationId },
+      select: { status: true },
+    });
+    if (!so) return [];
+
+    const closed: ServiceOrderStatus[] = ['FINISHED', 'DELIVERED', 'AWAITING_PAYMENT'];
+    if (!closed.includes(so.status)) return [];
+
+    const trigger = so.status === 'DELIVERED' ? 'OS_ENTREGUE' : 'OS_FINALIZADA';
+    return this.generateForServiceOrder(organizationId, serviceOrderId, trigger);
   }
 }

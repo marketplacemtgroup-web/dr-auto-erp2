@@ -35,7 +35,7 @@ export default function ReportsPage() {
       return normalizeReportsFull(raw);
     },
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 120_000,
   });
 
   const revenueChart = useMemo(

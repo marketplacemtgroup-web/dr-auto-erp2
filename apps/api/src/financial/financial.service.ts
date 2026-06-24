@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PaymentMethod, Prisma } from '@prisma/client';
+import { PaymentMethod, Prisma, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AppointmentsService } from '../appointments/appointments.service';
+import { CommissionEngineService } from '../team/commission-engine.service';
 import {
   CreateFinancialEntryDto,
   CreateInstallmentsDto,
@@ -29,6 +31,8 @@ export class FinancialService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly reports: ReportsService,
+    private readonly appointments: AppointmentsService,
+    private readonly commissionEngine: CommissionEngineService,
   ) {}
 
   profitSummary(organizationId: string, period: FinancialPeriodPreset = 'month') {
@@ -187,6 +191,33 @@ export class FinancialService {
     return { readyToBill, openReceivables };
   }
 
+  private async finalizeServiceOrderAfterReceivable(
+    organizationId: string,
+    serviceOrderId: string,
+    currentStatus: ServiceOrderStatus,
+  ) {
+    const deliverFrom: ServiceOrderStatus[] = [
+      'FINISHED',
+      'IN_PROGRESS',
+      'AWAITING_PAYMENT',
+      'APPROVED',
+    ];
+
+    if (deliverFrom.includes(currentStatus)) {
+      await this.prisma.serviceOrder.update({
+        where: { id: serviceOrderId },
+        data: { status: 'DELIVERED' },
+      });
+      await this.commissionEngine.generateForServiceOrder(
+        organizationId,
+        serviceOrderId,
+        'OS_ENTREGUE',
+      );
+    }
+
+    await this.appointments.completeByServiceOrder(serviceOrderId);
+  }
+
   async createFromServiceOrder(organizationId: string, serviceOrderId: string) {
     const so = await this.prisma.serviceOrder.findFirst({
       where: { id: serviceOrderId, organizationId },
@@ -198,12 +229,20 @@ export class FinancialService {
       where: { organizationId, serviceOrderId, type: 'RECEIVABLE', status: 'OPEN' },
       include: entryInclude,
     });
-    if (existing) return existing;
+
+    if (existing) {
+      await this.finalizeServiceOrderAfterReceivable(
+        organizationId,
+        serviceOrderId,
+        so.status,
+      );
+      return existing;
+    }
 
     const total = Number(so.totalAmount);
     if (total <= 0) throw new BadRequestException('OS sem valor para faturar');
 
-    return this.create(organizationId, {
+    const entry = await this.create(organizationId, {
       description: `OS #${so.number} — recebível de serviços`,
       type: 'RECEIVABLE',
       dueDate: new Date().toISOString().slice(0, 10),
@@ -211,6 +250,14 @@ export class FinancialService {
       customerId: so.vehicle.customerId,
       serviceOrderId: so.id,
     });
+
+    await this.finalizeServiceOrderAfterReceivable(
+      organizationId,
+      serviceOrderId,
+      so.status,
+    );
+
+    return entry;
   }
 
   async createFromPurchase(

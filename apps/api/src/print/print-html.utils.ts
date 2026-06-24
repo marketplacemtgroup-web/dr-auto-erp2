@@ -1,4 +1,5 @@
 import { formatBranchAddress } from '../common/format-branch-address';
+import { OBSERVATION_ITEMS, WARRANTY_PARAGRAPHS } from './print-legal-content';
 
 export function escapeHtml(value: string): string {
   return value
@@ -168,25 +169,19 @@ export const PRINT_STYLES = `
 `;
 
 export function printLegalTermsHtml(): string {
+  const warrantyHtml = WARRANTY_PARAGRAPHS.map(
+    (p) => `<p>${escapeHtml(p)}</p>`,
+  ).join('');
+  const observationsHtml = OBSERVATION_ITEMS.map(
+    (item, idx) => `<li>${escapeHtml(item)}</li>`,
+  ).join('');
+
   return `
     <section class="legal">
       <h3>TERMOS DE GARANTIA</h3>
-      <div style="margin-bottom:8px;">
-        <p>A garantia cobre exclusivamente os servicos, pecas e produtos discriminados neste documento, conforme prazos do CDC e condicoes do fabricante.</p>
-        <p>Pecas ou servicos de terceiros nao indicados pela oficina nao possuem garantia por nossa parte; retrabalho ou nova analise podera ser cobrado, inclusive em valor dobrado do servico tecnico padrao.</p>
-        <p>Nao ha cobertura para mau uso, falta de manutencao, acidentes, alteracoes por terceiros, desgaste natural ou falhas nao relacionadas ao servico executado. A garantia e invalidada se o veiculo ou componente for violado ou alterado apos o servico.</p>
-      </div>
-      <h3>OBSERVACOES</h3>
-      <ol>
-        <li>Analise tecnica pode exigir limpeza, desmontagem ou testes previos, cobrados a parte se o veiculo estiver em condicoes que dificultem a avaliacao.</li>
-        <li>Avarias visiveis na entrada serao registradas. Prazo estimado para diagnostico: 1 a 7 dias uteis, conforme complexidade e disponibilidade de pecas.</li>
-        <li>Orcamento valido por 15 dias. Apos esse prazo, valores podem ser atualizados.</li>
-        <li>Se o orcamento nao for aprovado, o cliente tem 3 dias para retirar o veiculo; apos esse prazo podera haver cobranca de estadia ou patio.</li>
-        <li>Servicos nao autorizados podem gerar cobranca de diagnostico, analise ou tempo em bancada.</li>
-        <li>A oficina nao se responsabiliza por objetos pessoais deixados no veiculo.</li>
-        <li>Aprovacao pode ser feita presencialmente, por telefone, WhatsApp ou outro meio acordado.</li>
-        <li>A liberacao do veiculo ocorre somente apos quitacao total dos valores devidos.</li>
-      </ol>
+      <div style="margin-bottom:8px;">${warrantyHtml}</div>
+      <h3>OBSERVAÇÕES</h3>
+      <ol>${observationsHtml}</ol>
     </section>
   `;
 }

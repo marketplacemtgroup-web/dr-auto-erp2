@@ -159,7 +159,7 @@ export class EmployeesService {
         generatedCommissions: {
           orderBy: { generatedAt: 'desc' },
           take: 50,
-          include: { serviceOrder: { select: { number: true } } },
+          include: { serviceOrder: { select: { id: true, number: true } } },
         },
         entries: { orderBy: { entryDate: 'desc' }, take: 50 },
         payrolls: { orderBy: { periodStart: 'desc' }, take: 12 },

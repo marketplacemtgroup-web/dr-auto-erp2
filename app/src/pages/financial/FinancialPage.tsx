@@ -131,9 +131,17 @@ export default function FinancialPage() {
   }
 
   useEffect(() => {
-    void loadEntries();
-    void loadCash();
-    void loadReceiveQueue();
+    if (!token) return;
+    setLoading(true);
+    setQueueLoading(true);
+    void Promise.all([
+      api.financialEntries(token).then(setRows),
+      api.cashCurrent(token).then(setCashSession).catch(() => setCashSession(null)),
+      api.financialReceiveQueue(token).then(setReceiveQueue),
+    ]).finally(() => {
+      setLoading(false);
+      setQueueLoading(false);
+    });
   }, [token]);
 
   useEffect(() => {
@@ -253,6 +261,8 @@ export default function FinancialPage() {
       const entry = await api.financialFromServiceOrder(token, order.serviceOrderId);
       openPay(entry);
       void loadReceiveQueue();
+      void queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      void queryClient.invalidateQueries({ queryKey: ["service-orders"] });
       void loadEntries(search);
     } finally {
       setChargingOrderId(null);

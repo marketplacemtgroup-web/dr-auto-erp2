@@ -28,6 +28,12 @@ const QUOTE_PHASE_STATUSES: ServiceOrderStatus[] = [
   'AWAITING_APPROVAL',
 ];
 
+const CLOSED_OS_STATUSES: ServiceOrderStatus[] = [
+  'FINISHED',
+  'DELIVERED',
+  'AWAITING_PAYMENT',
+];
+
 const EXECUTION_STATUSES: ServiceOrderStatus[] = ['IN_PROGRESS', 'APPROVED', 'AWAITING_PART'];
 
 const STATUS_PT: Record<string, string> = {
@@ -96,6 +102,15 @@ export class ServiceOrdersService {
     private readonly appointments: AppointmentsService,
     private readonly maintenanceReminders: MaintenanceRemindersService,
   ) {}
+
+  private async maybeRegenerateCommissions(
+    organizationId: string,
+    serviceOrderId: string,
+    status: ServiceOrderStatus,
+  ) {
+    if (!CLOSED_OS_STATUSES.includes(status)) return;
+    await this.commissionEngine.regenerateForServiceOrder(organizationId, serviceOrderId);
+  }
 
   private async previewItemCommission(
     organizationId: string,
@@ -475,6 +490,17 @@ export class ServiceOrdersService {
       });
     }
 
+    const teamTouched =
+      dto.generalResponsibleId !== undefined ||
+      dto.checklistById !== undefined ||
+      dto.diagnosisById !== undefined ||
+      dto.quoteById !== undefined ||
+      dto.executionById !== undefined ||
+      dto.finalizedById !== undefined;
+    if (teamTouched) {
+      await this.maybeRegenerateCommissions(organizationId, id, updated.status);
+    }
+
     return updated;
   }
 
@@ -773,6 +799,18 @@ export class ServiceOrdersService {
         },
       });
     }
+    const teamItemTouched =
+      dto.executorId !== undefined ||
+      dto.soldById !== undefined ||
+      dto.appliedById !== undefined;
+    if (teamItemTouched) {
+      await this.maybeRegenerateCommissions(
+        organizationId,
+        serviceOrderId,
+        refreshed.status,
+      );
+    }
+
     return refreshed;
   }
 

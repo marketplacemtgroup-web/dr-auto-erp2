@@ -538,12 +538,33 @@ export class QuotesService {
         ...(dto.paymentAgreement !== undefined
           ? { paymentAgreement: dto.paymentAgreement || null }
           : {}),
+        ...(dto.freeTextEnabled !== undefined ? { freeTextEnabled: dto.freeTextEnabled } : {}),
+        ...(dto.freeTextContent !== undefined
+          ? { freeTextContent: dto.freeTextContent || null }
+          : {}),
+        ...(dto.freeTextAmount !== undefined
+          ? {
+              freeTextAmount:
+                dto.freeTextAmount != null ? dto.freeTextAmount : null,
+            }
+          : {}),
         ...(dto.validUntil !== undefined
           ? { validUntil: dto.validUntil ? new Date(dto.validUntil) : null }
           : {}),
       },
       include: quoteInclude,
     });
+    if (
+      (dto.freeTextEnabled ?? updated.freeTextEnabled) &&
+      Number(dto.freeTextAmount ?? updated.freeTextAmount ?? 0) > 0
+    ) {
+      await this.prisma.quote.update({
+        where: { id },
+        data: {
+          amount: Number(dto.freeTextAmount ?? updated.freeTextAmount),
+        },
+      });
+    }
     if (dto.status === 'PENDING' || updated.status === 'PENDING') {
       await this.quotesSync.syncForServiceOrder(organizationId, existing.serviceOrderId);
       if (becamePending) {

@@ -64,7 +64,9 @@ export default function QuoteDetailContent({
   const pendingTotal = sumQuoteLines(pendingLines);
   const displayTotal = canRespond && supplement && pendingLines.length > 0
     ? pendingTotal
-    : Number(quote.amount);
+    : quote.freeTextEnabled && quote.freeTextAmount != null
+      ? Number(quote.freeTextAmount)
+      : Number(quote.amount);
 
   return (
     <div className="space-y-4">
@@ -102,6 +104,15 @@ export default function QuoteDetailContent({
         ) : null}
       </section>
 
+      {quote.freeTextEnabled && quote.freeTextContent?.trim() ? (
+        <section className="quote-sheet__card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] mb-2">
+            Detalhamento do orçamento
+          </p>
+          <p className="text-sm text-[#1E293B] whitespace-pre-wrap">{quote.freeTextContent.trim()}</p>
+        </section>
+      ) : null}
+
       {supplement && approvedLines.length > 0 ? (
         <div className="space-y-3">
           <div className="quote-sheet__card px-4 py-2.5">
@@ -124,15 +135,24 @@ export default function QuoteDetailContent({
           ) : null}
           <LineList lines={pendingLines} />
         </div>
-      ) : lines.length === 0 ? (
+      ) : lines.length === 0 && !quote.freeTextEnabled ? (
         <section className="quote-sheet__card p-4">
           <p className="text-sm text-[#64748B]">
             Os itens deste orçamento ainda não foram detalhados. Entre em contato com a oficina
             para mais informações.
           </p>
         </section>
-      ) : !supplement ? (
+      ) : lines.length === 0 ? null : !supplement ? (
         <LineList lines={lines} />
+      ) : null}
+
+      {quote.paymentAgreement?.trim() ? (
+        <section className="quote-sheet__card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] mb-2">
+            Forma de Pagamento
+          </p>
+          <p className="text-sm text-[#1E293B] whitespace-pre-wrap">{quote.paymentAgreement.trim()}</p>
+        </section>
       ) : null}
 
       {lines.length > 0 ? (

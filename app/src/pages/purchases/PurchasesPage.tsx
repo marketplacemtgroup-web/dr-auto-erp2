@@ -55,7 +55,7 @@ export default function PurchasesPage() {
     { id: crypto.randomUUID(), description: "", quantity: "1", unitCost: "0", discount: "0" },
   ]);
   const [productSearch, setProductSearch] = useState("");
-  const [postToStock, setPostToStock] = useState(true);
+  const [postToStock, setPostToStock] = useState(false);
 
   const { data: rows = [], isLoading } = useApiQuery<PurchaseOrderRow[]>(
     ["purchases", search],
@@ -93,29 +93,39 @@ export default function PurchasesPage() {
     return Math.max(subtotal + f + o - d, 0);
   }, [subtotal, freight, otherExpenses, discount]);
 
+  const buildPayload = () => ({
+    supplierId: supplierId || undefined,
+    supplierName: supplierName.trim(),
+    freight: Number(freight) || 0,
+    otherExpenses: Number(otherExpenses) || 0,
+    discount: Number(discount) || 0,
+    paymentTerms: {
+      installments: Number(installments) || 1,
+      firstDueDate,
+      intervalDays: 30,
+    },
+    items: items
+      .filter((i) => i.description.trim())
+      .map((i) => ({
+        productId: i.productId,
+        description: i.description.trim(),
+        quantity: Number(i.quantity) || 1,
+        unitCost: Number(i.unitCost) || 0,
+        discount: Number(i.discount) || 0,
+      })),
+  });
+
+  const saveDraft = useMutation({
+    mutationFn: () => api.createPurchaseOrder(token!, buildPayload()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      resetWizard();
+    },
+  });
+
   const create = useMutation({
     mutationFn: async () => {
-      const po = await api.createPurchaseOrder(token!, {
-        supplierId: supplierId || undefined,
-        supplierName: supplierName.trim(),
-        freight: Number(freight) || 0,
-        otherExpenses: Number(otherExpenses) || 0,
-        discount: Number(discount) || 0,
-        paymentTerms: {
-          installments: Number(installments) || 1,
-          firstDueDate,
-          intervalDays: 30,
-        },
-        items: items
-          .filter((i) => i.description.trim())
-          .map((i) => ({
-            productId: i.productId,
-            description: i.description.trim(),
-            quantity: Number(i.quantity) || 1,
-            unitCost: Number(i.unitCost) || 0,
-            discount: Number(i.discount) || 0,
-          })),
-      });
+      const po = await api.createPurchaseOrder(token!, buildPayload());
       return api.confirmPurchaseOrder(token!, po.id, {
         postToStock,
         autoCreateProducts: true,
@@ -149,7 +159,7 @@ export default function PurchasesPage() {
     setDiscount("0");
     setInstallments("1");
     setItems([{ id: crypto.randomUUID(), description: "", quantity: "1", unitCost: "0", discount: "0" }]);
-    setPostToStock(true);
+    setPostToStock(false);
   }
 
   useEffect(() => {
@@ -258,9 +268,9 @@ export default function PurchasesPage() {
                           onClick={() => {
                             if (window.confirm("Cancelar esta compra?")) cancel.mutate(r.id);
                           }}
-                          className="h-8 px-2 rounded-lg border border-[#FECACA] text-[#DC2626] text-[11px]"
+                          className="h-8 px-2 rounded-lg border border-[#FECACA] text-[#DC2626] text-[11px] font-medium"
                         >
-                          Cancelar
+                          {r.status === "DRAFT" ? "Excluir" : "Cancelar"}
                         </button>
                       ) : null}
                     </td>
@@ -291,8 +301,8 @@ export default function PurchasesPage() {
           step < STEPS.length - 1
             ? "Próximo"
             : postToStock
-              ? "Registrar compra e lançar no estoque"
-              : "Registrar compra"
+              ? "Confirmar e receber no estoque"
+              : "Confirmar compra"
         }
       >
         <div className="flex gap-1 mb-4">
@@ -543,6 +553,17 @@ export default function PurchasesPage() {
             </p>
           </div>
         )}
+
+        {step >= 1 ? (
+          <button
+            type="button"
+            disabled={!token || saveDraft.isPending || !supplierName.trim()}
+            onClick={() => saveDraft.mutate()}
+            className="mt-4 w-full h-10 rounded-lg border border-[#E2E8F0] text-sm text-[#64748B] hover:bg-[#F8FAFC] disabled:opacity-50"
+          >
+            {saveDraft.isPending ? "Salvando rascunho..." : "Salvar como rascunho"}
+          </button>
+        ) : null}
 
         {step > 0 ? (
           <button

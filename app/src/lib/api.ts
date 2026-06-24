@@ -1469,7 +1469,14 @@ export const api = {
   updateQuote: (
     token: string,
     id: string,
-    data: Partial<{ status: string; amount: number; paymentAgreement: string }>,
+    data: Partial<{
+      status: string;
+      amount: number;
+      paymentAgreement: string;
+      freeTextEnabled: boolean;
+      freeTextContent: string;
+      freeTextAmount: number | null;
+    }>,
   ) =>
     request<QuoteRow>(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
 
@@ -2248,6 +2255,9 @@ export const api = {
       token,
     ),
 
+  regenerateCommissions: (token: string, serviceOrderId: string) =>
+    request<unknown[]>(`/team/commissions/regenerate/${serviceOrderId}`, { method: "POST" }, token),
+
   generatedCommissions: (token: string, params?: { employeeId?: string; status?: string }) => {
     const q = new URLSearchParams();
     if (params?.employeeId) q.set("employeeId", params.employeeId);
@@ -2501,6 +2511,9 @@ export interface QuoteDetail extends QuoteRow {
   validUntil?: string | null;
   terms?: string | null;
   paymentAgreement?: string | null;
+  freeTextEnabled?: boolean;
+  freeTextContent?: string | null;
+  freeTextAmount?: string | number | null;
   lines?: QuoteLineRow[];
   serviceOrder: {
     id: string;

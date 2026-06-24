@@ -15,7 +15,8 @@ export function useApiQuery<T>(
     queryKey: [...key, token],
     queryFn: () => fetcher(token!),
     enabled: enabled && !!token,
-    staleTime: 30_000,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
     retry: 2,
     placeholderData: (prev) => prev,
   });

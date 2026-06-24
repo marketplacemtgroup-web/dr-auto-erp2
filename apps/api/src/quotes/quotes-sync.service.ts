@@ -266,10 +266,15 @@ export class QuotesSyncService {
     });
     if (!so) return;
 
-    const total = so.items.reduce(
+    const itemTotal = so.items.reduce(
       (sum, i) => sum + Number(i.unitPrice) * i.quantity,
       0,
     );
+    const freeTextQuote = so.quotes.find(
+      (q) => q.freeTextEnabled && Number(q.freeTextAmount ?? 0) > 0,
+    );
+    const total =
+      itemTotal > 0 ? itemTotal : freeTextQuote ? Number(freeTextQuote.freeTextAmount) : 0;
     if (total <= 0) return;
 
     const pending = so.quotes.find((q) => q.status === 'PENDING');
@@ -277,7 +282,14 @@ export class QuotesSyncService {
     const approved = so.quotes.find((q) => q.status === 'APPROVED');
 
     if (pending) {
-      await this.syncQuoteLines(pending.id, serviceOrderId, organizationId);
+      if (itemTotal <= 0 && freeTextQuote?.id === pending.id) {
+        await this.prisma.quote.update({
+          where: { id: pending.id },
+          data: { amount: new Prisma.Decimal(total) },
+        });
+      } else {
+        await this.syncQuoteLines(pending.id, serviceOrderId, organizationId);
+      }
       return pending.id;
     }
 

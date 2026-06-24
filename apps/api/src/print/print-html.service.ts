@@ -90,7 +90,7 @@ export class PrintHtmlService {
           </div>
         </div>
         <div class="header-right">
-          <p class="doc-type">Ordem de servico</p>
+          <p class="doc-type">Ordem de Serviço</p>
           <p class="doc-number">#${os.number}</p>
           <p class="doc-meta">${escapeHtml(osStatusLabel(os.status))}</p>
           <p class="doc-meta">Abertura: ${escapeHtml(formatDateTime(openedAt?.toISOString()))}</p>
@@ -101,13 +101,13 @@ export class PrintHtmlService {
         <div class="card">
           <p class="card-title">Cliente</p>
           ${printField('Nome', customer.name)}
-          ${printField('Endereco', formatCustomerAddress(customer))}
+          ${printField('Endereço', formatCustomerAddress(customer))}
           ${printField('Telefone', customer.phone ?? '')}
           ${printField('WhatsApp', customer.whatsapp ?? '')}
           ${printField('E-mail', customer.email ?? '')}
         </div>
         <div class="card">
-          <p class="card-title">Veiculo</p>
+          <p class="card-title">Veículo</p>
           ${printField('Placa', vehicle.plate)}
           ${printField('Modelo', [vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(' '))}
           ${vehicle.color ? printField('Cor', vehicle.color) : ''}
@@ -121,12 +121,12 @@ export class PrintHtmlService {
           ? `<section style="margin-bottom:16px;">
               ${
                 os.complaint
-                  ? `<div style="margin-bottom:8px;"><p class="section-title">Reclamacao</p><p class="whitespace-pre">${escapeHtml(os.complaint)}</p></div>`
+                  ? `<div style="margin-bottom:8px;"><p class="section-title">Reclamação</p><p class="whitespace-pre">${escapeHtml(os.complaint)}</p></div>`
                   : ''
               }
               ${
                 os.diagnosis
-                  ? `<div><p class="section-title">Diagnostico</p><p class="whitespace-pre">${escapeHtml(os.diagnosis)}</p></div>`
+                  ? `<div><p class="section-title">Diagnóstico</p><p class="whitespace-pre">${escapeHtml(os.diagnosis)}</p></div>`
                   : ''
               }
             </section>`
@@ -134,11 +134,11 @@ export class PrintHtmlService {
       }
 
       <section>
-        <p class="section-title">Servicos e pecas</p>
+        <p class="section-title">Serviços e Peças</p>
         <table>
           <thead>
             <tr>
-              <th class="text-left">Descricao</th>
+              <th class="text-left">Descrição</th>
               <th class="text-center" style="width:48px;">Qtd</th>
               <th class="text-right" style="width:80px;">Unit.</th>
               <th class="text-right" style="width:96px;">Total</th>
@@ -159,7 +159,7 @@ export class PrintHtmlService {
       ${
         os.paymentAgreement?.trim()
           ? `<section style="margin-bottom:16px;">
-              <p class="section-title">Pagamento combinado</p>
+              <p class="section-title">Forma de Pagamento</p>
               <p class="whitespace-pre">${escapeHtml(os.paymentAgreement.trim())}</p>
             </section>`
           : ''
@@ -182,7 +182,7 @@ export class PrintHtmlService {
         }
         <div class="signatures">
           <div><div class="signature-line">Assinatura do cliente</div></div>
-          <div><div class="signature-line">Responsavel da oficina</div></div>
+          <div><div class="signature-line">Responsável da oficina</div></div>
         </div>
       </footer>
     `;
@@ -211,37 +211,48 @@ export class PrintHtmlService {
         ? new Date(new Date(quote.createdAt).getTime() + 15 * 86400000).toISOString().slice(0, 10)
         : null;
 
+    const freeTextEnabled = quote.freeTextEnabled && quote.freeTextContent?.trim();
+    const displayAmount = freeTextEnabled && quote.freeTextAmount != null
+      ? Number(quote.freeTextAmount)
+      : Number(quote.amount);
+
     const lines =
-      (quote.lines ?? []).length > 0
-        ? (quote.lines ?? []).map((line) => ({
-            description: line.description,
-            tipo: lineTypeLabel(line.lineType),
-            quantity: line.quantity,
-            unitPrice: Number(line.unitPrice),
-            total: Number(line.unitPrice) * line.quantity - Number(line.discount ?? 0),
-          }))
-        : (os.items ?? []).map((item) => ({
-            description: item.description,
-            tipo: itemTypeLabel(item.itemType),
-            quantity: item.quantity,
-            unitPrice: Number(item.unitPrice),
-            total: Number(item.unitPrice) * item.quantity,
-          }));
+      freeTextEnabled
+        ? []
+        : (quote.lines ?? []).length > 0
+          ? (quote.lines ?? []).map((line) => ({
+              description: line.description,
+              quantity: line.quantity,
+              unitPrice: Number(line.unitPrice),
+              total: Number(line.unitPrice) * line.quantity - Number(line.discount ?? 0),
+            }))
+          : (os.items ?? []).map((item) => ({
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: Number(item.unitPrice),
+              total: Number(item.unitPrice) * item.quantity,
+            }));
 
     const linesRows =
-      lines.length === 0
-        ? `<tr><td colspan="5" class="muted text-center" style="padding:12px 8px;">Nenhum item no orcamento.</td></tr>`
-        : lines
-            .map(
-              (line) => `<tr>
+      freeTextEnabled
+        ? `<tr>
+            <td class="whitespace-pre">${escapeHtml(quote.freeTextContent!.trim())}</td>
+            <td class="text-center">1</td>
+            <td class="text-right">${formatMoney(displayAmount)}</td>
+            <td class="text-right total-value">${formatMoney(displayAmount)}</td>
+          </tr>`
+        : lines.length === 0
+          ? `<tr><td colspan="4" class="muted text-center" style="padding:12px 8px;">Nenhum item no orçamento.</td></tr>`
+          : lines
+              .map(
+                (line) => `<tr>
                 <td>${escapeHtml(line.description)}</td>
-                <td class="muted">${escapeHtml(line.tipo)}</td>
                 <td class="text-center">${line.quantity}</td>
                 <td class="text-right">${formatMoney(line.unitPrice)}</td>
                 <td class="text-right total-value">${formatMoney(line.total)}</td>
               </tr>`,
-            )
-            .join('');
+              )
+              .join('');
 
     const body = `
       <header class="header">
@@ -259,12 +270,12 @@ export class PrintHtmlService {
           </div>
         </div>
         <div class="header-right">
-          <p class="doc-type">Orcamento</p>
+          <p class="doc-type">Orçamento</p>
           <p class="doc-number">#${quote.number ?? '—'}</p>
           <p class="doc-meta">${escapeHtml(quoteStatusLabel(quote.status))}</p>
           ${
             quote.createdAt
-              ? `<p class="doc-meta">Emissao: ${escapeHtml(formatDateTime(quote.createdAt.toISOString()))}</p>`
+              ? `<p class="doc-meta">Emissão: ${escapeHtml(formatDateTime(quote.createdAt.toISOString()))}</p>`
               : ''
           }
           ${
@@ -279,13 +290,13 @@ export class PrintHtmlService {
         <div class="card">
           <p class="card-title">Cliente</p>
           ${printField('Nome', customer.name)}
-          ${printField('Endereco', formatCustomerAddress(customer))}
+          ${printField('Endereço', formatCustomerAddress(customer))}
           ${printField('Telefone', customer.phone ?? '')}
           ${printField('WhatsApp', customer.whatsapp ?? '')}
           ${printField('E-mail', customer.email ?? '')}
         </div>
         <div class="card">
-          <p class="card-title">Veiculo</p>
+          <p class="card-title">Veículo</p>
           ${printField('Placa', vehicle.plate)}
           ${printField('Modelo', [vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(' '))}
           ${vehicle.color ? printField('Cor', vehicle.color) : ''}
@@ -296,19 +307,18 @@ export class PrintHtmlService {
       ${
         os.complaint
           ? `<section style="margin-bottom:16px;">
-              <p class="section-title">Solicitacao / reclamacao</p>
+              <p class="section-title">Solicitação / reclamação</p>
               <p class="whitespace-pre">${escapeHtml(os.complaint)}</p>
             </section>`
           : ''
       }
 
       <section>
-        <p class="section-title">Servicos e pecas</p>
+        <p class="section-title">Serviços e Peças</p>
         <table>
           <thead>
             <tr>
-              <th class="text-left">Descricao</th>
-              <th class="text-left" style="width:64px;">Tipo</th>
+              <th class="text-left">Descrição</th>
               <th class="text-center" style="width:48px;">Qtd</th>
               <th class="text-right" style="width:80px;">Unit.</th>
               <th class="text-right" style="width:96px;">Total</th>
@@ -317,8 +327,8 @@ export class PrintHtmlService {
           <tbody>${linesRows}</tbody>
           <tfoot>
             <tr>
-              <td colspan="4" class="text-right">Total do orcamento</td>
-              <td class="text-right total-value">${formatMoney(quote.amount)}</td>
+              <td colspan="3" class="text-right">Total</td>
+              <td class="text-right total-value">${formatMoney(displayAmount)}</td>
             </tr>
           </tfoot>
         </table>
@@ -327,7 +337,7 @@ export class PrintHtmlService {
       ${
         quote.paymentAgreement?.trim()
           ? `<section style="margin-bottom:16px;">
-              <p class="section-title">Pagamento combinado</p>
+              <p class="section-title">Forma de Pagamento</p>
               <p class="whitespace-pre">${escapeHtml(quote.paymentAgreement.trim())}</p>
             </section>`
           : ''
@@ -350,7 +360,7 @@ export class PrintHtmlService {
         }
         <div class="signatures">
           <div><div class="signature-line">Assinatura do cliente</div></div>
-          <div><div class="signature-line">Responsavel da oficina</div></div>
+          <div><div class="signature-line">Responsável da oficina</div></div>
         </div>
       </footer>
     `;

@@ -9,6 +9,7 @@ const subNav = [
   { label: "Regras de Comissão", path: routes.equipeRegrasComissao },
   { label: "Lançamentos", path: routes.equipeLancamentos },
   { label: "Fechamentos", path: routes.equipeFechamentos },
+  { label: "Comissões", path: routes.equipeComissoes },
   { label: "Produtividade", path: routes.equipeProdutividade },
   { label: "Escalas", path: routes.equipeEscalas },
   { label: "Ponto", path: routes.equipePonto },

@@ -193,6 +193,10 @@ export interface PortalQuoteRow {
   number?: number | null;
   status: string;
   amount: string | number;
+  paymentAgreement?: string | null;
+  freeTextEnabled?: boolean;
+  freeTextContent?: string | null;
+  freeTextAmount?: string | number | null;
   createdAt: string;
   canRespond?: boolean;
   isSupplement?: boolean;

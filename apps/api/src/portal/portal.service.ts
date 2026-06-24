@@ -703,6 +703,10 @@ export class PortalService {
       number: number | null;
       validUntil: Date | null;
       terms: string | null;
+      paymentAgreement?: string | null;
+      freeTextEnabled?: boolean;
+      freeTextContent?: string | null;
+      freeTextAmount?: Prisma.Decimal | null;
       createdAt: Date;
       lines: Array<{
         id: string;
@@ -759,6 +763,10 @@ export class PortalService {
       amount: Number(q.amount),
       validUntil: q.validUntil,
       terms: q.terms,
+      paymentAgreement: q.paymentAgreement ?? null,
+      freeTextEnabled: q.freeTextEnabled ?? false,
+      freeTextContent: q.freeTextContent ?? null,
+      freeTextAmount: q.freeTextAmount != null ? Number(q.freeTextAmount) : null,
       createdAt: q.createdAt,
       lines,
       isSupplement,

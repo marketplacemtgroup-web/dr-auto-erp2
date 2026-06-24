@@ -29,6 +29,7 @@ import {
   UpdateEmployeeAccessDto,
 } from './dto/employee-access.dto';
 import { CommissionRulesService } from './commission-rules.service';
+import { CommissionEngineService } from './commission-engine.service';
 import { EmployeeAccessService } from './employee-access.service';
 import { EmployeeDocumentsService } from './employee-documents.service';
 import { EmployeeEntriesService } from './employee-entries.service';
@@ -44,6 +45,7 @@ export class TeamController {
     private readonly employeeAccess: EmployeeAccessService,
     private readonly jobTitles: JobTitlesService,
     private readonly commissionRules: CommissionRulesService,
+    private readonly commissionEngine: CommissionEngineService,
     private readonly entries: EmployeeEntriesService,
     private readonly payroll: PayrollService,
     private readonly employeeDocuments: EmployeeDocumentsService,
@@ -407,5 +409,17 @@ export class TeamController {
       employeeId,
       status,
     });
+  }
+
+  @Post('commissions/regenerate/:serviceOrderId')
+  @RequirePermissions('commissions.manage', 'team.manage', 'service_orders.manage')
+  regenerateCommissions(
+    @CurrentUser() user: { organizationId: string },
+    @Param('serviceOrderId') serviceOrderId: string,
+  ) {
+    return this.commissionEngine.regenerateForServiceOrder(
+      user.organizationId,
+      serviceOrderId,
+    );
   }
 }

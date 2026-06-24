@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -31,4 +32,18 @@ export class UpdateQuoteDto {
   @IsString()
   @MaxLength(1000)
   paymentAgreement?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  freeTextEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  freeTextContent?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  freeTextAmount?: number | null;
 }

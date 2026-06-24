@@ -66,7 +66,7 @@ export default function ServiceOrderPrintSheet({ os, org }: Props) {
       )}
 
       <section className="mb-4">
-        <p className="text-[10px] font-semibold uppercase text-[#64748B] mb-2">Servicos e pecas</p>
+        <p className="text-[10px] font-semibold uppercase text-[#64748B] mb-2">Serviços e Peças</p>
         <table className="w-full border-collapse text-[11px]">
           <thead>
             <tr className="bg-[#F8FAFC] border-y border-[#E2E8F0]">
@@ -128,7 +128,7 @@ export default function ServiceOrderPrintSheet({ os, org }: Props) {
 
       {os.paymentAgreement?.trim() && (
         <section className="mb-4">
-          <p className="text-[10px] font-semibold uppercase text-[#64748B]">Pagamento combinado</p>
+          <p className="text-[10px] font-semibold uppercase text-[#64748B]">Forma de Pagamento</p>
           <p className="whitespace-pre-wrap">{os.paymentAgreement.trim()}</p>
         </section>
       )}
@@ -152,7 +152,7 @@ export default function ServiceOrderPrintSheet({ os, org }: Props) {
               <div className="border-t border-[#333] pt-1 mt-8 text-[10px]">Assinatura do cliente</div>
             </div>
             <div>
-              <div className="border-t border-[#333] pt-1 mt-8 text-[10px]">Responsavel da oficina</div>
+              <div className="border-t border-[#333] pt-1 mt-8 text-[10px]">Responsável da oficina</div>
             </div>
           </div>
         </div>
