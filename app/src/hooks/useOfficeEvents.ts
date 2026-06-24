@@ -11,7 +11,8 @@ export type OfficeLiveEvent = {
   id?: string;
 };
 
-const POLL_MS = 10_000;
+/** Com aba visível; pausa quando minimizada (reduz egress do banco). */
+const POLL_MS = 60_000;
 
 /** Polling de notificações (substitui SSE — compatível com Vercel serverless). */
 export function useOfficeEvents(onEvent?: (ev: OfficeLiveEvent) => void) {
@@ -25,9 +26,11 @@ export function useOfficeEvents(onEvent?: (ev: OfficeLiveEvent) => void) {
     if (!token) return;
 
     let cancelled = false;
+    let timer: number | undefined;
 
     async function poll() {
       if (!token || cancelled) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       setPolling(true);
       try {
         const rows = await api.notificationsUnread(token);
@@ -51,11 +54,22 @@ export function useOfficeEvents(onEvent?: (ev: OfficeLiveEvent) => void) {
       }
     }
 
-    void poll();
-    const timer = window.setInterval(() => void poll(), POLL_MS);
+    const schedule = () => {
+      void poll();
+      timer = window.setInterval(() => void poll(), POLL_MS);
+    };
+
+    schedule();
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer != null) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [token]);
 

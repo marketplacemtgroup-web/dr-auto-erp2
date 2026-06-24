@@ -46,6 +46,9 @@ class PortalMessagingService : FirebaseMessagingService() {
                 "Exibindo push localmente: ${message.data["title"] ?: message.notification?.title}",
             )
             PortalNotificationHelper.showFromRemoteMessage(appContext, message)
+            if (SessionManager(appContext).isLoggedIn()) {
+                PortalRefreshBus.requestRefresh()
+            }
         } finally {
             releaseWakeLock(wakeLock)
         }

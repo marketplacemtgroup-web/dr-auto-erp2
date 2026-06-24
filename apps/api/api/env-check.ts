@@ -13,15 +13,30 @@ function checkDatabaseUrl(name: string): string[] {
     issues.push(`${name} não definida na Vercel`);
     return issues;
   }
-  if (raw !== stripEnvQuotes(raw)) {
+  const normalized = stripEnvQuotes(raw);
+  if (raw !== normalized) {
     issues.push(`${name} não deve ter aspas na Vercel — cole só postgresql://... sem " no início/fim`);
   }
-  if (!/^postgres(ql)?:\/\//i.test(stripEnvQuotes(raw))) {
+  if (!/^postgres(ql)?:\/\//i.test(normalized)) {
     issues.push(`${name} deve começar com postgresql:// (senha com @ precisa ser %40)`);
     return issues;
   }
+  if (name === 'DATABASE_URL' && /supabase\.com/i.test(normalized)) {
+    if (!/:6543\b/.test(normalized) && !/pooler/i.test(normalized)) {
+      issues.push(
+        'DATABASE_URL Supabase deve usar Transaction pooler (porta 6543, host pooler.supabase.com)',
+      );
+    }
+    if (!/pgbouncer=true/i.test(normalized)) {
+      issues.push('DATABASE_URL Supabase deve incluir ?pgbouncer=true (modo transaction)');
+    }
+  }
+  if (name === 'DIRECT_URL' && /supabase\.com/i.test(normalized)) {
+    if (!/:5432\b/.test(normalized)) {
+      issues.push('DIRECT_URL Supabase deve usar conexão direct na porta 5432 (migrations)');
+    }
+  }
   try {
-    const normalized = stripEnvQuotes(raw);
     const parsed = new URL(normalized);
     if (!parsed.hostname) issues.push(`${name} hostname inválido`);
     if (normalized.includes('@') && normalized.indexOf('@') !== normalized.lastIndexOf('@')) {

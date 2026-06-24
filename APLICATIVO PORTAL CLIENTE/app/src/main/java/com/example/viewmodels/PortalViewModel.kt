@@ -11,16 +11,17 @@ import com.example.services.ApiClient
 import com.example.services.PortalFcmManager
 import com.example.services.PortalNotificationHelper
 import com.example.services.PortalNotificationPermission
+import com.example.services.PortalRefreshBus
 import com.example.services.SessionManager
 import com.example.types.*
 import com.example.ui.theme.BrandThemeHolder
 import com.example.ui.theme.DynamicBrandColors
 import com.example.ui.theme.ThemeMode
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -86,7 +87,6 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     private val _publicBrandingLogoUrl = MutableStateFlow<String?>(null)
     val publicBrandingLogoUrl: StateFlow<String?> = _publicBrandingLogoUrl
 
-    private var pollingJob: Job? = null
     private var knownNotificationIds = mutableSetOf<String>()
     private var notificationsTrayInitialized = false
 
@@ -98,10 +98,14 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         loadPublicBranding()
+        viewModelScope.launch {
+            PortalRefreshBus.requests.collectLatest {
+                if (_isLoggedIn.value) loadAllData(showLoading = false)
+            }
+        }
         if (_isLoggedIn.value) {
             loadFromCache()
             loadAllData()
-            startPolling()
             registerPushTokenIfAllowed()
         }
     }
@@ -246,7 +250,6 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _isLoggedIn.value = true
         _isOffline.value = false
         loadAllData(showLoading = true)
-        startPolling()
         registerPushTokenIfAllowed()
         onSuccess()
     }
@@ -259,22 +262,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         registerPushTokenIfAllowed()
     }
 
-    fun startPolling() {
-        pollingJob?.cancel()
-        pollingJob = viewModelScope.launch {
-            while (isActive && _isLoggedIn.value) {
-                delay(20_000)
-                refreshSilently()
-            }
-        }
-    }
-
-    fun stopPolling() {
-        pollingJob?.cancel()
-        pollingJob = null
-    }
-
-    fun loadAllData(showLoading: Boolean = true) {
+    fun loadAllData(showLoading: Boolean = true, includeNotifications: Boolean = false) {
         if (!_isLoggedIn.value) return
         viewModelScope.launch {
             if (showLoading) _isLoading.value = true
@@ -286,10 +274,9 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 updateBrandColors(dashboardData.organization, null)
                 sessionManager.cacheDashboard(dashboardAdapter.toJson(dashboardData))
 
-                val notifs = api.getNotifications()
-                _notifications.value = notifs
-                sessionManager.cacheNotifications(notificationsAdapter.toJson(notifs))
-                notifyTrayForNewInboxItems(notifs)
+                if (includeNotifications) {
+                    loadNotificationsInternal()
+                }
 
                 val vehs = api.getVehicles()
                 _vehicles.value = vehs
@@ -316,29 +303,39 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun refreshSilently() {
+    fun loadNotifications() {
         if (!_isLoggedIn.value) return
         viewModelScope.launch {
-            _isRefreshing.value = true
             try {
-                val dashboardData = api.getDashboard()
-                _dashboard.value = dashboardData
-                updateBrandColors(dashboardData.organization, null)
-                sessionManager.cacheDashboard(dashboardAdapter.toJson(dashboardData))
-
-                val notifs = api.getNotifications()
-                _notifications.value = notifs
-                sessionManager.cacheNotifications(notificationsAdapter.toJson(notifs))
-                notifyTrayForNewInboxItems(notifs)
-
-                _isOffline.value = false
-                _errorMessage.value = null
+                loadNotificationsInternal()
             } catch (e: Exception) {
-                Log.d("PortalViewModel", "Silent refresh failed", e)
-            } finally {
-                _isRefreshing.value = false
+                Log.e("PortalViewModel", "Error loading notifications", e)
             }
         }
+    }
+
+    private suspend fun loadNotificationsInternal() {
+        val notifs = api.getNotifications()
+        _notifications.value = notifs
+        sessionManager.cacheNotifications(notificationsAdapter.toJson(notifs))
+        notifyTrayForNewInboxItems(notifs)
+    }
+
+    fun logout(onComplete: () -> Unit) {
+        resetNotificationTrayTracking()
+        sessionManager.clearSession()
+        _isLoggedIn.value = false
+        _dashboard.value = null
+        _notifications.value = emptyList()
+        _vehicles.value = emptyList()
+        _currentQuote.value = null
+        _currentServiceOrder.value = null
+        _publicQuote.value = null
+        _initialLoadComplete.value = false
+        _errorMessage.value = null
+        _dismissedQuoteIds.value = emptySet()
+        _quoteRespondingId.value = null
+        onComplete()
     }
 
     private fun notifyTrayForNewInboxItems(notifs: List<PortalNotification>) {
@@ -693,24 +690,6 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _appointmentActionLoading.value = false
             }
         }
-    }
-
-    fun logout(onComplete: () -> Unit) {
-        stopPolling()
-        resetNotificationTrayTracking()
-        sessionManager.clearSession()
-        _isLoggedIn.value = false
-        _dashboard.value = null
-        _notifications.value = emptyList()
-        _vehicles.value = emptyList()
-        _currentQuote.value = null
-        _currentServiceOrder.value = null
-        _publicQuote.value = null
-        _initialLoadComplete.value = false
-        _errorMessage.value = null
-        _dismissedQuoteIds.value = emptySet()
-        _quoteRespondingId.value = null
-        onComplete()
     }
 
     fun getCustomerName() = sessionManager.getCustomerName()

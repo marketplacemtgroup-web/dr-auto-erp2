@@ -1771,6 +1771,10 @@ fun NotificationsScreen(
     val isOffline by viewModel.isOffline.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.loadNotifications()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
         PortalAppState.isInForeground = true
         PortalNotificationHelper.ensureChannel(this)
         viewModel.registerPushToken()
+        viewModel.loadAllData(showLoading = false)
     }
 
     override fun onPause() {

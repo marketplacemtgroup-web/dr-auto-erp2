@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { Bell } from "lucide-react";
 import BrandLogo from "../BrandLogo";
@@ -8,7 +7,6 @@ import PortalPolling from "./PortalPolling";
 import PortalPushBanner from "./PortalPushBanner";
 import ThemeToggle from "./ThemeToggle";
 import { routes } from "../../lib/routes";
-import { usePortalStore, useUnreadNotificationCount } from "../../stores/portalStore";
 
 const pageTitles: Record<string, string> = {
   [routes.home]: "Acompanhamento de OS",
@@ -20,15 +18,9 @@ const pageTitles: Record<string, string> = {
 export default function PortalAppLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const loadNotifications = usePortalStore((s) => s.loadNotifications);
-  const unread = useUnreadNotificationCount();
   const isDetailOs = /^\/os\/[^/]+$/.test(pathname);
   const isDetailQuote = /^\/orcamentos\/[^/]+$/.test(pathname);
   const showBottomNav = !isDetailOs && !isDetailQuote && !pathname.startsWith("/perfil/");
-
-  useEffect(() => {
-    void loadNotifications();
-  }, [loadNotifications]);
 
   const title =
     pageTitles[pathname] ??
@@ -65,9 +57,6 @@ export default function PortalAppLayout() {
                   aria-label="Notificações"
                 >
                   <Bell size={22} style={{ color: "var(--portal-accent)" }} />
-                  {unread > 0 ? (
-                    <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500" />
-                  ) : null}
                 </button>
               </div>
             </div>

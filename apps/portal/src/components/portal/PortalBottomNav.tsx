@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router";
 import { Bell, ClipboardList, Home, User } from "lucide-react";
 import { routes } from "../../lib/routes";
-import { useUnreadNotificationCount } from "../../stores/portalStore";
 
 const tabs = [
   { to: routes.home, label: "Início", icon: Home, match: (p: string) => p === routes.home },
@@ -27,7 +26,6 @@ const tabs = [
 
 export default function PortalBottomNav() {
   const { pathname } = useLocation();
-  const unread = useUnreadNotificationCount();
 
   return (
     <nav
@@ -56,9 +54,6 @@ export default function PortalBottomNav() {
                 }}
               >
                 <Icon size={20} strokeWidth={active ? 2.25 : 2} />
-                {label === "Notificações" && unread > 0 ? (
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-white" />
-                ) : null}
               </span>
               {label}
             </Link>

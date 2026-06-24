@@ -68,13 +68,11 @@ export const usePortalStore = create<PortalState>()(
         const session = await api.portalLogin(cpf, plate);
         set({ session });
         await get().refresh();
-        await get().loadNotifications();
       },
       loginByAccessToken: async (accessToken) => {
         const session = await api.portalAccessByToken(accessToken);
         set({ session });
         await get().refresh();
-        await get().loadNotifications();
       },
       refresh: async () => {
         const token = get().session?.accessToken;
@@ -113,7 +111,6 @@ export const usePortalStore = create<PortalState>()(
         const session = await api.portalSwitchVehicle(token, vehicleId);
         set({ session, notifications: [], vehicles: [] });
         await get().refresh();
-        await get().loadNotifications();
         await get().loadVehicles();
       },
     }),

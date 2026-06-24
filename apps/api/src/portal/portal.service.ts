@@ -54,6 +54,9 @@ const STATUS_PT: Record<string, string> = {
 @Injectable()
 export class PortalService {
   private readonly logger = new Logger(PortalService.name);
+  /** Evita sync pesado de orçamentos a cada poll do portal (reduz egress do banco). */
+  private readonly quoteSyncLastAt = new Map<string, number>();
+  private static readonly QUOTE_SYNC_MIN_INTERVAL_MS = 10 * 60_000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -64,6 +67,21 @@ export class PortalService {
     private readonly attachments: AttachmentsService,
     private readonly appointments: AppointmentsService,
   ) {}
+
+  private async maybeSyncQuotesForVehicle(organizationId: string, vehicleId: string) {
+    const key = `${organizationId}:${vehicleId}`;
+    const now = Date.now();
+    const last = this.quoteSyncLastAt.get(key) ?? 0;
+    if (now - last < PortalService.QUOTE_SYNC_MIN_INTERVAL_MS) return;
+    this.quoteSyncLastAt.set(key, now);
+    try {
+      await this.quotesSync.syncForVehicle(organizationId, vehicleId);
+    } catch (err) {
+      this.logger.warn(
+        `Sincronização de orçamentos ignorada: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
 
   private async mapPortalAttachments(
     rows: Array<{
@@ -843,13 +861,7 @@ export class PortalService {
   }
 
   async listQuotes(ctx: { organizationId: string; vehicleId: string }) {
-    try {
-      await this.quotesSync.syncForVehicle(ctx.organizationId, ctx.vehicleId);
-    } catch (err) {
-      this.logger.warn(
-        `Sincronização de orçamentos ignorada: ${err instanceof Error ? err.message : err}`,
-      );
-    }
+    await this.maybeSyncQuotesForVehicle(ctx.organizationId, ctx.vehicleId);
 
     const rows = await this.prisma.quote.findMany({
       where: {
@@ -876,13 +888,7 @@ export class PortalService {
     ctx: { organizationId: string; vehicleId: string },
     quoteId: string,
   ) {
-    try {
-      await this.quotesSync.syncForVehicle(ctx.organizationId, ctx.vehicleId);
-    } catch (err) {
-      this.logger.warn(
-        `Sincronização de orçamentos ignorada: ${err instanceof Error ? err.message : err}`,
-      );
-    }
+    await this.maybeSyncQuotesForVehicle(ctx.organizationId, ctx.vehicleId);
 
     const row = await this.prisma.quote.findFirst({
       where: {
