@@ -719,7 +719,7 @@ export class PortalService {
       freeTextContent: string | null;
       freeTextAmount: Prisma.Decimal | null;
       amount: Prisma.Decimal;
-      lines: { length: number }[];
+      lines: { length: number };
     },
     serviceOrderId: string,
     organizationId: string,

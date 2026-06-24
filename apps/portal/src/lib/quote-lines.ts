@@ -57,7 +57,7 @@ export function quoteNeedsResponse(quote: {
   canRespond?: boolean;
   lines?: QuoteLineRow[];
   freeTextEnabled?: boolean;
-  freeTextAmount?: number | null;
+  freeTextAmount?: string | number | null;
   amount?: number | string;
 }) {
   if (quote.status === "APPROVED" || quote.status === "REJECTED" || quote.status === "DRAFT") {
