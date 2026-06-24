@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.lib.PortalDateTime
 import com.example.lib.PortalStatus
+import com.example.lib.QuotePriceHelper
 import com.example.types.*
 import com.example.ui.theme.LocalDynamicBrand
 
@@ -492,7 +493,7 @@ fun BudgetCard(
                 style = MaterialTheme.typography.labelMedium.copy(color = Color.Gray)
             )
             Text(
-                text = "R$ %.2f".format(quote.amount),
+                text = "R$ %.2f".format(QuotePriceHelper.displayAmount(quote)),
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = FontWeight.Black,
                     color = BrandPalette.TextDark
@@ -504,6 +505,13 @@ fun BudgetCard(
                 Text(
                     text = "Aguardando sua resposta em ${quote.pendingLineCount} itens",
                     color = Color(0xFFC2410C), // Deep Orange
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                )
+            } else if (PortalStatus.quoteNeedsResponse(quote)) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Aguardando sua aprovação",
+                    color = Color(0xFFC2410C),
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
                 )
             }

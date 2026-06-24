@@ -695,6 +695,58 @@ export class PortalService {
     });
   }
 
+  private freeTextQuoteAmount(quote: {
+    freeTextEnabled?: boolean;
+    freeTextAmount?: Prisma.Decimal | null;
+    amount: Prisma.Decimal;
+  }) {
+    if (!quote.freeTextEnabled) return 0;
+    return Number(quote.freeTextAmount ?? quote.amount ?? 0);
+  }
+
+  private isFreeTextOnlyQuote(quote: {
+    freeTextEnabled?: boolean;
+    freeTextAmount?: Prisma.Decimal | null;
+    amount: Prisma.Decimal;
+    lines?: { length: number };
+  }) {
+    return quote.freeTextEnabled && this.freeTextQuoteAmount(quote) > 0 && (quote.lines?.length ?? 0) === 0;
+  }
+
+  private async applyFreeTextApprovalToServiceOrder(
+    quote: {
+      freeTextEnabled: boolean;
+      freeTextContent: string | null;
+      freeTextAmount: Prisma.Decimal | null;
+      amount: Prisma.Decimal;
+      lines: { length: number }[];
+    },
+    serviceOrderId: string,
+    organizationId: string,
+  ) {
+    if (!this.isFreeTextOnlyQuote(quote)) return;
+
+    const items = await this.prisma.serviceOrderItem.findMany({
+      where: { serviceOrderId, organizationId },
+    });
+    if (items.length > 0) return;
+
+    const amount = this.freeTextQuoteAmount(quote);
+    const description = quote.freeTextContent?.trim() || 'Orçamento aprovado pelo cliente';
+
+    await this.prisma.serviceOrderItem.create({
+      data: {
+        organizationId,
+        serviceOrderId,
+        description,
+        itemType: 'SERVICE',
+        quantity: 1,
+        unitPrice: new Prisma.Decimal(amount),
+        discount: new Prisma.Decimal(0),
+      },
+    });
+  }
+
   private mapQuoteResponse(
     q: {
       id: string;
@@ -741,7 +793,9 @@ export class PortalService {
             unitPrice: Number(line.unitPrice),
             discount: Number(line.discount),
           }))
-        : q.serviceOrder.items.map((item, idx) => ({
+        : q.freeTextEnabled
+          ? []
+          : q.serviceOrder.items.map((item, idx) => ({
             id: item.id,
             description: item.description,
             lineType: item.itemType,
@@ -782,7 +836,9 @@ export class PortalService {
           unitPrice: Number(item.unitPrice),
         })),
       },
-      canRespond: q.status === 'PENDING' && pendingLines.length > 0,
+      canRespond:
+        q.status === 'PENDING' &&
+        (pendingLines.length > 0 || this.freeTextQuoteAmount(q) > 0),
     };
   }
 
@@ -966,6 +1022,9 @@ export class PortalService {
       include: { serviceOrder: true, lines: true },
     });
     if (!quote) throw new UnauthorizedException();
+    if (quote.status !== 'PENDING') {
+      throw new BadRequestException('Este orçamento não está aguardando sua resposta');
+    }
 
     const { allApproved, allRejected, supplementRejectOnly, approvedAmount, priorApproved } =
       await this.applyLineApprovals(quote.id, quote.serviceOrderId, dto, {
@@ -1053,19 +1112,32 @@ export class PortalService {
       .filter((l) => l.approved === true)
       .reduce((sum, l) => sum + this.lineTotal(l), 0);
 
+    const resolvedAmount =
+      finalApprovedAmount > 0
+        ? finalApprovedAmount
+        : this.freeTextQuoteAmount(quote) > 0
+          ? this.freeTextQuoteAmount(quote)
+          : Number(quote.amount);
+
     const osNextStatus =
       priorApproved || quote.serviceOrder.status === 'IN_PROGRESS'
         ? 'IN_PROGRESS'
-        : allApproved
+        : allApproved || this.isFreeTextOnlyQuote(quote)
           ? 'APPROVED'
           : 'IN_PROGRESS';
+
+    await this.applyFreeTextApprovalToServiceOrder(
+      quote,
+      quote.serviceOrderId,
+      ctx.organizationId,
+    );
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const q = await tx.quote.update({
         where: { id: quote.id },
         data: {
           status: 'APPROVED',
-          amount: new Prisma.Decimal(finalApprovedAmount || Number(quote.amount)),
+          amount: new Prisma.Decimal(resolvedAmount),
           customerComment: dto?.comment ?? quote.customerComment,
         },
       });
@@ -1073,7 +1145,7 @@ export class PortalService {
         where: { id: quote.serviceOrderId },
         data: {
           status: osNextStatus,
-          totalAmount: new Prisma.Decimal(finalApprovedAmount || Number(quote.amount)),
+          totalAmount: new Prisma.Decimal(resolvedAmount),
         },
       });
       await tx.serviceOrderStatusHistory.create({
@@ -1097,7 +1169,7 @@ export class PortalService {
       include: { vehicle: { include: { customer: true } } },
     });
     if (soFull) {
-      await this.notifyQuoteApproved(ctx, updated, soFull, finalApprovedAmount);
+      await this.notifyQuoteApproved(ctx, updated, soFull, resolvedAmount);
     }
 
     return this.getQuoteForPortal(ctx, quoteId);
@@ -1122,6 +1194,9 @@ export class PortalService {
       include: { serviceOrder: true, lines: true },
     });
     if (!quote) throw opts?.byToken ? new NotFoundException() : new UnauthorizedException();
+    if (quote.status !== 'PENDING') {
+      throw new BadRequestException('Este orçamento não está aguardando sua resposta');
+    }
 
     const hasPriorApproved = quote.lines.some((l) => l.approved === true);
     const hasPending = quote.lines.some((l) => l.approved === null);

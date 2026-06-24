@@ -152,6 +152,10 @@ data class PortalQuoteRow(
     val canRespond: Boolean,
     val isSupplement: Boolean,
     val pendingLineCount: Int,
+    val paymentAgreement: String? = null,
+    val freeTextEnabled: Boolean = false,
+    val freeTextContent: String? = null,
+    val freeTextAmount: Double? = null,
     val lines: List<PortalQuoteLine> = emptyList(),
     val photos: List<PortalPhoto>? = null,
     val serviceOrder: ServiceOrderSummary? = null

@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.lib.QuoteLineHelper
+import com.example.lib.QuotePriceHelper
 import com.example.services.ApiClient
 import com.example.types.PortalQuoteLine
 import com.example.types.ServiceOrder
@@ -99,5 +100,33 @@ class PortalServiceOrderParsingTest {
         )
         val payload = QuoteLineHelper.buildApprovePayload(lines)
         assertEquals(listOf("l2" to true), payload)
+    }
+
+    @Test
+    fun portalQuoteRow_freeTextFields_parsesSuccessfully() {
+        val adapter = ApiClient.moshi.adapter(com.example.types.PortalQuoteRow::class.java)
+        val json = """
+        {
+          "id": "q-1",
+          "number": 12,
+          "status": "PENDING",
+          "amount": 0,
+          "canRespond": true,
+          "isSupplement": false,
+          "pendingLineCount": 0,
+          "paymentAgreement": "50% entrada + 50% na entrega",
+          "freeTextEnabled": true,
+          "freeTextContent": "Revisão completa do motor",
+          "freeTextAmount": 2500.0,
+          "lines": []
+        }
+        """.trimIndent()
+
+        val quote = adapter.fromJson(json)
+        assertNotNull(quote)
+        assertEquals(true, quote!!.freeTextEnabled)
+        assertEquals("Revisão completa do motor", quote.freeTextContent)
+        assertEquals(2500.0, quote.freeTextAmount)
+        assertEquals(2500.0, QuotePriceHelper.displayAmount(quote))
     }
 }

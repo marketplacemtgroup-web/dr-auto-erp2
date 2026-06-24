@@ -86,6 +86,10 @@ export default function QuoteDetailContent({
           <p className="text-sm mt-3 text-[#1E293B]">
             A oficina adicionou novos itens. Revise o complemento e aprove ou recuse.
           </p>
+        ) : canRespond && lines.length === 0 && quote.freeTextEnabled ? (
+          <p className="text-sm mt-3 text-[#1E293B]">
+            Revise o detalhamento abaixo e aprove ou recuse o orçamento.
+          </p>
         ) : null}
         <p className="text-2xl font-bold text-[#0F3D4C] mt-3">{formatMoney(displayTotal)}</p>
         {supplement && approvedLines.length > 0 ? (
@@ -155,7 +159,7 @@ export default function QuoteDetailContent({
         </section>
       ) : null}
 
-      {lines.length > 0 ? (
+      {lines.length > 0 || quote.freeTextEnabled ? (
         <section className="quote-sheet__card p-4">
           <div className="flex items-center justify-between">
             <p className="font-semibold text-[#1E293B]">

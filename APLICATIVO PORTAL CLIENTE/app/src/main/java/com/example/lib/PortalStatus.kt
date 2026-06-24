@@ -48,9 +48,11 @@ object PortalStatus {
     fun quoteNeedsResponse(quote: PortalQuoteRow): Boolean {
         if (!quote.canRespond) return false
         if (quote.status.uppercase() != "PENDING") return false
-        if (quote.pendingLineCount <= 0) return false
         val lines = quote.lines
-        if (lines.isEmpty()) return true
+        if (lines.isEmpty()) {
+            return quote.freeTextEnabled && (quote.freeTextAmount ?: quote.amount) > 0
+        }
+        if (quote.pendingLineCount <= 0) return false
         return lines.any { lineNeedsResponse(it) }
     }
 

@@ -54,11 +54,19 @@ object QuotePriceHelper {
         return breakdown(quotes.flatMap { it.lines })
     }
 
+    fun displayAmount(quote: PortalQuoteRow): Double {
+        if (quote.freeTextEnabled && quote.freeTextAmount != null) return quote.freeTextAmount
+        return quote.amount
+    }
+
+    fun hasVisibleContent(quote: PortalQuoteRow): Boolean =
+        quote.lines.isNotEmpty() || (quote.freeTextEnabled && (quote.freeTextAmount ?: 0.0) > 0)
+
     fun relevantQuotes(
         quotes: List<PortalQuoteRow>,
         activeServiceOrderId: String?,
     ): List<PortalQuoteRow> {
-        val visible = quotes.filter { it.status.uppercase() != "DRAFT" && it.lines.isNotEmpty() }
+        val visible = quotes.filter { it.status.uppercase() != "DRAFT" && hasVisibleContent(it) }
         if (activeServiceOrderId == null) return visible
         val forOs = visible.filter { it.serviceOrder?.id == activeServiceOrderId }
         return forOs.ifEmpty { visible }

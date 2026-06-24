@@ -56,13 +56,24 @@ export function quoteNeedsResponse(quote: {
   status: string;
   canRespond?: boolean;
   lines?: QuoteLineRow[];
+  freeTextEnabled?: boolean;
+  freeTextAmount?: number | null;
+  amount?: number | string;
 }) {
   if (quote.status === "APPROVED" || quote.status === "REJECTED" || quote.status === "DRAFT") {
     return false;
   }
+  if (quote.canRespond === true) return true;
+  if (quote.canRespond === false) return false;
   const pending = pendingQuoteLines(quote.lines ?? []);
-  if (pending.length === 0) return false;
-  return quote.canRespond ?? quote.status === "PENDING";
+  if (pending.length === 0) {
+    return (
+      quote.status === "PENDING" &&
+      !!quote.freeTextEnabled &&
+      Number(quote.freeTextAmount ?? quote.amount ?? 0) > 0
+    );
+  }
+  return quote.status === "PENDING";
 }
 
 /** Aprova todas as linhas pendentes (ou todas, se não houver pendência explícita). */

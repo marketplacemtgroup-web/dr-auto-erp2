@@ -1102,6 +1102,11 @@ fun BudgetScreen(
             var selectedTab by remember { mutableIntStateOf(0) }
             val photos = currentQuote.photos?.map { it.url } ?: emptyList()
             val org = dashboard?.organization
+            val displayAmount = QuotePriceHelper.displayAmount(currentQuote)
+            val freeTextContent = currentQuote.freeTextContent?.trim().orEmpty()
+            val paymentAgreement = currentQuote.paymentAgreement?.trim().orEmpty()
+            val hasFreeText = currentQuote.freeTextEnabled && freeTextContent.isNotEmpty()
+            val hasLines = currentQuote.lines.isNotEmpty()
 
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(
@@ -1189,12 +1194,58 @@ fun BudgetScreen(
                                     style = MaterialTheme.typography.labelMedium.copy(color = Color.Gray)
                                 )
                                 Text(
-                                    text = "R$ %.2f".format(currentQuote.amount),
+                                    text = "R$ %.2f".format(displayAmount),
                                     style = MaterialTheme.typography.headlineMedium.copy(
                                         fontWeight = FontWeight.Black,
                                         color = BrandPalette.DeepBlue
                                     )
                                 )
+                            }
+                        }
+                    }
+
+                    if (hasFreeText) {
+                        item {
+                            AppCard {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "DETALHAMENTO DO ORÇAMENTO",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Gray,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = freeTextContent,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = BrandPalette.SlateGray
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (paymentAgreement.isNotEmpty()) {
+                        item {
+                            AppCard {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "FORMA DE PAGAMENTO",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Gray,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = paymentAgreement,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = BrandPalette.SlateGray
+                                    )
+                                }
                             }
                         }
                     }
@@ -1210,7 +1261,11 @@ fun BudgetScreen(
                                     .padding(14.dp)
                             ) {
                                 Text(
-                                    text = "Revise os itens abaixo e aprove ou recuse o orçamento completo.",
+                                    text = if (hasLines) {
+                                        "Revise os itens abaixo e aprove ou recuse o orçamento completo."
+                                    } else {
+                                        "Revise o orçamento abaixo e aprove ou recuse."
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF0E7490),
                                 )
@@ -1218,6 +1273,7 @@ fun BudgetScreen(
                         }
                     }
 
+                    if (hasLines) {
                     // Lines List Header
                     item {
                         SectionHeader(title = "Itens do Orçamento")
@@ -1271,6 +1327,7 @@ fun BudgetScreen(
                                 )
                             }
                         }
+                    }
                     }
                 }
                 }

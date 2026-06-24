@@ -599,7 +599,11 @@ fun PublicQuoteScreen(
                 publicQuote != null -> {
                     val data = publicQuote!!
                     val quote = data.quote
-                    val isPending = quote.status.uppercase() == "PENDING"
+                    val isPending = PortalStatus.quoteNeedsResponse(quote)
+                    val displayAmount = QuotePriceHelper.displayAmount(quote)
+                    val freeTextContent = quote.freeTextContent?.trim().orEmpty()
+                    val paymentAgreement = quote.paymentAgreement?.trim().orEmpty()
+                    val hasFreeText = quote.freeTextEnabled && freeTextContent.isNotEmpty()
 
                     LazyColumn(
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
@@ -618,7 +622,39 @@ fun PublicQuoteScreen(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(text = "Orçamento #${quote.number ?: "—"}", fontWeight = FontWeight.Black, fontSize = 18.sp)
-                                    Text(text = "R$ %.2f".format(quote.amount), fontWeight = FontWeight.Bold, color = BrandPalette.DeepBlue, fontSize = 22.sp)
+                                    Text(text = "R$ %.2f".format(displayAmount), fontWeight = FontWeight.Bold, color = BrandPalette.DeepBlue, fontSize = 22.sp)
+                                }
+                            }
+                        }
+                        if (hasFreeText) {
+                            item {
+                                AppCard {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(
+                                            text = "DETALHAMENTO DO ORÇAMENTO",
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Gray,
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(text = freeTextContent, color = BrandPalette.SlateGray, fontSize = 14.sp)
+                                    }
+                                }
+                            }
+                        }
+                        if (paymentAgreement.isNotEmpty()) {
+                            item {
+                                AppCard {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(
+                                            text = "FORMA DE PAGAMENTO",
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Gray,
+                                            fontSize = 11.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(text = paymentAgreement, color = BrandPalette.SlateGray, fontSize = 14.sp)
+                                    }
                                 }
                             }
                         }
