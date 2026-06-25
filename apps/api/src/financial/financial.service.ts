@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PaymentMethod, Prisma, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentsService } from '../appointments/appointments.service';
@@ -14,6 +14,8 @@ import {
   FinancialPeriodPreset,
   resolveFinancialPeriod,
 } from '../reports/reports-date.util';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
+import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 
 const entryInclude = {
   customer: { select: { id: true, name: true } },
@@ -33,43 +35,58 @@ export class FinancialService {
     private readonly reports: ReportsService,
     private readonly appointments: AppointmentsService,
     private readonly commissionEngine: CommissionEngineService,
+    @Optional() private readonly dashboardCache?: DashboardCacheService,
   ) {}
+
+  private async invalidateDashboardCache(organizationId: string, date?: Date) {
+    if (!this.dashboardCache) return;
+    await this.dashboardCache.invalidate(organizationId, date);
+  }
 
   profitSummary(organizationId: string, period: FinancialPeriodPreset = 'month') {
     const range = resolveFinancialPeriod(period);
     return this.reports.profitForPeriod(organizationId, range);
   }
 
-  list(
+  async list(
     organizationId: string,
     search?: string,
     type?: string,
     status?: string,
     origin?: string,
     supplierId?: string,
+    query: ListQueryInput = {},
   ) {
-    return this.prisma.financialEntry.findMany({
-      where: {
-        organizationId,
-        parentEntryId: null,
-        ...(type ? { type: type as never } : {}),
-        ...(status ? { status: status as never } : {}),
-        ...(origin ? { origin: origin as never } : {}),
-        ...(supplierId ? { supplierId } : {}),
-        ...(search
-          ? { description: { contains: search, mode: 'insensitive' } }
-          : {}),
-      },
-      include: {
-        ...entryInclude,
-        installments: { orderBy: { installmentNumber: 'asc' } },
-      },
-      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
-    });
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.FinancialEntryWhereInput = {
+      organizationId,
+      parentEntryId: null,
+      ...(type ? { type: type as never } : {}),
+      ...(status ? { status: status as never } : {}),
+      ...(origin ? { origin: origin as never } : {}),
+      ...(supplierId ? { supplierId } : {}),
+      ...(search
+        ? { description: { contains: search, mode: 'insensitive' } }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.financialEntry.count({ where }),
+      this.prisma.financialEntry.findMany({
+        where,
+        include: {
+          ...entryInclude,
+          installments: { orderBy: { installmentNumber: 'asc' } },
+        },
+        orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
-  create(organizationId: string, dto: CreateFinancialEntryDto) {
-    return this.prisma.financialEntry.create({
+  async create(organizationId: string, dto: CreateFinancialEntryDto) {
+    const entry = await this.prisma.financialEntry.create({
       data: {
         organizationId,
         description: dto.description.trim(),
@@ -84,6 +101,8 @@ export class FinancialService {
       },
       include: entryInclude,
     });
+    await this.invalidateDashboardCache(organizationId);
+    return entry;
   }
 
   async createInstallments(organizationId: string, dto: CreateInstallmentsDto) {
@@ -622,6 +641,8 @@ export class FinancialService {
       },
     });
 
+    await this.invalidateDashboardCache(organizationId, paidAt);
+
     return updated;
   }
 
@@ -716,6 +737,12 @@ export class FinancialService {
       },
     });
 
+    if (entry.status === 'PAID' && entry.paidAt) {
+      await this.invalidateDashboardCache(organizationId, entry.paidAt);
+    } else {
+      await this.invalidateDashboardCache(organizationId);
+    }
+
     return { ok: true };
   }
 
@@ -774,5 +801,59 @@ export class FinancialService {
     }));
 
     return [...fromSplits, ...fromLegacy];
+  }
+
+  /** Agregado leve para gráficos do dashboard (sem array de lançamentos). */
+  async getSummary(organizationId: string, month?: string) {
+    const now = new Date();
+    const [year, mon] = month
+      ? month.split('-').map(Number)
+      : [now.getFullYear(), now.getMonth() + 1];
+    const monthStart = new Date(year, mon - 1, 1);
+    const monthEnd = new Date(year, mon, 0, 23, 59, 59, 999);
+
+    const [receivableAgg, payableAgg, splitGroups] = await Promise.all([
+      this.prisma.financialEntry.aggregate({
+        where: {
+          organizationId,
+          type: 'RECEIVABLE',
+          status: 'PAID',
+          paidAt: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amountReceived: true },
+      }),
+      this.prisma.financialEntry.aggregate({
+        where: {
+          organizationId,
+          type: 'PAYABLE',
+          status: 'PAID',
+          paidAt: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amountReceived: true },
+      }),
+      this.prisma.financialPaymentSplit.groupBy({
+        by: ['paymentMethod'],
+        where: {
+          organizationId,
+          financialEntry: {
+            type: 'RECEIVABLE',
+            status: 'PAID',
+            paidAt: { gte: monthStart, lte: monthEnd },
+          },
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const revenue = this.roundMoney(Number(receivableAgg._sum.amountReceived ?? 0));
+    const expenses = this.roundMoney(Number(payableAgg._sum.amountReceived ?? 0));
+    const profit = this.roundMoney(revenue - expenses);
+
+    const paymentMethods: Record<string, number> = {};
+    for (const row of splitGroups) {
+      paymentMethods[row.paymentMethod] = this.roundMoney(Number(row._sum.amount ?? 0));
+    }
+
+    return { revenue, expenses, profit, paymentMethods };
   }
 }

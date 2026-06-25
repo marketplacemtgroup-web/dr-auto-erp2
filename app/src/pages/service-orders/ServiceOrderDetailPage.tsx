@@ -295,9 +295,15 @@ export default function ServiceOrderDetailPage() {
     void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
   };
 
-  const { data: products } = useApiQuery(["products-all"], (t) => api.products(t));
+  const { data: productsRes } = useApiQuery(["products-picker"], (t) =>
+    api.products(t, undefined, false, 1, 50),
+  );
+  const products = productsRes?.data;
   const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
-  const { data: activeEmployees } = useApiQuery(["employees-active"], (t) => api.employees(t, { status: "ACTIVE" }));
+  const { data: activeEmployeesRes } = useApiQuery(["employees-active"], (t) =>
+    api.employees(t, { status: "ACTIVE", limit: 50 }),
+  );
+  const activeEmployees = activeEmployeesRes?.data;
   const { data: technicians } = useApiQuery(["employee-technicians"], (t) => api.employeeTechnicians(t));
   const org = useOrganizationBranding();
 

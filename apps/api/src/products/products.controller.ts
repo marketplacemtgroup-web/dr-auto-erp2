@@ -37,11 +37,14 @@ export class ProductsController {
     @CurrentUser() user: { organizationId: string },
     @Query('search') search?: string,
     @Query('lowStock') lowStock?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.productsService.list(
       user.organizationId,
       search,
       lowStock === 'true',
+      { page, limit },
     );
   }
 

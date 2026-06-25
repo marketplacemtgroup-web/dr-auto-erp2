@@ -3,6 +3,7 @@ import { Prisma, PurchaseOrder } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { FinancialService } from '../financial/financial.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ConfirmPurchaseDto } from './dto/confirm-purchase.dto';
 import { ReceivePurchaseDto } from './dto/receive-purchase.dto';
@@ -160,27 +161,40 @@ export class PurchasesService {
     return created.id;
   }
 
-  list(organizationId: string, search?: string, status?: string) {
-    return this.prisma.purchaseOrder.findMany({
-      where: {
-        organizationId,
-        ...(status ? { status: status as never } : {}),
-        ...(search
-          ? {
-              OR: [
-                { number: { contains: search, mode: 'insensitive' } },
-                { supplierName: { contains: search, mode: 'insensitive' } },
-                { invoiceNumber: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        supplier: { select: { id: true, legalName: true, tradeName: true } },
-        items: { select: { id: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async list(
+    organizationId: string,
+    search?: string,
+    status?: string,
+    query: ListQueryInput = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.PurchaseOrderWhereInput = {
+      organizationId,
+      ...(status ? { status: status as never } : {}),
+      ...(search
+        ? {
+            OR: [
+              { number: { contains: search, mode: 'insensitive' } },
+              { supplierName: { contains: search, mode: 'insensitive' } },
+              { invoiceNumber: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.purchaseOrder.count({ where }),
+      this.prisma.purchaseOrder.findMany({
+        where,
+        include: {
+          supplier: { select: { id: true, legalName: true, tradeName: true } },
+          items: { select: { id: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {

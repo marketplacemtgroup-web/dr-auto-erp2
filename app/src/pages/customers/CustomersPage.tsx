@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
@@ -11,7 +11,8 @@ import CustomerFormFields, {
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
-import { api, type CustomerDetail, type CustomerRow } from "../../lib/api";
+import ListPagination from "../../components/modules/ListPagination";
+import { api, LIST_PAGE_SIZE, type CustomerDetail, type CustomerRow } from "../../lib/api";
 import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 
@@ -43,6 +44,7 @@ export default function CustomersPage() {
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRow | null>(null);
@@ -50,9 +52,17 @@ export default function CustomersPage() {
   const [loadingEdit, setLoadingEdit] = useState(false);
 
   const { data, isLoading, error } = useApiQuery(
-    ["customers", search],
-    (t) => api.customers(t, search || undefined),
+    ["customers", search, String(page)],
+    (t) => api.customers(t, search || undefined, page, LIST_PAGE_SIZE),
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const rows = data?.data ?? [];
+  const total = data?.pagination.total ?? 0;
+  const totalPages = data?.pagination.totalPages ?? 0;
 
   const openCreate = () => {
     setEditingId(null);
@@ -95,8 +105,7 @@ export default function CustomersPage() {
     },
   });
 
-  const total = data?.length ?? 0;
-  const withVehicles = data?.filter((c) => c._count.vehicles > 0).length ?? 0;
+  const withVehicles = rows.filter((c) => c._count.vehicles > 0).length;
 
   return (
     <>
@@ -105,7 +114,10 @@ export default function CustomersPage() {
         description="Cadastro completo e ficha do cliente (clique na linha para ver histórico)"
         actionLabel="Novo cliente"
         onAction={openCreate}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <KpiStrip
           items={[
@@ -113,8 +125,8 @@ export default function CustomersPage() {
             { label: "Com veiculo", value: String(withVehicles), tone: "success" },
             {
               label: "Sem veiculo",
-              value: String(total - withVehicles),
-              tone: total - withVehicles > 0 ? "warning" : "default",
+              value: String(rows.length - withVehicles),
+              tone: rows.length - withVehicles > 0 ? "warning" : "default",
             },
           ]}
         />
@@ -134,7 +146,7 @@ export default function CustomersPage() {
               ),
             },
           ]}
-          rows={data ?? []}
+          rows={rows}
           loading={isLoading}
           error={error}
           emptyMessage="Nenhum cliente. Clique em Novo cliente."
@@ -142,6 +154,7 @@ export default function CustomersPage() {
           onEdit={(row) => void openEdit(row)}
           onDelete={setDeleteTarget}
         />
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </ModulePageShell>
 
       <FormDrawer

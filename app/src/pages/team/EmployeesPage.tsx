@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
-import { api, type EmployeeRow } from "../../lib/api";
+import ListPagination from "../../components/modules/ListPagination";
+import { api, LIST_PAGE_SIZE, type EmployeeRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { routes } from "../../lib/routes";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
@@ -50,6 +51,7 @@ export default function EmployeesPage() {
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tab, setTab] = useState<"dados" | "pagamento" | "acesso">("dados");
@@ -61,13 +63,22 @@ export default function EmployeesPage() {
     api.teamLoginEmailDomain(t),
   );
   const { data, isLoading, error } = useApiQuery(
-    ["employees", search, statusFilter],
+    ["employees", search, statusFilter, String(page)],
     (t) =>
       api.employees(t, {
         search: search || undefined,
         status: statusFilter || undefined,
+        page,
+        limit: LIST_PAGE_SIZE,
       }),
   );
+
+  const rows = data?.data ?? [];
+  const totalPages = data?.pagination.totalPages ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -128,7 +139,10 @@ export default function EmployeesPage() {
         description="Gerencie sua equipe, acessos, salários, comissões e produtividade."
         actionLabel="Novo funcionário"
         onAction={openDrawer}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <KpiStrip
           items={[
@@ -150,7 +164,10 @@ export default function EmployeesPage() {
         <div className="flex gap-2 mb-4">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
             className={selectClass}
           >
             <option value="">Todos os status</option>
@@ -212,9 +229,10 @@ export default function EmployeesPage() {
               render: (r: EmployeeRow) => String(r.osInProgress ?? 0),
             },
           ]}
-          rows={data ?? []}
+          rows={rows}
           onRowClick={(r) => navigate(routes.equipeFuncionarioDetalhe(r.id))}
         />
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </ModulePageShell>
 
       <FormDrawer

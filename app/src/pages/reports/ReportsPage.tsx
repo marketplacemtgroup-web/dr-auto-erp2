@@ -1,12 +1,9 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ReportsPeriodFilter from "../../components/reports/ReportsPeriodFilter";
-import ReportsPrintSheet from "../../components/reports/ReportsPrintSheet";
-import ReportsDashboard from "../../components/reports/ReportsDashboard";
 import ReportsToolbar from "../../components/reports/ReportsToolbar";
-import ReportsTvMode from "../../components/reports/ReportsTvMode";
-import PrintPortal from "../../components/print/PrintPortal";
+import PageLoader from "../../components/PageLoader";
 import { api, getErrorMessage } from "../../lib/api";
 import { normalizeReportsFull } from "../../lib/normalizeReportsFull";
 import {
@@ -17,6 +14,11 @@ import {
 } from "../../lib/reportPeriod";
 import { QUERY_STALE_TIME_MS } from "../../lib/query-cache";
 import { useAuthStore } from "../../stores/authStore";
+
+const ReportsDashboard = lazy(() => import("../../components/reports/ReportsDashboard"));
+const ReportsPrintSheet = lazy(() => import("../../components/reports/ReportsPrintSheet"));
+const ReportsTvMode = lazy(() => import("../../components/reports/ReportsTvMode"));
+const PrintPortal = lazy(() => import("../../components/print/PrintPortal"));
 
 export default function ReportsPage() {
   const token = useAuthStore((s) => s.session?.accessToken ?? null);
@@ -99,12 +101,14 @@ export default function ReportsPage() {
           }
         >
           {report ? (
-            <ReportsDashboard
-              report={report}
-              period={period}
-              token={token}
-              isLoading={isLoading}
-            />
+            <Suspense fallback={<PageLoader />}>
+              <ReportsDashboard
+                report={report}
+                period={period}
+                token={token}
+                isLoading={isLoading}
+              />
+            </Suspense>
           ) : isLoading ? (
             <p className="text-sm text-[#94A3B8] py-12 text-center">
               Carregando relatórios… pode levar alguns segundos.
@@ -116,19 +120,23 @@ export default function ReportsPage() {
       </ModulePageShell>
 
       {report ? (
-        <PrintPortal>
-          <ReportsPrintSheet report={report} />
-        </PrintPortal>
+        <Suspense fallback={null}>
+          <PrintPortal>
+            <ReportsPrintSheet report={report} />
+          </PrintPortal>
+        </Suspense>
       ) : null}
 
       {tvMode && report ? (
-        <ReportsTvMode
-          report={report}
-          periodLabel={periodLabel}
-          revenueChart={revenueChart}
-          onClose={() => setTvMode(false)}
-          onRefresh={() => void refetch()}
-        />
+        <Suspense fallback={<PageLoader />}>
+          <ReportsTvMode
+            report={report}
+            periodLabel={periodLabel}
+            revenueChart={revenueChart}
+            onClose={() => setTvMode(false)}
+            onRefresh={() => void refetch()}
+          />
+        </Suspense>
       ) : null}
     </>
   );

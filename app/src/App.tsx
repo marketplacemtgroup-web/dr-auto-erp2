@@ -5,6 +5,7 @@ import BrandingBootstrap from "./components/BrandingBootstrap";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PageLoader from "./components/PageLoader";
 import AppShell from "./layouts/AppShell";
+import WithNotificationPolling from "./layouts/WithNotificationPolling";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterOrganizationPage from "./pages/auth/RegisterOrganizationPage";
 import { routes } from "./lib/routes";
@@ -60,9 +61,11 @@ export default function App() {
           <Route
             index
             element={
-              <Lazy>
-                <DashboardPage />
-              </Lazy>
+              <WithNotificationPolling>
+                <Lazy>
+                  <DashboardPage />
+                </Lazy>
+              </WithNotificationPolling>
             }
           />
           <Route
@@ -108,9 +111,11 @@ export default function App() {
           <Route
             path="ordem-de-servico"
             element={
-              <Lazy>
-                <ServiceOrdersPage />
-              </Lazy>
+              <WithNotificationPolling>
+                <Lazy>
+                  <ServiceOrdersPage />
+                </Lazy>
+              </WithNotificationPolling>
             }
           />
           <Route
@@ -124,9 +129,11 @@ export default function App() {
           <Route
             path="orcamentos"
             element={
-              <Lazy>
-                <QuotesPage />
-              </Lazy>
+              <WithNotificationPolling>
+                <Lazy>
+                  <QuotesPage />
+                </Lazy>
+              </WithNotificationPolling>
             }
           />
           <Route

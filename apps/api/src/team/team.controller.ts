@@ -65,13 +65,19 @@ export class TeamController {
     @Query('jobTitleId') jobTitleId?: string,
     @Query('employeeId') employeeId?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.employees.list(user.organizationId, {
-      status,
-      jobTitleId,
-      employeeId,
-      search,
-    });
+    return this.employees.list(
+      user.organizationId,
+      {
+        status,
+        jobTitleId,
+        employeeId,
+        search,
+      },
+      { page, limit },
+    );
   }
 
   @Get('employees/technicians')

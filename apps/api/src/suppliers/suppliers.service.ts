@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
@@ -8,23 +9,36 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(organizationId: string, search?: string, status?: string) {
-    return this.prisma.supplier.findMany({
-      where: {
-        organizationId,
-        ...(status ? { status: status as never } : {}),
-        ...(search
-          ? {
-              OR: [
-                { legalName: { contains: search, mode: 'insensitive' } },
-                { tradeName: { contains: search, mode: 'insensitive' } },
-                { document: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { legalName: 'asc' },
-    });
+  async list(
+    organizationId: string,
+    search?: string,
+    status?: string,
+    query: ListQueryInput = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.SupplierWhereInput = {
+      organizationId,
+      ...(status ? { status: status as never } : {}),
+      ...(search
+        ? {
+            OR: [
+              { legalName: { contains: search, mode: 'insensitive' } },
+              { tradeName: { contains: search, mode: 'insensitive' } },
+              { document: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.supplier.count({ where }),
+      this.prisma.supplier.findMany({
+        where,
+        orderBy: { legalName: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {

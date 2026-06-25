@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useDashboardBundleContext } from "../contexts/DashboardBundleContext";
 import { useDashboardRevenueSeries } from "../hooks/useDashboardLists";
 
 function formatValue(value: number) {
@@ -21,7 +22,10 @@ interface RevenueChartProps {
 }
 
 export default function RevenueChart({ monthlyRevenue = 0 }: RevenueChartProps) {
-  const { data: series = [], isLoading } = useDashboardRevenueSeries();
+  const bundle = useDashboardBundleContext();
+  const fallback = useDashboardRevenueSeries(bundle === null);
+  const series = bundle?.charts.data?.revenueSeries ?? fallback.data ?? [];
+  const isLoading = bundle ? bundle.charts.isPending : fallback.isLoading;
   const formatted = monthlyRevenue.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",

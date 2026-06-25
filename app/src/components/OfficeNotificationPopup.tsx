@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { api } from "../lib/api";
 import { routes } from "../lib/routes";
 import { useAuthStore } from "../stores/authStore";
-import { useOfficeEvents, type OfficeLiveEvent } from "../hooks/useOfficeEvents";
+import { useNotificationPolling, type OfficeLiveEvent } from "../contexts/NotificationPollingContext";
 import { formatMoney } from "../lib/format";
 import { playOfficeNotificationSound } from "../lib/notificationSound";
 
@@ -24,7 +24,11 @@ export default function OfficeNotificationPopup() {
     }
   }, []);
 
-  useOfficeEvents(pushEvent);
+  const { subscribe } = useNotificationPolling();
+
+  useEffect(() => {
+    return subscribe(pushEvent);
+  }, [subscribe, pushEvent]);
 
   function dismiss() {
     if (!current) return;

@@ -11,6 +11,22 @@ interface PortalApi {
         @Body request: LoginRequest
     ): LoginResponse
 
+    @GET("portal/summary")
+    suspend fun getSummary(): PortalSummary
+
+    @GET("portal/orders")
+    suspend fun getOrders(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20,
+    ): PaginatedServiceOrders
+
+    @GET("portal/quotes")
+    suspend fun getQuotes(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50,
+    ): PaginatedQuotes
+
+    /** @deprecated Prefer getSummary + getOrders + getQuotes */
     @GET("portal/dashboard")
     suspend fun getDashboard(): PortalDashboard
 
@@ -48,7 +64,10 @@ interface PortalApi {
     suspend fun markAllNotificationsRead(): ResponseBody
 
     @GET("portal/vehicles")
-    suspend fun getVehicles(): List<Vehicle>
+    suspend fun getVehicles(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50,
+    ): PaginatedVehicles
 
     @POST("portal/switch-vehicle")
     suspend fun switchVehicle(

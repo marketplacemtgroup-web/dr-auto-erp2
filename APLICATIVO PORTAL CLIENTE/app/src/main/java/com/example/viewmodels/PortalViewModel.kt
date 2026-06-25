@@ -269,7 +269,19 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             _errorMessage.value = null
             _isOffline.value = false
             try {
-                val dashboardData = api.getDashboard()
+                val summary = api.getSummary()
+                val orders = api.getOrders().data
+                val quotes = api.getQuotes().data
+                val dashboardData = PortalDashboard(
+                    organization = summary.organization,
+                    customer = summary.customer,
+                    vehicle = summary.vehicle,
+                    serviceOrders = orders,
+                    quotes = quotes,
+                    attachments = emptyList(),
+                    upcomingAppointment = summary.upcomingAppointment,
+                    maintenanceReminders = summary.maintenanceReminders,
+                )
                 _dashboard.value = dashboardData
                 updateBrandColors(dashboardData.organization, null)
                 sessionManager.cacheDashboard(dashboardAdapter.toJson(dashboardData))
@@ -278,7 +290,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                     loadNotificationsInternal()
                 }
 
-                val vehs = api.getVehicles()
+                val vehs = api.getVehicles().data
                 _vehicles.value = vehs
 
                 _isOffline.value = false

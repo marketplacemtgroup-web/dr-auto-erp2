@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import ModuleFilters, { FilterSelect } from "../../components/modules/ModuleFilters";
@@ -6,7 +6,8 @@ import FormDrawer, { FormField, inputClass } from "../../components/modules/Form
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
-import { api, type ProductRow } from "../../lib/api";
+import ListPagination from "../../components/modules/ListPagination";
+import { api, LIST_PAGE_SIZE, type ProductRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 
@@ -36,6 +37,7 @@ export default function InventoryPage() {
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [lowOnly, setLowOnly] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [stockDrawer, setStockDrawer] = useState<ProductRow | null>(null);
@@ -45,9 +47,17 @@ export default function InventoryPage() {
   const [form, setForm] = useState(emptyForm);
 
   const { data, isLoading, error } = useApiQuery(
-    ["products", search, String(lowOnly)],
-    (t) => api.products(t, search || undefined, lowOnly),
+    ["products", search, String(lowOnly), String(page)],
+    (t) => api.products(t, search || undefined, lowOnly, page, LIST_PAGE_SIZE),
   );
+
+  const rows = data?.data ?? [];
+  const totalListed = data?.pagination.total ?? 0;
+  const totalPages = data?.pagination.totalPages ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, lowOnly]);
 
   const { data: movements } = useApiQuery(["stock-movements"], (t) => api.stockMovements(t));
 
@@ -126,8 +136,8 @@ export default function InventoryPage() {
     },
   });
 
-  const low = data?.filter((p) => p.stock <= p.minStock).length ?? 0;
-  const stockValue = data?.reduce((s, p) => s + Number(p.costPrice) * p.stock, 0) ?? 0;
+  const low = rows.filter((p) => p.stock <= p.minStock).length;
+  const stockValue = rows.reduce((s, p) => s + Number(p.costPrice) * p.stock, 0);
 
   return (
     <>
@@ -136,13 +146,19 @@ export default function InventoryPage() {
         description="Pecas, produtos e alertas de reposicao"
         actionLabel="Nova peca"
         onAction={openCreate}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <ModuleFilters>
           <FilterSelect
             label="Filtro"
             value={lowOnly ? "low" : "all"}
-            onChange={(v) => setLowOnly(v === "low")}
+            onChange={(v) => {
+              setLowOnly(v === "low");
+              setPage(1);
+            }}
             options={[
               { value: "all", label: "Todos os itens" },
               { value: "low", label: "Somente baixo estoque" },
@@ -151,7 +167,7 @@ export default function InventoryPage() {
         </ModuleFilters>
         <KpiStrip
           items={[
-            { label: "Itens cadastrados", value: String(data?.length ?? 0) },
+            { label: "Itens cadastrados", value: String(totalListed) },
             { label: "Baixo estoque", value: String(low), tone: low > 0 ? "danger" : "success" },
             { label: "Valor em custo", value: formatMoney(stockValue) },
           ]}
@@ -198,7 +214,7 @@ export default function InventoryPage() {
               render: (p) => formatMoney(p.salePrice),
             },
           ]}
-          rows={data ?? []}
+          rows={rows}
           loading={isLoading}
           error={error}
           emptyMessage="Nenhuma peca cadastrada."
@@ -212,6 +228,7 @@ export default function InventoryPage() {
         <p className="text-xs text-[#94A3B8] mt-2">
           Clique na linha para entrada ou saida rapida de estoque.
         </p>
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="px-5 py-3 border-b border-[#F1F5F9]">

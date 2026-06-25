@@ -28,8 +28,10 @@ export class PurchasesController {
     @CurrentUser() user: { organizationId: string },
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.purchasesService.list(user.organizationId, search, status);
+    return this.purchasesService.list(user.organizationId, search, status, { page, limit });
   }
 
   @Get(':id')

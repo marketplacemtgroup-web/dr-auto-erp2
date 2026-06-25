@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AppointmentsModule } from '../appointments/appointments.module';
-import { AttachmentsModule } from '../attachments/attachments.module';
 import { FinancialModule } from '../financial/financial.module';
 import { MaintenanceRemindersModule } from '../maintenance-reminders/maintenance-reminders.module';
 import { ProductsModule } from '../products/products.module';
@@ -12,7 +11,6 @@ import { ServiceOrdersService } from './service-orders.service';
 
 @Module({
   imports: [
-    AttachmentsModule,
     AppointmentsModule,
     MaintenanceRemindersModule,
     forwardRef(() => QuotesModule),

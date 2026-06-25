@@ -54,7 +54,7 @@ export default function PortalHomePage() {
     setRefreshing(true);
     setError(null);
     try {
-      await refresh();
+      await refresh({ orders: true, quotes: true });
       fetchedForToken.current = token;
     } catch (err) {
       setError(

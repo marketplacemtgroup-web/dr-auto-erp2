@@ -29,9 +29,10 @@ export default function CommissionsPage() {
   const [employeeId, setEmployeeId] = useState("");
   const [status, setStatus] = useState("");
 
-  const { data: employees = [] } = useApiQuery(["employees-picker"], (t) =>
-    api.employees(t),
+  const { data: employeesRes } = useApiQuery(["employees-picker"], (t) =>
+    api.employees(t, { limit: 50 }),
   );
+  const employees = employeesRes?.data ?? [];
 
   const { data: rows = [], isLoading } = useApiQuery<CommissionRow[]>(
     ["team-commissions", employeeId, status],

@@ -20,7 +20,8 @@ import PaymentMethodsChart from "../components/PaymentMethodsChart";
 import AlertsPanel from "../components/AlertsPanel";
 import PreventiveMaintenancePanel from "../components/PreventiveMaintenancePanel";
 import MaintenanceAlertModal from "../components/MaintenanceAlertModal";
-import { useDashboardKpis } from "../hooks/useDashboardKpis";
+import { DashboardBundleProvider } from "../contexts/DashboardBundleContext";
+import { useDashboardBundle } from "../hooks/useDashboardBundle";
 import { usePermissions } from "../hooks/usePermissions";
 import NavButton from "../components/NavButton";
 import { formatMoney } from "../lib/format";
@@ -35,17 +36,29 @@ function sparkline(value: number) {
 }
 
 export default function DashboardPage() {
+  return (
+    <DashboardBundleProvider>
+      <DashboardPageContent />
+    </DashboardBundleProvider>
+  );
+}
+
+function DashboardPageContent() {
   const [maintenanceAlertDismissed, setMaintenanceAlertDismissed] = useState(false);
   const user = useAuthUser();
   const organizationName = useAuthStore((s) => s.session?.organizationName);
   const { canViewFinancialDashboard } = usePermissions();
   const showFinancial = canViewFinancialDashboard();
-  const { data: kpis, operational, financial } = useDashboardKpis();
+  const {
+    operational: op,
+    financial: fin,
+    kpis,
+    alerts,
+    summary,
+  } = useDashboardBundle();
 
-  const opLoading = operational.isPending && !operational.data;
-  const finLoading = showFinancial && financial.isPending && !financial.data;
-  const op = operational.data;
-  const fin = financial.data;
+  const opLoading = summary.isPending && !op;
+  const finLoading = showFinancial && summary.isPending && !fin;
 
   const operationalKpis = [
     {
@@ -201,37 +214,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {operational.isError && (
+      {summary.isError && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 flex flex-wrap items-center justify-between gap-2">
           <span>
-            Indicadores operacionais:{" "}
-            {getErrorMessage(operational.error, "falha na API")}.
+            Indicadores do painel:{" "}
+            {getErrorMessage(summary.error, "falha na API")}.
           </span>
           <button
             type="button"
-            onClick={() => void operational.refetch()}
-            disabled={operational.isFetching}
+            onClick={() => void summary.refetch()}
+            disabled={summary.isFetching}
             className="shrink-0 rounded-lg bg-amber-100 px-3 py-1.5 text-[12px] font-medium hover:bg-amber-200 disabled:opacity-60"
           >
-            {operational.isFetching ? "Carregando..." : "Tentar de novo"}
-          </button>
-        </div>
-      )}
-
-      {showFinancial && financial.isError && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Indicadores financeiros:{" "}
-            {getErrorMessage(financial.error, "falha na API")} (operacionais ja
-            carregados).
-          </span>
-          <button
-            type="button"
-            onClick={() => void financial.refetch()}
-            disabled={financial.isFetching}
-            className="shrink-0 rounded-lg bg-amber-100 px-3 py-1.5 text-[12px] font-medium hover:bg-amber-200 disabled:opacity-60"
-          >
-            {financial.isFetching ? "Carregando..." : "Tentar de novo"}
+            {summary.isFetching ? "Carregando..." : "Tentar de novo"}
           </button>
         </div>
       )}
@@ -276,8 +271,10 @@ export default function DashboardPage() {
         )}
         <div className={showFinancial ? "" : "md:col-span-2 xl:col-span-4"}>
           <AlertsPanel
-            lowStockParts={op?.lowStockParts}
-            delayedServices={op?.delayedServices}
+            lowStockParts={alerts.data?.lowStockParts ?? op?.lowStockParts}
+            delayedServices={alerts.data?.delayedServices ?? op?.delayedServices}
+            pendingQuotes={alerts.data?.pendingQuotes ?? op?.pendingQuotes}
+            maintenanceOverdue={alerts.data?.maintenanceOverdue}
           />
         </div>
       </div>

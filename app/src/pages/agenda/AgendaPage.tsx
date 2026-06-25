@@ -73,13 +73,10 @@ export default function AgendaPage() {
   const weekFrom = weekStart.toISOString();
   const weekTo = weekEnd.toISOString();
 
-  const { data: vehicles, isLoading: vehiclesLoading, error: vehiclesError } = useApiQuery(
-    ["vehicles-all"],
-    (t) => api.vehicles(t),
+  const { data: employeesRes } = useApiQuery(["employees-agenda"], (t) =>
+    api.employees(t, { status: "ACTIVE", limit: 50 }),
   );
-  const { data: employees } = useApiQuery(["employees-agenda"], (t) =>
-    api.employees(t, { status: "ACTIVE" }),
-  );
+  const employees = employeesRes?.data ?? [];
   const { data, isLoading, error: listError } = useApiQuery(
     ["appointments", weekFrom, weekTo],
     (t) => api.appointments(t, weekFrom, weekTo),
@@ -435,18 +432,11 @@ export default function AgendaPage() {
       >
         <FormField label="Veiculo *">
           <VehicleSearchSelect
-            vehicles={vehicles}
             value={form.vehicleId}
             onChange={(vehicleId) => setForm((f) => ({ ...f, vehicleId }))}
-            loading={vehiclesLoading}
             required
             placeholder="Buscar por placa ou cliente..."
           />
-          {vehiclesError && (
-            <p className="mt-1 text-xs text-red-600">
-              {getErrorMessage(vehiclesError, "Nao foi possivel carregar veiculos")}
-            </p>
-          )}
         </FormField>
         <FormField label="Data e hora *">
           <DateTimeField

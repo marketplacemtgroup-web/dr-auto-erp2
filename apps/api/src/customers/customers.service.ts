@@ -3,9 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ServiceOrderStatus } from '@prisma/client';
+import { ServiceOrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { CreateCustomerContactDto } from './dto/create-customer-contact.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -74,27 +75,35 @@ export class CustomersService {
     });
   }
 
-  list(organizationId: string, search?: string) {
-    return this.prisma.customer.findMany({
-      where: {
-        organizationId,
-        ...notDeleted,
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search, mode: 'insensitive' } },
-                { document: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        _count: { select: { vehicles: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+  async list(organizationId: string, search?: string, query: ListQueryInput = {}) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.CustomerWhereInput = {
+      organizationId,
+      ...notDeleted,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search, mode: 'insensitive' } },
+              { document: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.customer.count({ where }),
+      this.prisma.customer.findMany({
+        where,
+        include: {
+          _count: { select: { vehicles: true } },
+        },
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {

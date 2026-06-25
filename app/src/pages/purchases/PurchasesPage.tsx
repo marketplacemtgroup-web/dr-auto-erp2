@@ -8,8 +8,9 @@ import FormDrawer, {
   plainNumberInputClass,
 } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
+import ListPagination from "../../components/modules/ListPagination";
 import { useAuthStore } from "../../stores/authStore";
-import { api, type ProductRow, type PurchaseOrderRow, type SupplierRow } from "../../lib/api";
+import { api, LIST_PAGE_SIZE, type ProductRow, type PurchaseOrderRow, type SupplierRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { useApiQuery } from "../../hooks/useApiQuery";
 
@@ -42,6 +43,7 @@ export default function PurchasesPage() {
   const token = useAuthStore((s) => s.session?.accessToken ?? null);
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [supplierId, setSupplierId] = useState("");
@@ -57,23 +59,32 @@ export default function PurchasesPage() {
   const [productSearch, setProductSearch] = useState("");
   const [postToStock, setPostToStock] = useState(false);
 
-  const { data: rows = [], isLoading } = useApiQuery<PurchaseOrderRow[]>(
-    ["purchases", search],
-    (t) => api.purchaseOrders(t, search || undefined),
+  const { data: purchaseRes, isLoading } = useApiQuery(
+    ["purchases", search, String(page)],
+    (t) => api.purchaseOrders(t, search || undefined, undefined, page, LIST_PAGE_SIZE),
     Boolean(token),
   );
+  const rows = purchaseRes?.data ?? [];
+  const totalPages = purchaseRes?.pagination.totalPages ?? 0;
+  const totalListed = purchaseRes?.pagination.total ?? 0;
 
-  const { data: suppliers = [] } = useApiQuery<SupplierRow[]>(
+  const { data: suppliersRes } = useApiQuery(
     ["suppliers-picker"],
-    (t) => api.suppliers(t, undefined, "ACTIVE"),
+    (t) => api.suppliers(t, undefined, "ACTIVE", 1, LIST_PAGE_SIZE),
     wizardOpen && Boolean(token),
   );
+  const suppliers = suppliersRes?.data ?? [];
 
-  const { data: products = [] } = useApiQuery<ProductRow[]>(
+  const { data: productsRes } = useApiQuery(
     ["products-picker", productSearch],
-    (t) => api.products(t, productSearch || undefined),
+    (t) => api.products(t, productSearch || undefined, false, 1, LIST_PAGE_SIZE),
     wizardOpen && step === 1 && Boolean(token),
   );
+  const products = productsRes?.data ?? [];
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const subtotal = useMemo(
     () =>
@@ -192,13 +203,16 @@ export default function PurchasesPage() {
       <ModulePageShell
         title="Compras"
         description="Pedidos de compra com itens, estoque e contas a pagar"
-        onSearch={(q) => setSearch(q)}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
         onAction={() => setWizardOpen(true)}
         actionLabel="Nova compra"
       >
         <KpiStrip
           items={[
-            { label: "Pedidos", value: String(rows.length) },
+            { label: "Pedidos", value: String(totalListed) },
             { label: "Aguardando recebimento", value: String(pending), tone: "warning" },
             {
               label: "Total listado",
@@ -280,6 +294,7 @@ export default function PurchasesPage() {
             </tbody>
           </table>
         </div>
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </ModulePageShell>
 
       <FormDrawer

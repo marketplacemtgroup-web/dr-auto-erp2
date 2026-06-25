@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Printer, Trash2 } from "lucide-react";
@@ -12,7 +12,8 @@ import { fromDatetimeLocalValue } from "../../lib/datetimeLocal";
 import VehicleSearchSelect from "../../components/vehicles/VehicleSearchSelect";
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
-import { api, type ServiceOrderRow } from "../../lib/api";
+import ListPagination from "../../components/modules/ListPagination";
+import { api, LIST_PAGE_SIZE, type ServiceOrderRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { osStatusLabel, osStatusToVariant } from "../../lib/service-order-status";
@@ -51,6 +52,7 @@ export default function ServiceOrdersPage() {
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [viewTab, setViewTab] = useState<ViewTab>("ativas");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -62,11 +64,26 @@ export default function ServiceOrdersPage() {
     complaint: "",
   });
 
-  const { data: vehicles } = useApiQuery(["vehicles-all"], (t) => api.vehicles(t));
   const { data, isLoading, error } = useApiQuery(
-    ["service-orders", search, statusFilter],
-    (t) => api.serviceOrders(t, search || undefined, false, statusFilter || undefined),
+    ["service-orders", search, statusFilter, viewTab, String(page)],
+    (t) =>
+      api.serviceOrders(
+        t,
+        search || undefined,
+        false,
+        statusFilter || undefined,
+        page,
+        LIST_PAGE_SIZE,
+      ),
   );
+
+  const list = data?.data ?? [];
+  const totalListed = data?.pagination.total ?? 0;
+  const totalPages = data?.pagination.totalPages ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, viewTab]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -94,20 +111,20 @@ export default function ServiceOrdersPage() {
     },
   });
 
-  const open = data?.filter((o) => OPEN_STATUSES.includes(o.status as (typeof OPEN_STATUSES)[number]))
+  const open = list.filter((o) => OPEN_STATUSES.includes(o.status as (typeof OPEN_STATUSES)[number]))
     .length;
 
   const historyRows =
-    data?.filter((o) =>
+    list.filter((o) =>
       HISTORY_STATUSES.includes(o.status as (typeof HISTORY_STATUSES)[number]),
-    ) ?? [];
+    );
 
   const activeRows =
-    data?.filter((o) => {
+    list.filter((o) => {
       if (!OPEN_STATUSES.includes(o.status as (typeof OPEN_STATUSES)[number])) return false;
       if (statusFilter && o.status !== statusFilter) return false;
       return true;
-    }) ?? [];
+    });
 
   function openOs(id: string) {
     navigate(routes.ordemDeServicoDetalhe(id));
@@ -128,7 +145,10 @@ export default function ServiceOrdersPage() {
         }
         actionLabel="Nova OS"
         onAction={() => setDrawerOpen(true)}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <div className="flex gap-2 mb-4 border-b border-[#E2E8F0]">
           <button
@@ -136,6 +156,7 @@ export default function ServiceOrdersPage() {
             onClick={() => {
               setViewTab("ativas");
               setStatusFilter("");
+              setPage(1);
             }}
             className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px ${
               viewTab === "ativas"
@@ -150,6 +171,7 @@ export default function ServiceOrdersPage() {
             onClick={() => {
               setViewTab("historico");
               setStatusFilter("");
+              setPage(1);
             }}
             className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px ${
               viewTab === "historico"
@@ -200,7 +222,7 @@ export default function ServiceOrdersPage() {
               value: String(historyRows.length),
               tone: "success",
             },
-            { label: "Total listado", value: String(data?.length ?? 0) },
+            { label: "Total listado", value: String(totalListed) },
           ]}
         />
         {viewTab === "ativas" ? (
@@ -350,6 +372,7 @@ export default function ServiceOrdersPage() {
             )}
           </div>
         )}
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </ModulePageShell>
 
       <FormDrawer
@@ -366,7 +389,6 @@ export default function ServiceOrdersPage() {
       >
         <FormField label="Cliente / placa *">
           <VehicleSearchSelect
-            vehicles={vehicles}
             value={form.vehicleId}
             onChange={(vehicleId) => setForm((f) => ({ ...f, vehicleId }))}
             required

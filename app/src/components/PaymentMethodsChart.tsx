@@ -1,12 +1,4 @@
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApiQuery } from "../hooks/useApiQuery";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
@@ -15,30 +7,17 @@ import { routes } from "../lib/routes";
 import NavButton from "./NavButton";
 
 export default function PaymentMethodsChart() {
-  const { data = [], isLoading } = useApiQuery(
-    ["financial", "cash-flow"],
-    (t) => api.financialCashFlow(t),
+  const { data, isLoading } = useApiQuery(["financial", "summary"], (t) =>
+    api.financialSummary(t),
   );
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
-  const totals = new Map<string, number>();
-  for (const row of data) {
-    if (row.type !== "RECEIVABLE" || !row.paidAt) continue;
-    const paidAt = new Date(row.paidAt);
-    if (paidAt < monthStart) continue;
-    const method = row.paymentMethod ?? "OTHER";
-    totals.set(method, (totals.get(method) ?? 0) + Number(row.amount));
-  }
-
+  const paymentMethods = data?.paymentMethods ?? {};
   const chartData = PAYMENT_METHODS.map((method) => ({
     name: PAYMENT_LABELS[method],
-    value: totals.get(method) ?? 0,
+    value: paymentMethods[method] ?? 0,
   })).filter((d) => d.value > 0);
 
-  const monthTotal = chartData.reduce((s, d) => s + d.value, 0);
+  const monthTotal = data?.revenue ?? chartData.reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="bg-white rounded-xl card-shadow p-5">

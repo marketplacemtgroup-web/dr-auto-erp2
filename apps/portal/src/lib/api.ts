@@ -1,4 +1,5 @@
 import { fetchWithTimeout, parseJsonBody } from "./http";
+import type { Paginated } from "./pagination";
 
 function resolveApiBaseUrl(): string {
   const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? "";
@@ -79,7 +80,23 @@ export interface PortalDashboard {
     url: string;
     createdAt: string;
   }>;
+  upcomingAppointment?: {
+    id: string;
+    scheduledAt: string;
+    status: string;
+    durationMinutes: number;
+  } | null;
+  maintenanceReminders?: Array<{
+    id: string;
+    type: string;
+    dueKm: number | null;
+    dueDate: string | null;
+    serviceOrderNumber: number;
+    serviceOrderId: string;
+  }>;
 }
+
+export type PortalSummary = Omit<PortalDashboard, "serviceOrders" | "quotes" | "attachments">;
 
 export interface PortalChecklistItem {
   id: string;
@@ -275,8 +292,29 @@ export const api = {
   portalMe: (token: string) =>
     request<PortalMe>("/portal/me", { method: "GET" }, token),
 
-  portalQuotes: (token: string) =>
-    request<PortalQuoteRow[]>("/portal/quotes", { method: "GET" }, token),
+  portalQuotes: (token: string, page = 1, limit = 50) =>
+    request<Paginated<PortalQuoteRow>>(
+      `/portal/quotes?page=${page}&limit=${limit}`,
+      { method: "GET" },
+      token,
+    ),
+
+  portalSummary: (token: string) =>
+    request<PortalSummary>("/portal/summary", { method: "GET" }, token),
+
+  portalOrders: (token: string, page = 1, limit = 20) =>
+    request<Paginated<PortalDashboard["serviceOrders"][number]>>(
+      `/portal/orders?page=${page}&limit=${limit}`,
+      { method: "GET" },
+      token,
+    ),
+
+  portalAttachmentUrl: (token: string, attachmentId: string) =>
+    request<{ id: string; url: string; fileName: string; mimeType: string }>(
+      `/portal/attachments/${attachmentId}/url`,
+      { method: "GET" },
+      token,
+    ),
 
   portalQuote: (token: string, quoteId: string) =>
     request<PortalQuoteRow>(`/portal/quotes/${quoteId}`, { method: "GET" }, token),
@@ -356,8 +394,12 @@ export const api = {
   portalMarkAllNotificationsRead: (token: string) =>
     request<{ ok: boolean }>("/portal/notifications/read-all", { method: "PATCH" }, token),
 
-  portalVehicles: (token: string) =>
-    request<PortalVehicle[]>("/portal/vehicles", { method: "GET" }, token),
+  portalVehicles: (token: string, page = 1, limit = 50) =>
+    request<Paginated<PortalVehicle>>(
+      `/portal/vehicles?page=${page}&limit=${limit}`,
+      { method: "GET" },
+      token,
+    ),
 
   portalSwitchVehicle: (token: string, vehicleId: string) =>
     request<PortalSession>("/portal/switch-vehicle", {

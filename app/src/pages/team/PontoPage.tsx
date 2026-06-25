@@ -72,9 +72,10 @@ export default function PontoPage() {
     tab === "ajustes" && canApprove,
   );
 
-  const { data: employees } = useApiQuery(["employees-active"], (t) =>
-    api.employees(t, { status: "ACTIVE" }),
+  const { data: employeesRes } = useApiQuery(["employees-active"], (t) =>
+    api.employees(t, { status: "ACTIVE", limit: 50 }),
   );
+  const employees = employeesRes?.data;
 
   const bater = useMutation({
     mutationFn: (entryType: string) => api.baterPonto(token!, { entryType }),

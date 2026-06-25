@@ -38,7 +38,10 @@ export default function CommissionRulesPage() {
     isActive: true,
   });
 
-  const { data: employees } = useApiQuery(["employees-all"], (t) => api.employees(t));
+  const { data: employeesRes } = useApiQuery(["employees-picker"], (t) =>
+    api.employees(t, { limit: 50 }),
+  );
+  const employees = employeesRes?.data;
   const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
   const { data, isLoading, error } = useApiQuery(["commission-rules"], (t) =>
     api.commissionRules(t),

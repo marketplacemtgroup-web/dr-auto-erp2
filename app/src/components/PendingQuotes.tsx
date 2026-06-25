@@ -1,5 +1,6 @@
 import { routes } from "../lib/routes";
 import NavButton from "./NavButton";
+import { useDashboardBundleContext } from "../contexts/DashboardBundleContext";
 import { useDashboardPendingQuotes } from "../hooks/useDashboardLists";
 import { usePermissions } from "../hooks/usePermissions";
 import { formatMoney } from "../lib/format";
@@ -14,7 +15,10 @@ function timeAgo(iso: string) {
 }
 
 export default function PendingQuotes() {
-  const { data: quotes = [], isLoading } = useDashboardPendingQuotes();
+  const bundle = useDashboardBundleContext();
+  const fallback = useDashboardPendingQuotes(bundle === null);
+  const quotes = bundle?.charts.data?.pendingQuotes ?? fallback.data ?? [];
+  const isLoading = bundle ? bundle.charts.isPending : fallback.isLoading;
   const { canViewMoney } = usePermissions();
   const showMoney = canViewMoney();
 

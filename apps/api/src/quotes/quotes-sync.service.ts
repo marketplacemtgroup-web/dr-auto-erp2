@@ -99,6 +99,20 @@ export class QuotesSyncService {
     let addedPendingLines = 0;
     let modifiedPendingLines = 0;
 
+    const linesToCreate: Prisma.QuoteLineCreateManyInput[] = [];
+    const linesToUpdate: Array<{
+      id: string;
+      data: {
+        lineType: QuoteLineType;
+        description: string;
+        quantity: number;
+        unitPrice: Prisma.Decimal;
+        discount: Prisma.Decimal;
+        sortOrder: number;
+        serviceOrderItemId: string;
+      };
+    }> = [];
+
     for (let idx = 0; idx < items.length; idx++) {
       const item = items[idx];
       const existing = byItemId.get(item.id);
@@ -113,22 +127,33 @@ export class QuotesSyncService {
       };
 
       if (existing) {
-        if (this.pendingLineChanged(existing, item)) modifiedPendingLines++;
-        await this.prisma.quoteLine.update({
-          where: { id: existing.id },
-          data: lineData,
-        });
+        if (this.pendingLineChanged(existing, item)) {
+          modifiedPendingLines++;
+          linesToUpdate.push({ id: existing.id, data: lineData });
+        }
       } else {
         addedPendingLines++;
-        await this.prisma.quoteLine.create({
-          data: {
-            organizationId,
-            quoteId,
-            ...lineData,
-            approved: null,
-          },
+        linesToCreate.push({
+          organizationId,
+          quoteId,
+          ...lineData,
+          approved: null,
         });
       }
+    }
+
+    if (linesToCreate.length) {
+      await this.prisma.quoteLine.createMany({ data: linesToCreate });
+    }
+    if (linesToUpdate.length) {
+      await this.prisma.$transaction(
+        linesToUpdate.map((row) =>
+          this.prisma.quoteLine.update({
+            where: { id: row.id },
+            data: row.data,
+          }),
+        ),
+      );
     }
 
     const lines = await this.prisma.quoteLine.findMany({ where: { quoteId } });

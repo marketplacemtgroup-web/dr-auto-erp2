@@ -8,6 +8,7 @@ import { ApproveLinesDto } from './dto/approve-lines.dto';
 import { QuotesSyncService } from './quotes-sync.service';
 import { EventsService } from '../events/events.service';
 import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { CAR_CHECKLIST_TEMPLATE } from '../service-orders/checklist-template';
 import { ServiceOrdersService } from '../service-orders/service-orders.service';
@@ -192,43 +193,52 @@ export class QuotesService {
     return quote;
   }
 
-  list(
+  async list(
     organizationId: string,
     search?: string,
     status?: string,
     includeApproved = false,
+    query: ListQueryInput = {},
   ) {
-    return this.prisma.quote.findMany({
-      where: {
-        organizationId,
-        ...notDeleted,
-        ...(status
-          ? { status: status as never }
-          : includeApproved
-            ? {}
-            : { status: { not: 'APPROVED' as never } }),
-        ...(search
-          ? {
-              OR: [
-                {
-                  serviceOrder: {
-                    vehicle: { plate: { contains: search, mode: 'insensitive' } },
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.QuoteWhereInput = {
+      organizationId,
+      ...notDeleted,
+      ...(status
+        ? { status: status as never }
+        : includeApproved
+          ? {}
+          : { status: { not: 'APPROVED' as never } }),
+      ...(search
+        ? {
+            OR: [
+              {
+                serviceOrder: {
+                  vehicle: { plate: { contains: search, mode: 'insensitive' } },
+                },
+              },
+              {
+                serviceOrder: {
+                  vehicle: {
+                    customer: { name: { contains: search, mode: 'insensitive' } },
                   },
                 },
-                {
-                  serviceOrder: {
-                    vehicle: {
-                      customer: { name: { contains: search, mode: 'insensitive' } },
-                    },
-                  },
-                },
-              ],
-            }
-          : {}),
-      },
-      include: quoteInclude,
-      orderBy: { createdAt: 'desc' },
-    });
+              },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.quote.count({ where }),
+      this.prisma.quote.findMany({
+        where,
+        include: quoteInclude,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {

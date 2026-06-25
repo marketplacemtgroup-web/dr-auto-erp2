@@ -1,8 +1,10 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { PerformanceInterceptor } from './common/performance.interceptor';
 
 export function configureNestApp(app: NestExpressApplication) {
+  app.useGlobalInterceptors(new PerformanceInterceptor());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

@@ -44,12 +44,15 @@ export class ServiceOrdersController {
     @Query('search') search?: string,
     @Query('scheduled') scheduled?: string,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.serviceOrdersService.list(
       user.organizationId,
       search,
       scheduled === 'true',
       status,
+      { page, limit },
     );
   }
 

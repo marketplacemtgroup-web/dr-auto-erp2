@@ -9,8 +9,8 @@ import { CreateServiceOrderItemDto } from './dto/create-service-order-item.dto';
 import { UpdateServiceOrderItemDto } from './dto/update-service-order-item.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
 import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
-import { AttachmentsService } from '../attachments/attachments.service';
 import { AuditService } from '../audit/audit.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { isCommissionEligibleItemType } from '../common/item-type.util';
 import { EventsService } from '../events/events.service';
@@ -96,7 +96,6 @@ export class ServiceOrdersService {
     private readonly audit: AuditService,
     private readonly events: EventsService,
     private readonly portalNotify: PortalCustomerNotifyService,
-    private readonly attachments: AttachmentsService,
     private readonly financial: FinancialService,
     private readonly commissionEngine: CommissionEngineService,
     private readonly appointments: AppointmentsService,
@@ -198,28 +197,42 @@ export class ServiceOrdersService {
     return so;
   }
 
-  list(organizationId: string, search?: string, scheduledOnly?: boolean, status?: string) {
-    return this.prisma.serviceOrder.findMany({
-      where: {
-        organizationId,
-        ...notDeleted,
-        ...(status ? { status: status as ServiceOrderStatus } : {}),
-        ...(scheduledOnly ? { estimatedAt: { not: null } } : {}),
-        ...(search
-          ? {
-              OR: [
-                { vehicle: { plate: { contains: search, mode: 'insensitive' } } },
-                { vehicle: { customer: { name: { contains: search, mode: 'insensitive' } } } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        vehicle: { include: { customer: true } },
-        branch: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+  async list(
+    organizationId: string,
+    search?: string,
+    scheduledOnly?: boolean,
+    status?: string,
+    query: ListQueryInput = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.ServiceOrderWhereInput = {
+      organizationId,
+      ...notDeleted,
+      ...(status ? { status: status as ServiceOrderStatus } : {}),
+      ...(scheduledOnly ? { estimatedAt: { not: null } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { vehicle: { plate: { contains: search, mode: 'insensitive' } } },
+              { vehicle: { customer: { name: { contains: search, mode: 'insensitive' } } } },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.serviceOrder.count({ where }),
+      this.prisma.serviceOrder.findMany({
+        where,
+        include: {
+          vehicle: { include: { customer: true } },
+          branch: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {
@@ -252,7 +265,7 @@ export class ServiceOrdersService {
       })!;
     }
 
-    const attachments = await this.attachments.enrichMany(row!.attachments);
+    const attachments = row!.attachments;
     return { ...row!, attachments };
   }
 

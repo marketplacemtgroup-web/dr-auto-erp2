@@ -5,6 +5,7 @@ import {
   type PortalDashboard,
   type PortalMe,
   type PortalNotification,
+  type PortalQuoteRow,
   type PortalSession,
   type PortalVehicle,
 } from "../lib/api";
@@ -20,7 +21,9 @@ interface PortalState {
   logout: () => void;
   login: (cpf: string, plate: string) => Promise<void>;
   loginByAccessToken: (accessToken: string) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { orders?: boolean; quotes?: boolean }) => Promise<void>;
+  loadQuotes: () => Promise<PortalQuoteRow[]>;
+  loadOrders: () => Promise<PortalDashboard["serviceOrders"]>;
   loadNotifications: () => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   loadVehicles: () => Promise<void>;
@@ -47,6 +50,16 @@ function buildMe(dashboard: PortalDashboard): PortalMe {
   };
 }
 
+function applyBranding(dashboard: PortalDashboard) {
+  useBrandingStore.getState().apply({
+    name: dashboard.organization.name,
+    tradeName: dashboard.organization.name,
+    logoUrl: dashboard.organization.logoUrl,
+    primaryColor: dashboard.organization.primaryColor,
+    accentColor: dashboard.organization.accentColor,
+  });
+}
+
 export const usePortalStore = create<PortalState>()(
   persist(
     (set, get) => ({
@@ -67,25 +80,71 @@ export const usePortalStore = create<PortalState>()(
       login: async (cpf, plate) => {
         const session = await api.portalLogin(cpf, plate);
         set({ session });
-        await get().refresh();
+        await get().refresh({ orders: true, quotes: true });
       },
       loginByAccessToken: async (accessToken) => {
         const session = await api.portalAccessByToken(accessToken);
         set({ session });
-        await get().refresh();
+        await get().refresh({ orders: true, quotes: true });
       },
-      refresh: async () => {
+      refresh: async (opts) => {
         const token = get().session?.accessToken;
         if (!token) return;
-        const dashboard = await api.portalDashboard(token);
+        const loadOrders = opts?.orders ?? false;
+        const loadQuotes = opts?.quotes ?? false;
+        const prev = get().dashboard;
+
+        const summary = await api.portalSummary(token);
+        let serviceOrders = prev?.serviceOrders ?? [];
+        let quotes = prev?.quotes ?? [];
+
+        const tasks: Promise<void>[] = [];
+        if (loadOrders) {
+          tasks.push(
+            api.portalOrders(token).then((res) => {
+              serviceOrders = res.data;
+            }),
+          );
+        }
+        if (loadQuotes) {
+          tasks.push(
+            api.portalQuotes(token).then((res) => {
+              quotes = res.data;
+            }),
+          );
+        }
+        if (tasks.length) await Promise.all(tasks);
+
+        const dashboard: PortalDashboard = {
+          ...summary,
+          serviceOrders,
+          quotes,
+          attachments: [],
+        };
         set({ dashboard, me: buildMe(dashboard) });
-        useBrandingStore.getState().apply({
-          name: dashboard.organization.name,
-          tradeName: dashboard.organization.name,
-          logoUrl: dashboard.organization.logoUrl,
-          primaryColor: dashboard.organization.primaryColor,
-          accentColor: dashboard.organization.accentColor,
-        });
+        applyBranding(dashboard);
+      },
+      loadQuotes: async () => {
+        const token = get().session?.accessToken;
+        if (!token) return [];
+        const res = await api.portalQuotes(token);
+        const dashboard = get().dashboard;
+        if (dashboard) {
+          const next = { ...dashboard, quotes: res.data };
+          set({ dashboard: next, me: buildMe(next) });
+        }
+        return res.data;
+      },
+      loadOrders: async () => {
+        const token = get().session?.accessToken;
+        if (!token) return [];
+        const res = await api.portalOrders(token);
+        const dashboard = get().dashboard;
+        if (dashboard) {
+          const next = { ...dashboard, serviceOrders: res.data };
+          set({ dashboard: next, me: buildMe(next) });
+        }
+        return res.data;
       },
       loadNotifications: async () => {
         const token = get().session?.accessToken;
@@ -102,15 +161,15 @@ export const usePortalStore = create<PortalState>()(
       loadVehicles: async () => {
         const token = get().session?.accessToken;
         if (!token) return;
-        const vehicles = await api.portalVehicles(token);
-        set({ vehicles });
+        const res = await api.portalVehicles(token);
+        set({ vehicles: res.data });
       },
       switchVehicle: async (vehicleId) => {
         const token = get().session?.accessToken;
         if (!token) return;
         const session = await api.portalSwitchVehicle(token, vehicleId);
-        set({ session, notifications: [], vehicles: [] });
-        await get().refresh();
+        set({ session, notifications: [], vehicles: [], dashboard: null });
+        await get().refresh({ orders: true, quotes: true });
         await get().loadVehicles();
       },
     }),

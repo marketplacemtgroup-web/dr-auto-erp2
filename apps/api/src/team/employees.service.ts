@@ -7,6 +7,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeePaymentConfigDto } from './dto/employee-payment-config.dto';
 import { ensureDefaultJobTitles } from './default-job-titles';
 import { EmployeeAccessService } from './employee-access.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 
 const employeeInclude = {
   jobTitle: true,
@@ -80,71 +81,118 @@ export class EmployeesService {
       employeeId?: string;
       search?: string;
     },
+    query: ListQueryInput = {},
   ) {
     await this.ensureDefaultJobTitles(organizationId);
 
-    const employees = await this.prisma.employee.findMany({
-      where: {
-        organizationId,
-        ...(filters?.status ? { status: filters.status } : {}),
-        ...(filters?.jobTitleId ? { jobTitleId: filters.jobTitleId } : {}),
-        ...(filters?.employeeId ? { id: filters.employeeId } : {}),
-        ...(filters?.search
-          ? { name: { contains: filters.search, mode: 'insensitive' } }
-          : {}),
-      },
-      include: employeeInclude,
-      orderBy: { name: 'asc' },
-    });
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.EmployeeWhereInput = {
+      organizationId,
+      ...(filters?.status ? { status: filters.status } : {}),
+      ...(filters?.jobTitleId ? { jobTitleId: filters.jobTitleId } : {}),
+      ...(filters?.employeeId ? { id: filters.employeeId } : {}),
+      ...(filters?.search
+        ? { name: { contains: filters.search, mode: 'insensitive' as const } }
+        : {}),
+    };
 
+    const [total, employees] = await Promise.all([
+      this.prisma.employee.count({ where }),
+      this.prisma.employee.findMany({
+        where,
+        include: employeeInclude,
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const employeeIds = employees.map((e) => e.id);
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    return Promise.all(
-      employees.map(async (emp) => {
-        const [pendingPay, osCount, monthTotal] = await Promise.all([
-          this.prisma.generatedCommission.aggregate({
-            where: { employeeId: emp.id, status: 'PENDENTE' },
-            _sum: { commissionAmount: true },
-          }),
-          this.prisma.serviceOrder.count({
+    const [pendingByEmployee, osInProgressRows, monthPayrolls] = await Promise.all([
+      employeeIds.length
+        ? this.prisma.generatedCommission.groupBy({
+            by: ['employeeId'],
             where: {
               organizationId,
-              deletedAt: null,
-              status: { in: ['IN_PROGRESS', 'APPROVED', 'AWAITING_PART'] },
-              OR: [
-                { executionById: emp.id },
-                { generalResponsibleId: emp.id },
-                { items: { some: { executorId: emp.id } } },
-              ],
+              employeeId: { in: employeeIds },
+              status: 'PENDENTE',
             },
-          }),
-          this.prisma.payroll.findFirst({
+            _sum: { commissionAmount: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.serviceOrder.findMany({
+        where: {
+          organizationId,
+          deletedAt: null,
+          status: { in: ['IN_PROGRESS', 'APPROVED', 'AWAITING_PART'] },
+        },
+        select: {
+          executionById: true,
+          generalResponsibleId: true,
+          items: { select: { executorId: true } },
+        },
+      }),
+      employeeIds.length
+        ? this.prisma.payroll.findMany({
             where: {
-              employeeId: emp.id,
+              employeeId: { in: employeeIds },
               periodStart: { gte: monthStart },
               periodEnd: { lte: monthEnd },
             },
             orderBy: { createdAt: 'desc' },
-          }),
-        ]);
+          })
+        : Promise.resolve([]),
+    ]);
 
-        const fixedSalary = Number(emp.paymentConfig?.fixedSalary ?? 0);
-        const pendingCommission = Number(pendingPay._sum.commissionAmount ?? 0);
-        const monthToPay =
-          monthTotal?.status === 'PAGA'
-            ? 0
-            : fixedSalary + pendingCommission;
-
-        return {
-          ...emp,
-          pendingCommission,
-          osInProgress: osCount,
-          monthToPay,
-        };
-      }),
+    const pendingMap = new Map(
+      pendingByEmployee.map((row) => [
+        row.employeeId,
+        Number(row._sum.commissionAmount ?? 0),
+      ]),
     );
+
+    const osCountMap = new Map<string, number>();
+    const employeeIdSet = new Set(employeeIds);
+    for (const os of osInProgressRows) {
+      const linked = new Set<string>();
+      if (os.executionById) linked.add(os.executionById);
+      if (os.generalResponsibleId) linked.add(os.generalResponsibleId);
+      for (const item of os.items) {
+        if (item.executorId) linked.add(item.executorId);
+      }
+      for (const id of linked) {
+        if (!employeeIdSet.has(id)) continue;
+        osCountMap.set(id, (osCountMap.get(id) ?? 0) + 1);
+      }
+    }
+
+    const payrollByEmployee = new Map<string, (typeof monthPayrolls)[number]>();
+    for (const payroll of monthPayrolls) {
+      if (!payrollByEmployee.has(payroll.employeeId)) {
+        payrollByEmployee.set(payroll.employeeId, payroll);
+      }
+    }
+
+    const data = employees.map((emp) => {
+      const fixedSalary = Number(emp.paymentConfig?.fixedSalary ?? 0);
+      const pendingCommission = pendingMap.get(emp.id) ?? 0;
+      const monthTotal = payrollByEmployee.get(emp.id);
+      const monthToPay =
+        monthTotal?.status === 'PAGA' ? 0 : fixedSalary + pendingCommission;
+
+      return {
+        ...emp,
+        pendingCommission,
+        osInProgress: osCountMap.get(emp.id) ?? 0,
+        monthToPay,
+      };
+    });
+
+    return paginatedResponse(data, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {

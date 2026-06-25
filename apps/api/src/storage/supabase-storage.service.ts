@@ -6,7 +6,10 @@ import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join, posix } from 'path';
 
 const LOCAL_UPLOAD_ROOT = join(process.cwd(), 'uploads');
-const SIGNED_URL_TTL_SEC = 3600;
+const SIGNED_URL_TTL_SEC = 86400;
+const SIGNED_URL_CACHE_TTL_MS = 23 * 60 * 60 * 1000;
+
+type CachedSignedUrl = { url: string; expiresAt: number };
 
 export const BRANDING_BUCKET = 'branding';
 
@@ -14,6 +17,7 @@ export const BRANDING_BUCKET = 'branding';
 export class SupabaseStorageService {
   private readonly logger = new Logger(SupabaseStorageService.name);
   private client: SupabaseClient | null = null;
+  private readonly signedUrlCache = new Map<string, CachedSignedUrl>();
 
   constructor(private readonly config: ConfigService) {}
 
@@ -48,6 +52,14 @@ export class SupabaseStorageService {
     return parts.map((p) => p.replace(/\\/g, '/')).join('/').replace(/^\/+/, '');
   }
 
+  private signedUrlCacheKey(bucket: string, storagePath: string): string {
+    return `${bucket}:${this.normalizeStoragePath(storagePath)}`;
+  }
+
+  private invalidateSignedUrlCache(bucket: string, storagePath: string): void {
+    this.signedUrlCache.delete(this.signedUrlCacheKey(bucket, storagePath));
+  }
+
   async upload(
     bucket: string,
     storagePath: string,
@@ -69,6 +81,7 @@ export class SupabaseStorageService {
         }
         throw new Error('Falha ao enviar arquivo para o storage');
       }
+      this.invalidateSignedUrlCache(bucket, path);
       return;
     }
     const full = join(LOCAL_UPLOAD_ROOT, path);
@@ -78,6 +91,7 @@ export class SupabaseStorageService {
 
   async remove(bucket: string, storagePath: string): Promise<void> {
     const path = this.normalizeStoragePath(storagePath);
+    this.invalidateSignedUrlCache(bucket, path);
     if (this.isCloudStorage()) {
       await this.getClient().storage.from(bucket).remove([path]);
       return;
@@ -115,6 +129,11 @@ export class SupabaseStorageService {
     if (!this.isCloudStorage()) {
       return `/api/uploads/${path}`;
     }
+    const cacheKey = this.signedUrlCacheKey(bucket, path);
+    const cached = this.signedUrlCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.url;
+    }
     const { data, error } = await this.getClient()
       .storage.from(bucket)
       .createSignedUrl(path, expiresIn);
@@ -122,6 +141,10 @@ export class SupabaseStorageService {
       this.logger.error(`Signed URL falhou: ${error?.message}`);
       throw new Error('Não foi possível gerar URL do arquivo');
     }
+    this.signedUrlCache.set(cacheKey, {
+      url: data.signedUrl,
+      expiresAt: Date.now() + SIGNED_URL_CACHE_TTL_MS,
+    });
     return data.signedUrl;
   }
 

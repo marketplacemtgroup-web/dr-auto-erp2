@@ -1,5 +1,6 @@
 import { Controller, Get, Headers, UnauthorizedException } from '@nestjs/common';
 import { AttachmentsPurgeService } from '../attachments/attachments-purge.service';
+import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 import { MaintenanceRemindersService } from '../maintenance-reminders/maintenance-reminders.service';
 
 @Controller('cron')
@@ -7,6 +8,7 @@ export class CronController {
   constructor(
     private readonly attachmentsPurge: AttachmentsPurgeService,
     private readonly maintenanceReminders: MaintenanceRemindersService,
+    private readonly dashboardCache: DashboardCacheService,
   ) {}
 
   private assertCronAuth(authorization?: string) {
@@ -30,5 +32,11 @@ export class CronController {
   processMaintenanceReminders(@Headers('authorization') authorization?: string) {
     this.assertCronAuth(authorization);
     return this.maintenanceReminders.processDueNotifications();
+  }
+
+  @Get('dashboard-cache-refresh')
+  refreshDashboardCache(@Headers('authorization') authorization?: string) {
+    this.assertCronAuth(authorization);
+    return this.dashboardCache.refreshStaleBatch();
   }
 }

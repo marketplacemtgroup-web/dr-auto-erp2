@@ -5,7 +5,8 @@ import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
-import { api, getErrorMessage, type VehicleRow } from "../../lib/api";
+import ListPagination from "../../components/modules/ListPagination";
+import { api, LIST_PAGE_SIZE, getErrorMessage, type VehicleRow } from "../../lib/api";
 import { routes } from "../../lib/routes";
 import {
   normalizePlate,
@@ -37,6 +38,8 @@ export default function VehiclesPage() {
   const queryClient = useQueryClient();
   const openedFromCustomer = useRef(false);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VehicleRow | null>(null);
@@ -44,13 +47,27 @@ export default function VehiclesPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const {
-    data: customers,
+    data: customersRes,
     isLoading: customersLoading,
     error: customersError,
-  } = useApiQuery(["customers-all"], (t) => api.customers(t));
-  const { data, isLoading, error } = useApiQuery(["vehicles", search], (t) =>
-    api.vehicles(t, search || undefined),
+  } = useApiQuery(
+    ["customers-picker", customerSearch],
+    (t) => api.customers(t, customerSearch || undefined, 1, LIST_PAGE_SIZE),
+    drawerOpen,
   );
+  const customers = customersRes?.data ?? [];
+
+  const { data, isLoading, error } = useApiQuery(
+    ["vehicles", search, String(page)],
+    (t) => api.vehicles(t, search || undefined, page, LIST_PAGE_SIZE),
+  );
+
+  const rows = data?.data ?? [];
+  const totalPages = data?.pagination.totalPages ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   useEffect(() => {
     const customerId = searchParams.get("customerId");
@@ -153,7 +170,10 @@ export default function VehiclesPage() {
         description="Cadastro completo e prontuario do veiculo"
         actionLabel="Novo veiculo"
         onAction={openCreate}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <DataTable
           columns={[
@@ -171,7 +191,7 @@ export default function VehiclesPage() {
             { key: "year", header: "Ano", render: (v) => v.year ?? "—" },
             { key: "color", header: "Cor", render: (v) => v.color ?? "—" },
           ]}
-          rows={data ?? []}
+          rows={rows}
           loading={isLoading}
           error={error}
           emptyMessage="Nenhum veiculo cadastrado."
@@ -179,6 +199,7 @@ export default function VehiclesPage() {
           onEdit={(row) => void openEdit(row)}
           onDelete={setDeleteTarget}
         />
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </ModulePageShell>
 
       <FormDrawer
@@ -193,8 +214,15 @@ export default function VehiclesPage() {
         submitLabel={editing ? "Salvar e abrir ficha" : "Cadastrar e abrir ficha"}
       >
         <FormField label="Cliente *">
+          <input
+            className={inputClass}
+            value={customerSearch}
+            onChange={(e) => setCustomerSearch(e.target.value)}
+            placeholder="Buscar cliente por nome..."
+            disabled={!drawerOpen}
+          />
           <select
-            className={selectClass}
+            className={`${selectClass} mt-2`}
             value={form.customerId}
             onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
             required

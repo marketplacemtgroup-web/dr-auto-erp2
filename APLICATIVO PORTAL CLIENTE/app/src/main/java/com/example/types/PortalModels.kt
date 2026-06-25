@@ -203,6 +203,41 @@ data class PortalMaintenanceReminder(
 )
 
 @JsonClass(generateAdapter = true)
+data class PaginationMeta(
+    val page: Int,
+    val limit: Int,
+    val total: Int,
+    val totalPages: Int,
+)
+
+@JsonClass(generateAdapter = true)
+data class PaginatedServiceOrders(
+    val data: List<ServiceOrderListItem>,
+    val pagination: PaginationMeta,
+)
+
+@JsonClass(generateAdapter = true)
+data class PaginatedQuotes(
+    val data: List<PortalQuoteRow>,
+    val pagination: PaginationMeta,
+)
+
+@JsonClass(generateAdapter = true)
+data class PaginatedVehicles(
+    val data: List<Vehicle>,
+    val pagination: PaginationMeta,
+)
+
+@JsonClass(generateAdapter = true)
+data class PortalSummary(
+    val organization: Organization,
+    val customer: Customer,
+    val vehicle: Vehicle,
+    val upcomingAppointment: PortalUpcomingAppointment? = null,
+    val maintenanceReminders: List<PortalMaintenanceReminder> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
 data class PortalDashboard(
     val organization: Organization,
     val customer: Customer,

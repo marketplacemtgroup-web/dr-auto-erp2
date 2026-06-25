@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auditoria Egress Supabase — Oficina Beto</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --border: #475569;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #0e7490;
+      --accent-light: #22d3ee;
+      --ok: #22c55e;
+      --low: #3b82f6;
+      --med: #f59e0b;
+      --high: #f97316;
+      --crit: #ef4444;
+      --none: #64748b;
+      --sidebar-w: 280px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    nav {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 1rem;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    nav h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      padding: 0 0.5rem;
+    }
+
+    nav a {
+      display: block;
+      padding: 0.45rem 0.75rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-radius: 6px;
+      margin-bottom: 2px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    nav a:hover, nav a.active {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    nav a.p0 { border-left: 3px solid var(--crit); }
+    nav a.p1 { border-left: 3px solid var(--high); }
+
+    /* Main */
+    main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      padding: 2rem 2.5rem 4rem;
+      max-width: 1100px;
+    }
+
+    header.hero {
+      background: linear-gradient(135deg, #0e7490 0%, #0f3d4c 50%, #1e293b 100%);
+      border-radius: 16px;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+      border: 1px solid rgba(34, 211, 238, 0.2);
+    }
+
+    header.hero h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    header.hero .meta {
+      color: rgba(241, 245, 249, 0.75);
+      font-size: 0.9rem;
+    }
+
+    header.hero .meta span { margin-right: 1.5rem; }
+
+    /* Cards grid */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .card .label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+    }
+
+    .card .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .card.crit .value { color: var(--crit); }
+    .card.high .value { color: var(--high); }
+    .card.ok .value { color: var(--ok); }
+    .card.accent .value { color: var(--accent-light); }
+
+    /* Sections */
+    section {
+      margin-bottom: 3rem;
+      scroll-margin-top: 1.5rem;
+    }
+
+    section h2 {
+      font-size: 1.35rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    section h2 .num {
+      background: var(--accent);
+      color: white;
+      font-size: 0.8rem;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    section h3 {
+      font-size: 1rem;
+      color: var(--accent-light);
+      margin: 1.25rem 0 0.75rem;
+    }
+
+    p, .note {
+      color: var(--muted);
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    /* Architecture */
+    .arch {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 0.85rem;
+      line-height: 1.8;
+      color: var(--accent-light);
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+    }
+
+    .arch .arrow { color: var(--muted); }
+    .arch .layer { color: var(--text); }
+
+    /* Risk badges */
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .badge-none { background: #334155; color: #94a3b8; }
+    .badge-ok { background: #14532d; color: #86efac; }
+    .badge-low { background: #1e3a5f; color: #93c5fd; }
+    .badge-med { background: #78350f; color: #fcd34d; }
+    .badge-high { background: #7c2d12; color: #fdba74; }
+    .badge-crit { background: #7f1d1d; color: #fca5a5; }
+    .badge-info { background: #164e63; color: #67e8f9; }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    th {
+      background: var(--surface2);
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.65rem 0.85rem;
+      border-top: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:hover td { background: rgba(255,255,255,0.03); }
+
+    td code {
+      background: rgba(0,0,0,0.3);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      word-break: break-all;
+    }
+
+    /* Priority matrix */
+    .priority-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .priority-item {
+      display: grid;
+      grid-template-columns: 60px 1fr auto;
+      gap: 1rem;
+      align-items: start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+    }
+
+    .priority-item .prio {
+      font-weight: 800;
+      font-size: 1.1rem;
+      text-align: center;
+      padding: 0.35rem;
+      border-radius: 8px;
+    }
+
+    .prio-p0 { background: #7f1d1d; color: #fca5a5; }
+    .prio-p1 { background: #7c2d12; color: #fdba74; }
+    .prio-p2 { background: #78350f; color: #fcd34d; }
+    .prio-p3 { background: #334155; color: #94a3b8; }
+
+    .priority-item h4 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+    .priority-item p { font-size: 0.82rem; margin: 0; color: var(--muted); }
+
+    /* Lists */
+    ul.risks {
+      list-style: none;
+      margin-bottom: 1.5rem;
+    }
+
+    ul.risks li {
+      padding: 0.65rem 1rem;
+      background: var(--surface);
+      border-left: 4px solid var(--high);
+      margin-bottom: 0.5rem;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.9rem;
+    }
+
+    ul.ok-list li {
+      border-left-color: var(--ok);
+    }
+
+    /* Filter bar */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .filter-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.4rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-btn:hover, .filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    /* Volume table highlight */
+    .volume-row-high td:first-child { font-weight: 600; }
+
+    .conclusion {
+      background: linear-gradient(135deg, #1e293b, #0f3d4c);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+    }
+
+    .conclusion h2 { border: none; margin-bottom: 1rem; }
+
+    .conclusion ol {
+      margin-left: 1.25rem;
+      color: var(--text);
+    }
+
+    .conclusion li { margin-bottom: 0.5rem; }
+
+    /* Mobile */
+    .menu-toggle {
+      display: none;
+      position: fixed;
+      top: 1rem; left: 1rem;
+      z-index: 200;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+
+    @media (max-width: 900px) {
+      nav {
+        transform: translateX(-100%);
+        transition: transform 0.25s;
+      }
+      nav.open { transform: translateX(0); }
+      main { margin-left: 0; padding: 1.5rem 1rem 3rem; padding-top: 4rem; }
+      .menu-toggle { display: block; }
+      .priority-item { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      nav, .menu-toggle, .filter-bar { display: none; }
+      main { margin-left: 0; }
+      body { background: white; color: black; }
+      .card, section, table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="menu-toggle" onclick="document.querySelector('nav').classList.toggle('open')" aria-label="Menu">☰</button>
+
+<nav>
+  <h2>Navegação</h2>
+  <a href="#resumo">Resumo executivo</a>
+  <a href="#arquitetura">Arquitetura</a>
+  <a href="#prioridades" class="p0">Matriz de prioridades</a>
+  <a href="#volume">Estimativa de volume</a>
+  <h2 style="margin-top:1.5rem">14 pontos auditados</h2>
+  <a href="#s1">1. Realtime</a>
+  <a href="#s2">2. postgres_changes</a>
+  <a href="#s3">3. Channels</a>
+  <a href="#s4">4. Subscriptions</a>
+  <a href="#s5">5. Sem unsubscribe</a>
+  <a href="#s6" class="p0">6. Polling setInterval</a>
+  <a href="#s7">7. refetchInterval</a>
+  <a href="#s8">8. refetchOnWindowFocus</a>
+  <a href="#s9" class="p0">9. Dashboard repetido</a>
+  <a href="#s10" class="p1">10. Sem paginação</a>
+  <a href="#s11" class="p1">11. Queries em loop</a>
+  <a href="#s12">12. Storage downloads</a>
+  <a href="#s13">13. Imagens</a>
+  <a href="#s14">14. Memory leaks</a>
+  <a href="#sem-risco">Sem risco</a>
+  <a href="#conclusao">Conclusão</a>
+</nav>
+
+<main>
+
+  <header class="hero">
+    <h1>Auditoria de consumo Supabase</h1>
+    <p style="font-size:1.1rem; opacity:0.9; margin-bottom:1rem">Oficina Beto — Análise de Egress</p>
+    <div class="meta">
+      <span>📅 25/06/2026</span>
+      <span>🔍 Análise estática</span>
+      <span>📁 app · portal · api · Android</span>
+    </div>
+  </header>
+
+  <!-- Summary cards -->
+  <div class="cards" id="resumo">
+    <div class="card ok">
+      <div class="label">Realtime Supabase</div>
+      <div class="value">Não usado</div>
+    </div>
+    <div class="card crit">
+      <div class="label">Riscos P0</div>
+      <div class="value">2</div>
+    </div>
+    <div class="card high">
+      <div class="label">Riscos P1</div>
+      <div class="value">4</div>
+    </div>
+    <div class="card accent">
+      <div class="label">Req. dashboard (cache frio)</div>
+      <div class="value">~15</div>
+    </div>
+    <div class="card high">
+      <div class="label">Poll ERP / usuário / hora</div>
+      <div class="value">~60</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Resumo executivo</h2>
+    <p>O projeto <strong>não usa Supabase Realtime</strong>. O consumo concentra-se no <strong>PostgreSQL via Prisma</strong> e no <strong>Storage</strong> (signed URLs e uploads). O frontend nunca importa <code>@supabase/supabase-js</code>.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Camada</th><th>Uso do Supabase</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Banco (PostgreSQL)</strong></td><td>Prisma via DATABASE_URL — todas as leituras/escritas da API</td></tr>
+          <tr><td><strong>Storage</strong></td><td>SupabaseStorageService — upload, signed URLs, buckets</td></tr>
+          <tr><td><strong>Auth</strong></td><td>JWT próprio da API — não usa Supabase Auth no frontend</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Maiores riscos</h3>
+    <ul class="risks">
+      <li><strong>Polling HTTP</strong> no ERP (<code>useOfficeEvents</code>, 60s) em todas as rotas autenticadas</li>
+      <li><strong>Portal dashboard</strong> com <code>listQuotes</code> sem paginação + N signed URLs por anexo</li>
+      <li><strong>Listagens ERP sem <code>take</code></strong> (OS, financeiro, orçamentos)</li>
+      <li><strong>Dashboard financeiro</strong> dispara 3× <code>dashboardFinancial</code> + findMany sem limite</li>
+      <li><strong>N+1 em loops</strong> (funcionários, comissões, sync de orçamentos)</li>
+      <li><strong>Cron global</strong> de manutenção preventiva sem filtro por organização</li>
+    </ul>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Área</th><th>Impacto</th></tr></thead>
+        <tbody>
+          <tr><td>Realtime Supabase</td><td><span class="badge badge-none">Nenhum</span></td></tr>
+          <tr><td>Polling ERP</td><td><span class="badge badge-high">Alto</span></td></tr>
+          <tr><td>Portal web + Android</td><td><span class="badge badge-high">Alto</span></td></tr>
+          <tr><td>Listagens sem paginação</td><td><span class="badge badge-high">Alto</span></td></tr>
+          <tr><td>Storage signed URLs</td><td><span class="badge badge-med">Médio</span></td></tr>
+          <tr><td>React Query</td><td><span class="badge badge-low">Baixo</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="arquitetura">
+    <h2>Arquitetura</h2>
+    <div class="arch">
+      <div class="layer">Frontend (ERP / Portal / Android)</div>
+      <div class="arrow">    ↓ REST API</div>
+      <div class="layer">NestJS / Vercel</div>
+      <div class="arrow">    ├→ Prisma → PostgreSQL (Supabase)</div>
+      <div class="arrow">    └→ SupabaseStorageService → Storage (signed URLs, upload)</div>
+    </div>
+    <p>Cliente Supabase em produção: apenas <code>apps/api/src/storage/supabase-storage.service.ts</code> e <code>apps/api/api/env-check.ts</code>.</p>
+  </section>
+
+  <section id="prioridades">
+    <h2>Matriz de prioridades</h2>
+    <div class="priority-grid">
+      <div class="priority-item">
+        <div class="prio prio-p0">P0</div>
+        <div>
+          <h4>Portal dashboard sem paginação + N signed URLs</h4>
+          <p><code>portal.service.ts</code> linhas 385–498, 866–882</p>
+        </div>
+        <span class="badge badge-crit">Crítico</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p0">P0</div>
+        <div>
+          <h4>Polling ERP 60s em todo AppShell</h4>
+          <p><code>useOfficeEvents.ts</code> linhas 15–59</p>
+        </div>
+        <span class="badge badge-crit">Crítico</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p1">P1</div>
+        <div>
+          <h4>Listagens ERP sem take (OS, financeiro, quotes)</h4>
+          <p><code>service-orders</code>, <code>financial</code>, <code>quotes</code> services</p>
+        </div>
+        <span class="badge badge-high">Alto</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p1">P1</div>
+        <div>
+          <h4>Dashboard financeiro 3× reports + findMany mês</h4>
+          <p><code>dashboard.service.ts</code> 115–141</p>
+        </div>
+        <span class="badge badge-high">Alto</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p1">P1</div>
+        <div>
+          <h4>N+1 lista funcionários</h4>
+          <p><code>employees.service.ts</code> 104–147</p>
+        </div>
+        <span class="badge badge-high">Alto</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p1">P1</div>
+        <div>
+          <h4>Cron manutenção global</h4>
+          <p><code>maintenance-reminders.service.ts</code> 188–194</p>
+        </div>
+        <span class="badge badge-high">Alto</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p2">P2</div>
+        <div>
+          <h4>Cash-flow no dashboard para gráfico simples</h4>
+          <p><code>PaymentMethodsChart.tsx</code> 18–20</p>
+        </div>
+        <span class="badge badge-med">Médio</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p2">P2</div>
+        <div>
+          <h4>Signed URL TTL vs cache React Query</h4>
+          <p><code>supabase-storage.service.ts</code> vs <code>query-cache.ts</code></p>
+        </div>
+        <span class="badge badge-med">Médio</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p2">P2</div>
+        <div>
+          <h4>Portal refresh duplicado (login/splash/polling)</h4>
+          <p><code>portalStore.ts</code>, <code>PortalPolling.tsx</code></p>
+        </div>
+        <span class="badge badge-med">Médio</span>
+      </div>
+      <div class="priority-item">
+        <div class="prio prio-p3">P3</div>
+        <div>
+          <h4>Realtime Supabase</h4>
+          <p>Não aplicável — não utilizado</p>
+        </div>
+        <span class="badge badge-none">N/A</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="volume">
+    <h2>Estimativa de volume</h2>
+    <p class="note">Valores ilustrativos — dependem de usuários ativos e tamanho da base.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cenário</th><th>Requisições / hora (por usuário)</th></tr></thead>
+        <tbody>
+          <tr class="volume-row-high"><td>ERP logado, aba visível, fora do dashboard</td><td>~60 polls notificações + navegação</td></tr>
+          <tr><td>ERP no dashboard (cache quente, 30 min)</td><td>~0–2</td></tr>
+          <tr class="volume-row-high"><td>ERP no dashboard (cache frio)</td><td>~15 API → dezenas de queries Prisma</td></tr>
+          <tr class="volume-row-high"><td>Portal web, alternando abas 10×/h</td><td>~10× GET /portal/dashboard</td></tr>
+          <tr class="volume-row-high"><td>Modo TV relatórios</td><td>~60× /reports/full por hora</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <span style="color:var(--muted);font-size:0.85rem;align-self:center">Filtrar tabelas por risco:</span>
+    <button class="filter-btn active" data-filter="all">Todos</button>
+    <button class="filter-btn" data-filter="crit">Crítico</button>
+    <button class="filter-btn" data-filter="high">Alto</button>
+    <button class="filter-btn" data-filter="med">Médio</button>
+    <button class="filter-btn" data-filter="low">Baixo / OK</button>
+  </div>
+
+  <!-- Section 1 -->
+  <section id="s1">
+    <h2><span class="num">1</span> Uso de Realtime</h2>
+    <div class="table-wrap" data-section="s1">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="none"><td><em>(nenhum)</em></td><td>—</td><td><span class="badge badge-none">Nenhum</span></td><td>Nenhum egress Realtime</td><td>Manter polling + Web Push. Se adotar Realtime no futuro, limitar canais por org e fazer unsubscribe.</td></tr>
+          <tr data-risk="low"><td><code>events.service.ts</code></td><td>14</td><td><span class="badge badge-info">Info</span></td><td>Baixo</td><td>Comentário: ERP usa polling em vez de SSE/Realtime.</td></tr>
+          <tr data-risk="high"><td><code>useOfficeEvents.ts</code></td><td>17</td><td><span class="badge badge-med">Médio</span></td><td><span class="badge badge-high">Alto</span></td><td>Polling 60s → leituras contínuas no Postgres. Considerar Web Push no ERP.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s2">
+    <h2><span class="num">2</span> postgres_changes</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="none"><td><em>(nenhum)</em></td><td>—</td><td><span class="badge badge-none">Nenhum</span></td><td>Nenhum</td><td>Não há listeners postgres_changes no repositório.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s3">
+    <h2><span class="num">3</span> Channels</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="none"><td><em>(nenhum Supabase)</em></td><td>—</td><td><span class="badge badge-none">Nenhum</span></td><td>Nenhum</td><td>Sem supabase.channel() no projeto.</td></tr>
+          <tr data-risk="low"><td><code>pushSubscribe.ts</code> (app + portal)</td><td>22</td><td><span class="badge badge-info">Info</span></td><td>Nenhum</td><td>Web Push do browser, não canal Realtime.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s4">
+    <h2><span class="num">4</span> Subscriptions</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="none"><td><em>(nenhum Supabase Realtime)</em></td><td>—</td><td><span class="badge badge-none">Nenhum</span></td><td>Nenhum</td><td>Sem subscriptions Supabase.</td></tr>
+          <tr data-risk="low"><td><code>push.service.ts</code></td><td>várias</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>Lê pushSubscription/fcmToken por veículo — escopo limitado.</td></tr>
+          <tr data-risk="low"><td><code>env-check.ts</code></td><td>90</td><td><span class="badge badge-low">Baixo</span></td><td>Desprezível</td><td>listBuckets() só no health check.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s5">
+    <h2><span class="num">5</span> Componentes sem unsubscribe</h2>
+    <p>Sem Realtime Supabase — cobre listeners e timers que poderiam vazar após unmount.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="low"><td><code>useOfficeEvents.ts</code></td><td>69–73</td><td><span class="badge badge-ok">OK</span></td><td>—</td><td>Cleanup correto: clearInterval, cancelled, visibilitychange.</td></tr>
+          <tr data-risk="low"><td><code>ReportsTvMode.tsx</code></td><td>32–35</td><td><span class="badge badge-ok">OK</span></td><td>—</td><td>clearInterval + remove keydown.</td></tr>
+          <tr data-risk="low"><td><code>PortalPolling.tsx</code></td><td>20–22</td><td><span class="badge badge-ok">OK</span></td><td>—</td><td>Remove visibilitychange corretamente.</td></tr>
+          <tr data-risk="med"><td><code>FinancialPage.tsx</code></td><td>133–145</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Promise.all sem cancelled — setState após unmount. Usar AbortController.</td></tr>
+          <tr data-risk="low"><td><code>BrandingBootstrap.tsx</code></td><td>8–14</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>Fetch sem abort após unmount.</td></tr>
+          <tr data-risk="low"><td><code>GlobalSearchDialog.tsx</code></td><td>29</td><td><span class="badge badge-low">Baixo</span></td><td>Desprezível</td><td>setTimeout focus sem cleanup.</td></tr>
+          <tr data-risk="low"><td><code>PortalServiceOrderPage.tsx</code></td><td>74–76</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>load() async sem cancelled.</td></tr>
+          <tr data-risk="low"><td><code>PortalNotificationsPage.tsx</code></td><td>19–22</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>setLoading em finally sem guarda.</td></tr>
+          <tr data-risk="low"><td><code>useOrganizationBranding.ts</code></td><td>17–25</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>CSS vars sem reset no unmount.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s6">
+    <h2><span class="num">6</span> Polling com setInterval</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="high"><td><code>useOfficeEvents.ts</code></td><td>15, 57–59</td><td><span class="badge badge-high">Alto</span></td><td><span class="badge badge-high">Alto</span> ~1 req/min em TODAS rotas ERP</td><td>Reduzir frequência, restringir rotas, ou Web Push. GET /notifications/unread</td></tr>
+          <tr data-risk="med"><td><code>ReportsTvMode.tsx</code></td><td>27</td><td><span class="badge badge-med">Médio</span></td><td>Médio (só TV)</td><td>Refetch relatórios a cada 60s — documentar custo.</td></tr>
+          <tr data-risk="high"><td><code>PortalPolling.tsx</code></td><td>15–16</td><td><span class="badge badge-med">Médio</span></td><td><span class="badge badge-high">Alto</span></td><td>visibilitychange → refresh() = dashboard completo. Debounce 30s.</td></tr>
+          <tr data-risk="low"><td><code>PortalViewModel.kt</code></td><td>99–103</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>FCM push-driven — sem setInterval.</td></tr>
+          <tr data-risk="low"><td><code>portal.service.ts</code></td><td>57–59</td><td><span class="badge badge-info">Mitigação</span></td><td>Positivo</td><td>Throttle 10 min em maybeSyncQuotesForVehicle.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s7">
+    <h2><span class="num">7</span> React Query refetchInterval</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="none"><td><em>(nenhum)</em></td><td>—</td><td><span class="badge badge-none">Nenhum</span></td><td>Nenhum</td><td>refetchInterval não usado em nenhum .ts/.tsx.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s8">
+    <h2><span class="num">8</span> React Query refetchOnWindowFocus</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="low"><td><code>app/main.tsx</code></td><td>17</td><td><span class="badge badge-ok">OK</span></td><td>Positivo</td><td>false globalmente — evita rajadas ao focar aba.</td></tr>
+          <tr data-risk="low"><td><code>useDashboardKpis.ts</code></td><td>17, 31</td><td><span class="badge badge-ok">OK</span></td><td>Positivo</td><td>Reforça false nos KPIs.</td></tr>
+          <tr data-risk="low"><td><code>portal/main.tsx</code></td><td>15</td><td><span class="badge badge-ok">OK</span></td><td>Positivo</td><td>Portal também desabilita.</td></tr>
+          <tr data-risk="low"><td><em>default React Query</em></td><td>—</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>staleTime 30 min — remount não refetch dentro desse período.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Portal tem QueryClientProvider mas não usa useQuery — dados via Zustand (portalStore.ts).</p>
+  </section>
+
+  <section id="s9">
+    <h2><span class="num">9</span> Chamadas repetidas para dashboard</h2>
+
+    <h3>ERP — DashboardPage</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="med"><td><code>useDashboardKpis.ts</code></td><td>11–33</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>2 endpoints KPIs — unificar ou cache server-side.</td></tr>
+          <tr data-risk="med"><td><code>useDashboardLists.ts</code></td><td>4–13</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>+3 endpoints (OS, quotes, receita).</td></tr>
+          <tr data-risk="low"><td><code>TodayAgenda.tsx</code></td><td>20–22</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>/appointments hoje.</td></tr>
+          <tr data-risk="med"><td><code>PreventiveMaintenancePanel.tsx</code></td><td>24</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>maintenance-reminders overdue.</td></tr>
+          <tr data-risk="med"><td><code>MaintenanceAlertModal.tsx</code></td><td>17–18</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>month-overdue — overlap com painel.</td></tr>
+          <tr data-risk="high"><td><code>PaymentMethodsChart.tsx</code></td><td>18–20</td><td><span class="badge badge-high">Alto</span></td><td><span class="badge badge-high">Alto</span></td><td>/financial/cash-flow — payload grande para gráfico simples.</td></tr>
+          <tr data-risk="med"><td><code>AppShell.tsx</code></td><td>9, 22</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Branding + poll em toda rota, não só dashboard.</td></tr>
+          <tr data-risk="med"><td><code>AlertsPanel.tsx</code></td><td>46</td><td><span class="badge badge-med">Médio</span></td><td>Baixo (UX)</td><td>Texto fixo "3 orçamentos" — ignora KPI real.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><strong>Total 1ª visita (cache frio):</strong> ~12 dashboard + ~3 shell ≈ <strong>15 requisições paralelas</strong>.</p>
+
+    <h3>Backend — dashboard financeiro</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="high"><td><code>dashboard.service.ts</code></td><td>115–119</td><td><span class="badge badge-high">Alto</span></td><td><span class="badge badge-high">Alto</span></td><td>3× dashboardFinancial (mês, hoje, ontem).</td></tr>
+          <tr data-risk="high"><td><code>dashboard.service.ts</code></td><td>134–141</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>findMany OS entregues no mês sem take.</td></tr>
+          <tr data-risk="med"><td><code>dashboard.service.ts</code></td><td>198–207</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>findMany recebíveis pagos no mês.</td></tr>
+          <tr data-risk="high"><td><code>reports.service.ts</code></td><td>88+, 165+</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>~20+ findMany sem limite por período.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Portal web + Android + backend portal</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="high"><td><code>portalStore.ts</code></td><td>67–80</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>login → refresh() → GET /portal/dashboard.</td></tr>
+          <tr data-risk="med"><td><code>PortalSplashPage.tsx</code></td><td>30–33</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>refresh() duplicado após login.</td></tr>
+          <tr data-risk="med"><td><code>PortalHomePage.tsx</code></td><td>72–77</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>syncDashboard no mount.</td></tr>
+          <tr data-risk="high"><td><code>PortalPolling.tsx</code></td><td>15–16</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>Cada foco na aba = dashboard completo.</td></tr>
+          <tr data-risk="med"><td><code>PortalViewModel.kt</code></td><td>265–282</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>dashboard + vehicles sequencial.</td></tr>
+          <tr data-risk="crit"><td><code>portal.service.ts getDashboard</code></td><td>385–498</td><td><span class="badge badge-crit">Crítico</span></td><td><span class="badge badge-crit">Crítico</span></td><td>Orquestra quotes + OS + anexos + signed URLs.</td></tr>
+          <tr data-risk="high"><td><code>portal.service.ts listQuotes</code></td><td>866–882</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>findMany sem take a cada dashboard.</td></tr>
+          <tr data-risk="high"><td><code>portal.service.ts mapPortalAttachments</code></td><td>97–116, 481</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>N signed URLs Storage por anexo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s10">
+    <h2><span class="num">10</span> Consultas sem paginação</h2>
+
+    <h3>ERP — alto volume</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="high"><td><code>service-orders.service.ts</code></td><td>202–222</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>list() — todas OS. Adicionar take/skip ou cursor.</td></tr>
+          <tr data-risk="high"><td><code>financial.service.ts</code></td><td>51–68</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>list() — todos lançamentos + parcelas.</td></tr>
+          <tr data-risk="high"><td><code>quotes.service.ts</code></td><td>201+</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>list() — orçamentos com includes profundos.</td></tr>
+          <tr data-risk="med"><td><code>customers.service.ts</code></td><td>78</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Lista clientes sem take.</td></tr>
+          <tr data-risk="med"><td><code>vehicles.service.ts</code></td><td>62, 113</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Lista veículos; anexos sem limite.</td></tr>
+          <tr data-risk="med"><td><code>products.service.ts</code></td><td>35</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Catálogo completo.</td></tr>
+          <tr data-risk="med"><td><code>attachments.service.ts</code></td><td>247–252</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Todos anexos OS + N signed URLs.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Portal, cron e relatórios</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="crit"><td><code>portal.service.ts listQuotes</code></td><td>866–882</td><td><span class="badge badge-crit">Crítico</span></td><td>Crítico</td><td>Todos quotes + lines + SO items.</td></tr>
+          <tr data-risk="high"><td><code>maintenance-reminders.service.ts</code></td><td>188–194</td><td><span class="badge badge-high">Alto</span></td><td>Alto (cron)</td><td>ACTIVE sem organizationId — todas orgs.</td></tr>
+          <tr data-risk="high"><td><code>reports.service.ts</code></td><td>165+ (várias)</td><td><span class="badge badge-high">Alto</span></td><td>Alto sob demanda</td><td>Múltiplos findMany; pesado no modo TV 60s.</td></tr>
+          <tr data-risk="med"><td><code>financial.service.ts cashFlow</code></td><td>728–744</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>6 meses de splits — usado no dashboard.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Boas práticas encontradas ✓</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Detalhe</th></tr></thead>
+        <tbody>
+          <tr data-risk="low"><td><code>dashboard.service.ts</code></td><td>232, 247</td><td>take: 10</td></tr>
+          <tr data-risk="low"><td><code>notifications.service.ts</code></td><td>8–12</td><td>take: limit (default 20)</td></tr>
+          <tr data-risk="low"><td><code>search.service.ts</code></td><td>19–103</td><td>take: 8 por entidade</td></tr>
+          <tr data-risk="low"><td><code>colaborador-app.service.ts</code></td><td>312–320</td><td>skip/take paginação</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s11">
+    <h2><span class="num">11</span> Consultas executadas em loop</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="high"><td><code>employees.service.ts</code></td><td>104–147</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>3 queries por funcionário. Batch ou view materializada.</td></tr>
+          <tr data-risk="high"><td><code>commission-engine.service.ts</code></td><td>131–164+</td><td><span class="badge badge-high">Alto</span></td><td>Alto (evento)</td><td>Por item × regra: getActiveRules, findFirst, create.</td></tr>
+          <tr data-risk="med"><td><code>quotes-sync.service.ts</code></td><td>102–131</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>update/create individual por item.</td></tr>
+          <tr data-risk="high"><td><code>portal.service.ts mapPortalAttachments</code></td><td>97–116</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>N createSignedUrl por anexo.</td></tr>
+          <tr data-risk="high"><td><code>attachments.service.ts enrichMany</code></td><td>40–44</td><td><span class="badge badge-high">Alto</span></td><td>Alto</td><td>Signed URL por linha.</td></tr>
+          <tr data-risk="med"><td><code>attachments-purge.service.ts</code></td><td>30–43</td><td><span class="badge badge-med">Médio</span></td><td>Baixo (cron)</td><td>Loop ordem → anexos → remove.</td></tr>
+          <tr data-risk="med"><td><code>maintenance-reminders.service.ts</code></td><td>200–235</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Por reminder: emitCustomer + update.</td></tr>
+          <tr data-risk="med"><td><code>service-orders.service.ts</code></td><td>905–942</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Por peça: estoque + findFirst + update.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s12">
+    <h2><span class="num">12</span> Downloads de Storage</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="med"><td><code>supabase-storage.service.ts</code></td><td>113–126</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>createSignedUrl TTL 3600s — download direto CDN.</td></tr>
+          <tr data-risk="low"><td><code>supabase-storage.service.ts</code></td><td>92–110</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>Upload direto cliente→Storage (bom).</td></tr>
+          <tr data-risk="med"><td><code>attachments.service.ts</code></td><td>255–266</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Nova signed URL por request /file.</td></tr>
+          <tr data-risk="low"><td><code>organizations.service.ts</code></td><td>169–177</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>Logo em bucket público branding.</td></tr>
+          <tr data-risk="low"><td><code>api.ts</code></td><td>1320–1324</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>PUT upload direto (egress upload).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><strong>Padrão:</strong> backend não faz proxy de bytes — apenas gera URLs. Egress download: Supabase → browser/app.</p>
+  </section>
+
+  <section id="s13">
+    <h2><span class="num">13</span> Uso de imagens</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="med"><td><code>mediaUrl.ts</code></td><td>8–13</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Signed URL direto; fallback /api/attachments/:id/file.</td></tr>
+          <tr data-risk="med"><td><code>AttachmentGrid.tsx</code></td><td>33, 62–63</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Cada img = 1 download Storage/CDN.</td></tr>
+          <tr data-risk="med"><td><code>PortalPhotosTab.tsx</code></td><td>52, 107–111</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Lazy load; sem refresh após TTL 1h.</td></tr>
+          <tr data-risk="med"><td><code>CommonComponents.kt</code></td><td>759</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Coil AsyncImage — download direto.</td></tr>
+          <tr data-risk="high"><td><code>supabase-storage.service.ts</code></td><td>9, 113</td><td><span class="badge badge-high">Alto</span></td><td>Alto (sessões longas)</td><td>TTL 1h vs cache React Query 30min — imagens quebram.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s14">
+    <h2><span class="num">14</span> Possíveis memory leaks</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Linha</th><th>Risco</th><th>Impacto</th><th>Recomendação</th></tr></thead>
+        <tbody>
+          <tr data-risk="low"><td><code>useOfficeEvents.ts seenRef</code></td><td>22</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>Set de IDs cresce na sessão — limitar tamanho.</td></tr>
+          <tr data-risk="low"><td><code>portal.service.ts quoteSyncLastAt</code></td><td>58</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo (servidor)</td><td>Map sem eviction — considerar LRU.</td></tr>
+          <tr data-risk="low"><td><code>portalStore.ts persist</code></td><td>118–122</td><td><span class="badge badge-low">Baixo</span></td><td>Baixo</td><td>Dashboard no localStorage — dados stale.</td></tr>
+          <tr data-risk="med"><td><code>FinancialPage.tsx</code></td><td>133–145</td><td><span class="badge badge-med">Médio</span></td><td>Médio</td><td>Async sem cleanup — ver §5.</td></tr>
+          <tr data-risk="low"><td><code>main.tsx gcTime</code></td><td>18–19</td><td><span class="badge badge-ok">OK</span></td><td>Positivo</td><td>Cache liberado após 60 min.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="sem-risco">
+    <h2>Itens verificados sem risco relevante</h2>
+    <ul class="risks ok-list">
+      <li>Supabase Realtime / postgres_changes / channels — ausentes</li>
+      <li>refetchInterval — ausente</li>
+      <li>refetchOnWindowFocus — desabilitado globalmente</li>
+      <li>Cliente Supabase no frontend — ausente (correto)</li>
+      <li>Supabase Auth no frontend — não utilizado</li>
+      <li>Polling Android — removido em favor de FCM</li>
+    </ul>
+  </section>
+
+  <section id="conclusao" class="conclusion">
+    <h2>Conclusão</h2>
+    <p style="color:var(--text);margin-bottom:1rem">O projeto está bem posicionado quanto a Realtime (não usa) e React Query (sem polling automático). Os maiores custos vêm de:</p>
+    <ol>
+      <li><strong>Polling HTTP</strong> como substituto de Realtime no ERP</li>
+      <li><strong>Endpoints agregadores pesados</strong> (portal dashboard, dashboard financeiro)</li>
+      <li><strong>Listagens sem paginação</strong> que escalam com o crescimento da oficina</li>
+      <li><strong>Fan-out de signed URLs</strong> em anexos</li>
+    </ol>
+    <p style="color:var(--muted);margin-top:1rem;font-size:0.85rem">Fonte: SUPABASE_USAGE_AUDIT.md · Auditoria estática · 25/06/2026</p>
+  </section>
+
+</main>
+
+<script>
+  // Active nav link on scroll
+  const sections = document.querySelectorAll('section[id], header.hero');
+  const navLinks = document.querySelectorAll('nav a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => { if (s.id) observer.observe(s); });
+  observer.observe(document.getElementById('resumo'));
+
+  // Risk filter
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('tbody tr[data-risk]').forEach(row => {
+        if (filter === 'all') {
+          row.style.display = '';
+        } else if (filter === 'low') {
+          row.style.display = ['low','none'].includes(row.dataset.risk) ? '' : 'none';
+        } else {
+          row.style.display = row.dataset.risk === filter ? '' : 'none';
+        }
+      });
+    });
+  });
+
+  // Close mobile nav on link click
+  navLinks.forEach(a => {
+    a.addEventListener('click', () => {
+      document.querySelector('nav').classList.remove('open');
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -4,9 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ServiceOrderStatus } from '@prisma/client';
+import { ServiceOrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AttachmentsService } from '../attachments/attachments.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -15,10 +15,7 @@ const finishedStatuses: ServiceOrderStatus[] = ['FINISHED', 'DELIVERED'];
 
 @Injectable()
 export class VehiclesService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly attachments: AttachmentsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(organizationId: string, dto: CreateVehicleDto) {
     const plate = dto.plate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -58,25 +55,33 @@ export class VehiclesService {
     });
   }
 
-  list(organizationId: string, search?: string) {
-    return this.prisma.vehicle.findMany({
-      where: {
-        organizationId,
-        ...notDeleted,
-        ...(search
-          ? {
-              OR: [
-                { plate: { contains: search, mode: 'insensitive' } },
-                { brand: { contains: search, mode: 'insensitive' } },
-                { model: { contains: search, mode: 'insensitive' } },
-                { customer: { name: { contains: search, mode: 'insensitive' } } },
-              ],
-            }
-          : {}),
-      },
-      include: { customer: true },
-      orderBy: { updatedAt: 'desc' },
-    });
+  async list(organizationId: string, search?: string, query: ListQueryInput = {}) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.VehicleWhereInput = {
+      organizationId,
+      ...notDeleted,
+      ...(search
+        ? {
+            OR: [
+              { plate: { contains: search, mode: 'insensitive' } },
+              { brand: { contains: search, mode: 'insensitive' } },
+              { model: { contains: search, mode: 'insensitive' } },
+              { customer: { name: { contains: search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.vehicle.count({ where }),
+      this.prisma.vehicle.findMany({
+        where,
+        include: { customer: true },
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {
@@ -153,7 +158,7 @@ export class VehiclesService {
       ...vehicle,
       kpis,
       quotes,
-      attachments: await this.attachments.enrichMany(attachments),
+      attachments,
       timeline,
       serviceOrders: orders,
     };

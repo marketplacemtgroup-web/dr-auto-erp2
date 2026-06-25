@@ -70,9 +70,10 @@ export default function EscalasPage() {
   });
 
   const { data: stats } = useApiQuery(["escalas-stats"], (t) => api.escalasStats(t));
-  const { data: employees } = useApiQuery(["employees-active"], (t) =>
-    api.employees(t, { status: "ACTIVE" }),
+  const { data: employeesRes } = useApiQuery(["employees-active"], (t) =>
+    api.employees(t, { status: "ACTIVE", limit: 50 }),
   );
+  const employees = employeesRes?.data;
   const { data, isLoading, error } = useApiQuery(
     ["escalas", periodStart, periodEnd, employeeFilter, dayTypeFilter, statusFilter],
     (t) =>

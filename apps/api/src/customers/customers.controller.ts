@@ -37,8 +37,10 @@ export class CustomersController {
   list(
     @CurrentUser() user: { organizationId: string },
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.customersService.list(user.organizationId, search);
+    return this.customersService.list(user.organizationId, search, { page, limit });
   }
 
   @Get(':id')

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle } from "lucide-react";
@@ -7,7 +7,8 @@ import FormDrawer, { FormField, inputClass } from "../../components/modules/Form
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
-import { api, type SupplierRow } from "../../lib/api";
+import ListPagination from "../../components/modules/ListPagination";
+import { api, LIST_PAGE_SIZE, type SupplierRow } from "../../lib/api";
 import { routes } from "../../lib/routes";
 import { whatsappUrl } from "../../lib/whatsapp";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
@@ -44,14 +45,23 @@ export default function SuppliersPage() {
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SupplierRow | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const { data, isLoading, error } = useApiQuery(
-    ["suppliers", search],
-    (t) => api.suppliers(t, search || undefined, "ACTIVE"),
+    ["suppliers", search, String(page)],
+    (t) => api.suppliers(t, search || undefined, "ACTIVE", page, LIST_PAGE_SIZE),
   );
+
+  const rows = data?.data ?? [];
+  const totalPages = data?.pagination.totalPages ?? 0;
+  const active = data?.pagination.total ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -85,7 +95,7 @@ export default function SuppliersPage() {
     },
   });
 
-  const active = data?.length ?? 0;
+  const activeTypes = new Set(rows.map((s) => s.supplierType)).size;
 
   return (
     <>
@@ -94,12 +104,15 @@ export default function SuppliersPage() {
         description="Cadastro de fornecedores e histórico de compras"
         actionLabel="Novo fornecedor"
         onAction={() => setDrawerOpen(true)}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <KpiStrip
           items={[
             { label: "Ativos", value: String(active) },
-            { label: "Tipos", value: String(new Set(data?.map((s) => s.supplierType)).size) },
+            { label: "Tipos", value: String(activeTypes) },
           ]}
         />
         <DataTable
@@ -139,10 +152,11 @@ export default function SuppliersPage() {
             },
             { key: "phone", header: "Telefone", render: (r) => r.phone ?? r.email ?? "—" },
           ]}
-          rows={data ?? []}
+          rows={rows}
           onRowClick={(r) => navigate(routes.fornecedorDetalhe(r.id))}
           onDelete={setDeleteTarget}
         />
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </ModulePageShell>
 
       <FormDrawer

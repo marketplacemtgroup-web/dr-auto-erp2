@@ -38,12 +38,15 @@ export class QuotesController {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('includeApproved') includeApproved?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.quotesService.list(
       user.organizationId,
       search,
       status,
       includeApproved === 'true',
+      { page, limit },
     );
   }
 

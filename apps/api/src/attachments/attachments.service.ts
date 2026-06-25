@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AttachmentEntityType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { posix } from 'path';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { SupabaseStorageService } from '../storage/supabase-storage.service';
@@ -243,13 +244,45 @@ export class AttachmentsService {
     return this.enrichForClient(row);
   }
 
-  async listForServiceOrder(organizationId: string, serviceOrderId: string) {
-    const rows = await this.prisma.attachment.findMany({
-      where: { organizationId, serviceOrderId },
-      orderBy: { createdAt: 'desc' },
-      include: { uploadedBy: { select: { id: true, name: true } } },
+  async listForServiceOrder(
+    organizationId: string,
+    serviceOrderId: string,
+    query: ListQueryInput = {},
+  ) {
+    await this.findServiceOrder(organizationId, serviceOrderId);
+    const { page, limit, skip } = parseListQuery(query);
+    const where = { organizationId, serviceOrderId };
+    const [rows, total] = await Promise.all([
+      this.prisma.attachment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: { uploadedBy: { select: { id: true, name: true } } },
+      }),
+      this.prisma.attachment.count({ where }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
+  }
+
+  async getSignedUrlForClient(organizationId: string, id: string): Promise<{ url: string }> {
+    const row = await this.prisma.attachment.findFirst({
+      where: { id, organizationId },
     });
-    return this.enrichMany(rows);
+    if (!row) throw new NotFoundException('Anexo não encontrado');
+
+    const bucket = this.storage.bucketForEntity(row.entityType);
+    let url = '';
+    try {
+      if (this.storage.isCloudStorage()) {
+        url = await this.storage.createSignedUrl(bucket, row.storagePath);
+      } else {
+        url = `/api/uploads/${this.storage.normalizeStoragePath(row.storagePath)}`;
+      }
+    } catch {
+      /* arquivo ausente no storage */
+    }
+    return { url };
   }
 
   async resolveDownloadUrl(

@@ -1,6 +1,7 @@
 import { routes } from "../lib/routes";
 import NavButton from "./NavButton";
 import StatusBadge from "./StatusBadge";
+import { useDashboardBundleContext } from "../contexts/DashboardBundleContext";
 import { useDashboardServiceOrdersInProgress } from "../hooks/useDashboardLists";
 import { serviceOrderStatusToVariant } from "../lib/serviceOrderStatus";
 
@@ -11,7 +12,11 @@ function formatDateTime(iso: string | null) {
 }
 
 export default function ServiceOrdersTable() {
-  const { data: orders = [], isLoading } = useDashboardServiceOrdersInProgress();
+  const bundle = useDashboardBundleContext();
+  const fallback = useDashboardServiceOrdersInProgress(bundle === null);
+  const orders =
+    bundle?.charts.data?.serviceOrdersInProgress ?? fallback.data ?? [];
+  const isLoading = bundle ? bundle.charts.isPending : fallback.isLoading;
 
   return (
     <div className="bg-white rounded-xl card-shadow p-5">

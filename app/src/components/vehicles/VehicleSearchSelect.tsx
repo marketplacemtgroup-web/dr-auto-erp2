@@ -1,69 +1,63 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, X } from "lucide-react";
-import type { VehicleRow } from "../../lib/api";
+import { api, type VehicleRow } from "../../lib/api";
+import { QUERY_GC_TIME_MS, QUERY_STALE_TIME_MS } from "../../lib/query-cache";
+import { useAuthToken } from "../../hooks/useApiQuery";
 import { inputClass } from "../modules/FormDrawer";
 
-function normalizeSearchText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-}
-
-function normalizePlate(value: string) {
-  return value.replace(/[\s-]/g, "").toUpperCase();
-}
+const PICKER_LIMIT = 50;
 
 export function vehicleDisplayLabel(v: VehicleRow) {
   const model = [v.brand, v.model].filter(Boolean).join(" ");
   return `${v.customer.name} — ${v.plate}${model ? ` (${model})` : ""}`;
 }
 
-function matchesVehicle(vehicle: VehicleRow, query: string) {
-  const trimmed = query.trim();
-  if (!trimmed) return true;
-
-  const plateQuery = normalizePlate(trimmed);
-  if (normalizePlate(vehicle.plate).includes(plateQuery)) return true;
-
-  const haystack = normalizeSearchText(
-    `${vehicle.customer.name} ${vehicle.plate} ${vehicle.brand ?? ""} ${vehicle.model ?? ""}`,
-  );
-  return haystack.includes(normalizeSearchText(trimmed));
-}
-
 type Props = {
-  vehicles?: VehicleRow[];
   value: string;
   onChange: (vehicleId: string) => void;
-  loading?: boolean;
   required?: boolean;
   placeholder?: string;
 };
 
 export default function VehicleSearchSelect({
-  vehicles,
   value,
   onChange,
-  loading,
   required,
   placeholder = "Digite o nome do cliente ou a placa...",
 }: Props) {
+  const token = useAuthToken();
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [open, setOpen] = useState(false);
 
-  const selected = useMemo(
-    () => vehicles?.find((vehicle) => vehicle.id === value) ?? null,
-    [vehicles, value],
-  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
-  const results = useMemo(() => {
-    if (!vehicles?.length) return [];
-    return vehicles.filter((vehicle) => matchesVehicle(vehicle, query)).slice(0, 12);
-  }, [vehicles, query]);
+  const searchEnabled = open && !!token;
+
+  const { data: searchResult, isLoading: searchLoading } = useQuery({
+    queryKey: ["vehicles-search", debouncedQuery, token],
+    queryFn: () =>
+      api.vehicles(token!, debouncedQuery || undefined, 1, PICKER_LIMIT),
+    enabled: searchEnabled,
+    staleTime: QUERY_STALE_TIME_MS,
+    gcTime: QUERY_GC_TIME_MS,
+  });
+
+  const { data: selectedVehicle } = useQuery({
+    queryKey: ["vehicle", value, token],
+    queryFn: () => api.vehicle(token!, value),
+    enabled: !!token && !!value,
+    staleTime: QUERY_STALE_TIME_MS,
+    gcTime: QUERY_GC_TIME_MS,
+  });
+
+  const results = useMemo(() => searchResult?.data ?? [], [searchResult]);
 
   useEffect(() => {
     if (!value) {
@@ -96,15 +90,17 @@ export default function VehicleSearchSelect({
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  if (selected) {
+  if (selectedVehicle && value) {
     return (
       <div className="rounded-lg border border-[#0E7490]/30 bg-[#ECFEFF] px-3 py-2.5 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[#0F3D4C] truncate">{selected.customer.name}</p>
+          <p className="text-sm font-semibold text-[#0F3D4C] truncate">
+            {selectedVehicle.customer.name}
+          </p>
           <p className="text-[12px] text-[#64748B] mt-0.5">
-            <span className="font-bold text-[#0E7490]">{selected.plate}</span>
-            {[selected.brand, selected.model].filter(Boolean).length > 0
-              ? ` · ${[selected.brand, selected.model].filter(Boolean).join(" ")}`
+            <span className="font-bold text-[#0E7490]">{selectedVehicle.plate}</span>
+            {[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).length > 0
+              ? ` · ${[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(" ")}`
               : ""}
           </p>
         </div>
@@ -137,8 +133,7 @@ export default function VehicleSearchSelect({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder={loading ? "Carregando veiculos..." : placeholder}
-          disabled={loading}
+          placeholder={searchLoading ? "Buscando veiculos..." : placeholder}
           className={`${inputClass} pl-9`}
           autoComplete="off"
         />
@@ -146,13 +141,15 @@ export default function VehicleSearchSelect({
 
       {required ? <input type="hidden" value={value} required readOnly /> : null}
 
-      {open && !loading ? (
+      {open ? (
         <div className="absolute z-10 left-0 right-0 mt-1.5 rounded-lg border border-[#E2E8F0] bg-white shadow-lg overflow-hidden">
-          {!vehicles?.length ? (
-            <p className="px-3 py-3 text-[12px] text-[#94A3B8]">Nenhum veiculo cadastrado.</p>
+          {searchLoading ? (
+            <p className="px-3 py-3 text-[12px] text-[#94A3B8]">Buscando...</p>
           ) : results.length === 0 ? (
             <p className="px-3 py-3 text-[12px] text-[#94A3B8]">
-              Nenhum resultado para &quot;{query.trim()}&quot;.
+              {debouncedQuery
+                ? `Nenhum resultado para "${debouncedQuery}".`
+                : "Digite para buscar cliente ou placa."}
             </p>
           ) : (
             <ul className="max-h-52 overflow-y-auto py-1">

@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ServiceOrderStatus } from '@autocore/database';
 import { notDeleted } from '../common/soft-delete';
+import { MaintenanceRemindersService } from '../maintenance-reminders/maintenance-reminders.service';
 import { endOfDay, roundMoney, startOfDay } from '../reports/reports-date.util';
 import { PROFIT_RECOGNIZED_STATUSES } from '../reports/reports-profit.util';
 import { ReportsService } from '../reports/reports.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DashboardCacheService } from './dashboard-cache.service';
 
 const OPEN_STATUSES: ServiceOrderStatus[] = [
   'RECEIVED',
@@ -32,6 +34,8 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reportsService: ReportsService,
+    private readonly maintenanceReminders: MaintenanceRemindersService,
+    private readonly dashboardCache: DashboardCacheService,
   ) {}
 
   /** Rápido — contagens diretas (como antes do Relatórios BI). */
@@ -100,23 +104,19 @@ export class DashboardService {
     const yesterdayEnd = endOfDay(yesterday);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const active = { organizationId, ...notDeleted };
-
     const fromStr = this.toLocalIsoDate(monthStart);
     const toStr = this.toLocalIsoDate(today);
-    const todayStr = this.toLocalIsoDate(today);
-    const yesterdayStr = this.toLocalIsoDate(yesterday);
-
     const paidReceivable = {
       organizationId,
       status: 'PAID' as const,
       type: 'RECEIVABLE' as const,
     };
 
-    const [report, todayReport, yesterdayReport, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
+    const [report, todayCache, yesterdayCache, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
       await Promise.all([
         this.reportsService.dashboardFinancial(organizationId, fromStr, toStr),
-        this.reportsService.dashboardFinancial(organizationId, todayStr, todayStr),
-        this.reportsService.dashboardFinancial(organizationId, yesterdayStr, yesterdayStr),
+        this.dashboardCache.getOrCompute(organizationId, today),
+        this.dashboardCache.getOrCompute(organizationId, yesterday),
         this.prisma.financialEntry.aggregate({
           where: {
             ...paidReceivable,
@@ -143,8 +143,8 @@ export class DashboardService {
 
     const dailyAmount = roundMoney(Number(paidTodayAgg._sum.amount ?? 0));
     const yesterdayAmount = Number(paidYesterdayAgg._sum.amount ?? 0);
-    const dailyProfit = todayReport.financial.totalProfit;
-    const yesterdayProfit = yesterdayReport.financial.totalProfit;
+    const dailyProfit = todayCache.profit;
+    const yesterdayProfit = yesterdayCache.profit;
 
     const ticketSum = deliveredOrdersMonth.reduce(
       (s, o) => s + Number(o.totalAmount),
@@ -188,6 +188,46 @@ export class DashboardService {
       this.getFinancialKpis(organizationId),
     ]);
     return { ...operational, ...financial };
+  }
+
+  async getSummary(organizationId: string, includeFinancial: boolean) {
+    const [operational, financial] = await Promise.all([
+      this.getOperationalKpis(organizationId),
+      includeFinancial
+        ? this.getFinancialKpis(organizationId)
+        : Promise.resolve(null),
+    ]);
+    return {
+      operational,
+      ...(financial ? { financial } : {}),
+    };
+  }
+
+  async getAlerts(organizationId: string) {
+    const [operational, overdueReminders] = await Promise.all([
+      this.getOperationalKpis(organizationId),
+      this.maintenanceReminders.list(organizationId, 'overdue'),
+    ]);
+
+    return {
+      lowStockParts: operational.lowStockParts,
+      delayedServices: operational.delayedServices,
+      pendingQuotes: operational.pendingQuotes,
+      maintenanceOverdue: overdueReminders.length,
+    };
+  }
+
+  async getCharts(organizationId: string, includeRevenueSeries: boolean) {
+    const [serviceOrdersInProgress, pendingQuotes, revenueSeries] =
+      await Promise.all([
+        this.getServiceOrdersInProgress(organizationId),
+        this.getPendingQuotes(organizationId),
+        includeRevenueSeries
+          ? this.getRevenueSeries(organizationId)
+          : Promise.resolve([]),
+      ]);
+
+    return { serviceOrdersInProgress, pendingQuotes, revenueSeries };
   }
 
   async getRevenueSeries(organizationId: string) {

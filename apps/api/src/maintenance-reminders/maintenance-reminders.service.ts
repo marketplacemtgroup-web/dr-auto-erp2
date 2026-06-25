@@ -185,56 +185,77 @@ export class MaintenanceRemindersService {
   }
 
   async processDueNotifications() {
-    const active = await this.prisma.maintenanceReminder.findMany({
-      where: { status: 'ACTIVE' },
-      include: {
-        vehicle: true,
-        serviceOrder: { select: { number: true } },
-      },
-    });
-
     let notified = 0;
+    let checked = 0;
     const oneDayAgo = new Date();
     oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-    for (const reminder of active) {
-      const overdue = this.isOverdue(reminder, reminder.vehicle.currentKm);
-      const upcoming = this.isUpcoming(reminder, reminder.vehicle.currentKm);
-      if (!overdue && !upcoming) continue;
+    const organizations = await this.prisma.maintenanceReminder.findMany({
+      where: { status: 'ACTIVE' },
+      distinct: ['organizationId'],
+      select: { organizationId: true },
+    });
 
-      if (reminder.lastNotifiedAt && reminder.lastNotifiedAt > oneDayAgo) {
-        continue;
+    for (const { organizationId } of organizations) {
+      let skip = 0;
+      while (true) {
+        const batch = await this.prisma.maintenanceReminder.findMany({
+          where: { organizationId, status: 'ACTIVE' },
+          include: {
+            vehicle: true,
+            serviceOrder: { select: { number: true } },
+          },
+          orderBy: { id: 'asc' },
+          take: 100,
+          skip,
+        });
+        if (!batch.length) break;
+
+        checked += batch.length;
+
+        for (const reminder of batch) {
+          const overdue = this.isOverdue(reminder, reminder.vehicle.currentKm);
+          const upcoming = this.isUpcoming(reminder, reminder.vehicle.currentKm);
+          if (!overdue && !upcoming) continue;
+
+          if (reminder.lastNotifiedAt && reminder.lastNotifiedAt > oneDayAgo) {
+            continue;
+          }
+
+          const typeLabel =
+            reminder.type === 'REVISION' ? 'Revisão preventiva' : 'Troca de óleo';
+          const osNum = reminder.serviceOrder.number;
+          let detail = '';
+          if (reminder.dueKm != null) {
+            detail = `aprox. ${reminder.dueKm.toLocaleString('pt-BR')} km`;
+          }
+          if (reminder.dueDate) {
+            const dateStr = reminder.dueDate.toLocaleDateString('pt-BR');
+            detail = detail ? `${detail} ou ${dateStr}` : dateStr;
+          }
+
+          await this.events.emitCustomer(reminder.vehicleId, {
+            pushTitle: `${typeLabel} — OS #${osNum}`,
+            pushBody: overdue
+              ? `Prazo de manutenção preventiva atingido (${detail})`
+              : `Manutenção preventiva se aproxima (${detail})`,
+            pushUrl: '/agendamento',
+            portalNotificationType: 'manutencao_preventiva',
+            serviceOrderId: reminder.serviceOrderId,
+          });
+
+          await this.prisma.maintenanceReminder.update({
+            where: { id: reminder.id },
+            data: { lastNotifiedAt: new Date() },
+          });
+          notified++;
+        }
+
+        skip += batch.length;
+        if (batch.length < 100) break;
       }
-
-      const typeLabel =
-        reminder.type === 'REVISION' ? 'Revisão preventiva' : 'Troca de óleo';
-      const osNum = reminder.serviceOrder.number;
-      let detail = '';
-      if (reminder.dueKm != null) {
-        detail = `aprox. ${reminder.dueKm.toLocaleString('pt-BR')} km`;
-      }
-      if (reminder.dueDate) {
-        const dateStr = reminder.dueDate.toLocaleDateString('pt-BR');
-        detail = detail ? `${detail} ou ${dateStr}` : dateStr;
-      }
-
-      await this.events.emitCustomer(reminder.vehicleId, {
-        pushTitle: `${typeLabel} — OS #${osNum}`,
-        pushBody: overdue
-          ? `Prazo de manutenção preventiva atingido (${detail})`
-          : `Manutenção preventiva se aproxima (${detail})`,
-        pushUrl: '/agendamento',
-        portalNotificationType: 'manutencao_preventiva',
-        serviceOrderId: reminder.serviceOrderId,
-      });
-
-      await this.prisma.maintenanceReminder.update({
-        where: { id: reminder.id },
-        data: { lastNotifiedAt: new Date() },
-      });
-      notified++;
     }
 
-    return { notified, checked: active.length };
+    return { notified, checked };
   }
 }

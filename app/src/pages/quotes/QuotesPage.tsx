@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import StatusBadge from "../../components/StatusBadge";
@@ -8,8 +8,9 @@ import FormDrawer, { FormField, inputClass } from "../../components/modules/Form
 import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
+import ListPagination from "../../components/modules/ListPagination";
 import VehicleSearchSelect from "../../components/vehicles/VehicleSearchSelect";
-import { api, type QuoteRow } from "../../lib/api";
+import { api, LIST_PAGE_SIZE, type QuoteRow } from "../../lib/api";
 import { formatDate, formatMoney } from "../../lib/format";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 import { quoteStatusLabel, quoteStatusVariant } from "../../lib/service-order-status";
@@ -20,16 +21,24 @@ export default function QuotesPage() {
   const token = useAuthToken();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<QuoteRow | null>(null);
   const [form, setForm] = useState({ vehicleId: "", complaint: "" });
 
-  const { data: vehicles } = useApiQuery(["vehicles-all"], (t) => api.vehicles(t));
   const { data, isLoading, error } = useApiQuery(
-    ["quotes", search, statusFilter],
-    (t) => api.quotes(t, search || undefined, statusFilter || undefined),
+    ["quotes", search, statusFilter, String(page)],
+    (t) => api.quotes(t, search || undefined, statusFilter || undefined, false, page, LIST_PAGE_SIZE),
   );
+
+  const rows = data?.data ?? [];
+  const totalPages = data?.pagination.totalPages ?? 0;
+  const totalListed = data?.pagination.total ?? 0;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   const openCreate = () => {
     setForm({ vehicleId: "", complaint: "" });
@@ -58,9 +67,9 @@ export default function QuotesPage() {
     },
   });
 
-  const pending = data?.filter((q) => q.status === "PENDING").length ?? 0;
+  const pending = rows.filter((q) => q.status === "PENDING").length;
   const pendingTotal =
-    data?.filter((q) => q.status === "PENDING").reduce((s, q) => s + Number(q.amount), 0) ?? 0;
+    rows.filter((q) => q.status === "PENDING").reduce((s, q) => s + Number(q.amount), 0);
 
   return (
     <>
@@ -69,7 +78,10 @@ export default function QuotesPage() {
         description="Monte o orçamento por cliente/veículo — ao aprovar, vira ordem de serviço"
         actionLabel="Novo orçamento"
         onAction={openCreate}
-        onSearch={setSearch}
+        onSearch={(q) => {
+          setSearch(q);
+          setPage(1);
+        }}
       >
         <ModuleFilters>
           <FilterSelect
@@ -88,7 +100,7 @@ export default function QuotesPage() {
           items={[
             { label: "Aguardando aprovação", value: String(pending), tone: "warning" },
             { label: "Valor pendente", value: formatMoney(pendingTotal), tone: "warning" },
-            { label: "Ativos", value: String(data?.length ?? 0) },
+            { label: "Ativos", value: String(totalListed) },
           ]}
         />
         <DataTable
@@ -134,13 +146,14 @@ export default function QuotesPage() {
             },
             { key: "date", header: "Data", render: (q) => formatDate(q.createdAt) },
           ]}
-          rows={data ?? []}
+          rows={rows}
           loading={isLoading}
           error={error}
           emptyMessage="Nenhum orçamento ativo. Crie um novo selecionando cliente e placa."
           onRowClick={(q) => navigate(routes.orcamentoDetalhe(q.id))}
           onDelete={setDeleteTarget}
         />
+        <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
         <p className="text-xs text-[#94A3B8] mt-3">
           Orçamentos aprovados saem desta lista e aparecem em Ordens de Serviço. O cliente aprova
           pelo app ou portal.
@@ -161,7 +174,6 @@ export default function QuotesPage() {
       >
         <FormField label="Cliente / placa *">
           <VehicleSearchSelect
-            vehicles={vehicles}
             value={form.vehicleId}
             onChange={(vehicleId) => setForm((f) => ({ ...f, vehicleId }))}
             required

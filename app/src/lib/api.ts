@@ -1,5 +1,15 @@
 import { fetchWithTimeout, parseJsonBody } from "./http";
 import type { ServiceOrderItemType } from "./itemType";
+import { type Paginated, paginationFrom, unwrapPaginated } from "./pagination";
+
+export type { Paginated };
+export { unwrapPaginated };
+
+export const LIST_PAGE_SIZE = 50;
+
+function parsePaginatedList<T>(body: T[] | Paginated<T>): Paginated<T> {
+  return paginationFrom(body);
+}
 
 // Produção: URL vazia → mesmo host (`/api` via nginx).
 // Dev no PC: pode usar VITE_API_URL ou proxy do Vite.
@@ -20,10 +30,10 @@ function resolveApiBaseUrl(): string {
 
 const API_URL = resolveApiBaseUrl();
 
-function buildQuery(params: Record<string, string | undefined>) {
+function buildQuery(params: Record<string, string | number | undefined>) {
   const q = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value) q.set(key, value);
+    if (value !== undefined && value !== "") q.set(key, String(value));
   }
   const s = q.toString();
   return s ? `?${s}` : "";
@@ -76,6 +86,24 @@ export interface DashboardFinancialKpis {
 }
 
 export type DashboardKpis = DashboardOperationalKpis & DashboardFinancialKpis;
+
+export interface DashboardSummary {
+  operational: DashboardOperationalKpis;
+  financial?: DashboardFinancialKpis;
+}
+
+export interface DashboardAlerts {
+  lowStockParts: number;
+  delayedServices: number;
+  pendingQuotes: number;
+  maintenanceOverdue: number;
+}
+
+export interface DashboardCharts {
+  serviceOrdersInProgress: ServiceOrderRow[];
+  pendingQuotes: QuoteRow[];
+  revenueSeries: Array<{ day: string; value: number }>;
+}
 
 export interface AdminStats {
   activeUsers: number;
@@ -1058,6 +1086,17 @@ export const api = {
       { timeoutMs: 45_000 },
     ),
 
+  dashboardSummary: (token: string) =>
+    request<DashboardSummary>("/dashboard/summary", { method: "GET" }, token, {
+      timeoutMs: 45_000,
+    }),
+
+  dashboardAlerts: (token: string) =>
+    request<DashboardAlerts>("/dashboard/alerts", { method: "GET" }, token),
+
+  dashboardCharts: (token: string) =>
+    request<DashboardCharts>("/dashboard/charts", { method: "GET" }, token),
+
   dashboardServiceOrdersInProgress: (token: string) =>
     request<ServiceOrderRow[]>("/dashboard/service-orders-in-progress", { method: "GET" }, token),
 
@@ -1070,12 +1109,12 @@ export const api = {
   adminStats: (token: string) =>
     request<AdminStats>("/organizations/admin/stats", { method: "GET" }, token),
 
-  customers: (token: string, search?: string) =>
-    request<CustomerRow[]>(
-      `/customers${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+  customers: (token: string, search?: string, page?: number, limit?: number) =>
+    request<CustomerRow[] | Paginated<CustomerRow>>(
+      `/customers${buildQuery({ search, page, limit })}`,
       { method: "GET" },
       token,
-    ),
+    ).then(parsePaginatedList),
 
   createCustomer: (
     token: string,
@@ -1152,12 +1191,12 @@ export const api = {
   deleteCustomer: (token: string, id: string) =>
     request<{ ok: boolean }>(`/customers/${id}`, { method: "DELETE" }, token),
 
-  vehicles: (token: string, search?: string) =>
-    request<VehicleRow[]>(
-      `/vehicles${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+  vehicles: (token: string, search?: string, page?: number, limit?: number) =>
+    request<VehicleRow[] | Paginated<VehicleRow>>(
+      `/vehicles${buildQuery({ search, page, limit })}`,
       { method: "GET" },
       token,
-    ),
+    ).then(parsePaginatedList),
 
   createVehicle: (
     token: string,
@@ -1222,18 +1261,25 @@ export const api = {
   deleteVehicle: (token: string, id: string) =>
     request<{ ok: boolean }>(`/vehicles/${id}`, { method: "DELETE" }, token),
 
-  serviceOrders: (token: string, search?: string, scheduled?: boolean, status?: string) => {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (scheduled) params.set("scheduled", "true");
-    if (status) params.set("status", status);
-    const q = params.toString();
-    return request<ServiceOrderRow[]>(
-      `/service-orders${q ? `?${q}` : ""}`,
+  serviceOrders: (
+    token: string,
+    search?: string,
+    scheduled?: boolean,
+    status?: string,
+    page?: number,
+    limit?: number,
+  ) =>
+    request<ServiceOrderRow[] | Paginated<ServiceOrderRow>>(
+      `/service-orders${buildQuery({
+        search,
+        scheduled: scheduled ? "true" : undefined,
+        status,
+        page,
+        limit,
+      })}`,
       { method: "GET" },
       token,
-    );
-  },
+    ).then(parsePaginatedList),
 
   serviceOrder: (token: string, id: string) =>
     request<ServiceOrderDetail>(`/service-orders/${id}`, { method: "GET" }, token),
@@ -1366,6 +1412,23 @@ export const api = {
   deleteAttachment: (token: string, id: string) =>
     request<{ ok: boolean }>(`/attachments/${id}`, { method: "DELETE" }, token),
 
+  getAttachmentUrl: (token: string, id: string) =>
+    request<{ url: string }>(`/attachments/${id}/url`, { method: "GET" }, token),
+
+  listServiceOrderAttachments: (
+    token: string,
+    serviceOrderId: string,
+    params?: { page?: number; limit?: number },
+  ) =>
+    request<Paginated<AttachmentRow>>(
+      `/attachments/service-order/${serviceOrderId}${buildQuery({
+        page: params?.page,
+        limit: params?.limit,
+      })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
+
   deleteServiceOrder: (token: string, id: string) =>
     request<{ ok: boolean }>(`/service-orders/${id}`, { method: "DELETE" }, token),
 
@@ -1442,14 +1505,20 @@ export const api = {
     search?: string,
     status?: string,
     includeApproved?: boolean,
-  ) => {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (status) params.set("status", status);
-    if (includeApproved) params.set("includeApproved", "true");
-    const q = params.toString();
-    return request<QuoteRow[]>(`/quotes${q ? `?${q}` : ""}`, { method: "GET" }, token);
-  },
+    page?: number,
+    limit?: number,
+  ) =>
+    request<QuoteRow[] | Paginated<QuoteRow>>(
+      `/quotes${buildQuery({
+        search,
+        status,
+        includeApproved: includeApproved ? "true" : undefined,
+        page,
+        limit,
+      })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
 
   quote: (token: string, id: string) =>
     request<QuoteDetail>(`/quotes/${id}`, { method: "GET" }, token),
@@ -1534,13 +1603,23 @@ export const api = {
       body: JSON.stringify({ comment }),
     }),
 
-  products: (token: string, search?: string, lowStock?: boolean) => {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (lowStock) params.set("lowStock", "true");
-    const q = params.toString();
-    return request<ProductRow[]>(`/products${q ? `?${q}` : ""}`, { method: "GET" }, token);
-  },
+  products: (
+    token: string,
+    search?: string,
+    lowStock?: boolean,
+    page?: number,
+    limit?: number,
+  ) =>
+    request<ProductRow[] | Paginated<ProductRow>>(
+      `/products${buildQuery({
+        search,
+        lowStock: lowStock ? "true" : undefined,
+        page,
+        limit,
+      })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
 
   createProduct: (
     token: string,
@@ -1695,12 +1774,18 @@ export const api = {
   notificationMarkRead: (token: string, id: string) =>
     request<{ count: number }>(`/notifications/${id}/read`, { method: "PATCH" }, token),
 
-  purchaseOrders: (token: string, search?: string, status?: string) =>
-    request<PurchaseOrderRow[]>(
-      `/purchases${buildQuery({ search, status })}`,
+  purchaseOrders: (
+    token: string,
+    search?: string,
+    status?: string,
+    page?: number,
+    limit?: number,
+  ) =>
+    request<PurchaseOrderRow[] | Paginated<PurchaseOrderRow>>(
+      `/purchases${buildQuery({ search, status, page, limit })}`,
       { method: "GET" },
       token,
-    ),
+    ).then(parsePaginatedList),
 
   purchaseOrder: (token: string, id: string) =>
     request<PurchaseOrderDetail>(`/purchases/${id}`, { method: "GET" }, token),
@@ -1766,8 +1851,18 @@ export const api = {
   cancelPurchaseOrder: (token: string, id: string) =>
     request<PurchaseOrderDetail>(`/purchases/${id}/cancel`, { method: "PATCH" }, token),
 
-  suppliers: (token: string, search?: string, status?: string) =>
-    request<SupplierRow[]>(`/suppliers${buildQuery({ search, status })}`, { method: "GET" }, token),
+  suppliers: (
+    token: string,
+    search?: string,
+    status?: string,
+    page?: number,
+    limit?: number,
+  ) =>
+    request<SupplierRow[] | Paginated<SupplierRow>>(
+      `/suppliers${buildQuery({ search, status, page, limit })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
 
   supplier: (token: string, id: string) =>
     request<SupplierDetail>(`/suppliers/${id}`, { method: "GET" }, token),
@@ -1788,12 +1883,12 @@ export const api = {
   deleteSupplier: (token: string, id: string) =>
     request<SupplierDetail>(`/suppliers/${id}`, { method: "DELETE" }, token),
 
-  financialEntries: (token: string, search?: string) =>
-    request<FinancialEntryRow[]>(
-      `/financial${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+  financialEntries: (token: string, search?: string, page?: number, limit?: number) =>
+    request<FinancialEntryRow[] | Paginated<FinancialEntryRow>>(
+      `/financial${buildQuery({ search, page, limit })}`,
       { method: "GET" },
       token,
-    ),
+    ).then(parsePaginatedList),
 
   createFinancialEntry: (
     token: string,
@@ -1873,6 +1968,16 @@ export const api = {
       { method: "GET" },
       token,
     ),
+
+  financialSummary: (token: string, month?: string) => {
+    const q = month ? `?month=${encodeURIComponent(month)}` : "";
+    return request<{
+      revenue: number;
+      expenses: number;
+      profit: number;
+      paymentMethods: Record<string, number>;
+    }>(`/financial/summary${q}`, { method: "GET" }, token);
+  },
 
   cashCurrent: (token: string) =>
     requestNullable<CashSessionRow | null>("/cash/current", { method: "GET" }, token),
@@ -2052,15 +2157,25 @@ export const api = {
 
   employees: (
     token: string,
-    params?: { status?: string; jobTitleId?: string; search?: string },
-  ) => {
-    const q = new URLSearchParams();
-    if (params?.status) q.set("status", params.status);
-    if (params?.jobTitleId) q.set("jobTitleId", params.jobTitleId);
-    if (params?.search) q.set("search", params.search);
-    const suffix = q.toString() ? `?${q}` : "";
-    return request<EmployeeRow[]>(`/team/employees${suffix}`, { method: "GET" }, token);
-  },
+    params?: {
+      status?: string;
+      jobTitleId?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) =>
+    request<EmployeeRow[] | Paginated<EmployeeRow>>(
+      `/team/employees${buildQuery({
+        status: params?.status,
+        jobTitleId: params?.jobTitleId,
+        search: params?.search,
+        page: params?.page,
+        limit: params?.limit,
+      })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
 
   employeeTechnicians: (token: string) =>
     request<EmployeeMini[]>("/team/employees/technicians", { method: "GET" }, token),

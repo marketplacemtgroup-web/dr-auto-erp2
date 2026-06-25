@@ -52,7 +52,10 @@ export default function QuoteDetailPage() {
     !!id,
   );
 
-  const { data: products } = useApiQuery(["products-all"], (t) => api.products(t));
+  const { data: productsRes } = useApiQuery(["products-picker"], (t) =>
+    api.products(t, undefined, false, 1, 50),
+  );
+  const products = productsRes?.data;
   const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
   const org = useOrganizationBranding();
 

@@ -8,9 +8,11 @@ import PayEntryModal from "../../components/financial/PayEntryModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
+import ListPagination from "../../components/modules/ListPagination";
 import { useAuthStore } from "../../stores/authStore";
 import {
   api,
+  LIST_PAGE_SIZE,
   type CashSessionRow,
   type FinancialEntryRow,
   type FinancialProfitSummary,
@@ -67,6 +69,8 @@ export default function FinancialPage() {
   const [profitLoading, setProfitLoading] = useState(false);
   const [tab, setTab] = useState<"entries" | "cash">("entries");
   const [rows, setRows] = useState<FinancialEntryRow[]>([]);
+  const [entriesPage, setEntriesPage] = useState(1);
+  const [entriesTotalPages, setEntriesTotalPages] = useState(0);
   const [cashSession, setCashSession] = useState<CashSessionRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -101,11 +105,14 @@ export default function FinancialPage() {
     }
   }
 
-  async function loadEntries(nextSearch?: string) {
+  async function loadEntries(nextSearch?: string, nextPage = entriesPage) {
     if (!token) return;
     setLoading(true);
     try {
-      setRows(await api.financialEntries(token, nextSearch));
+      const res = await api.financialEntries(token, nextSearch, nextPage, LIST_PAGE_SIZE);
+      setRows(res.data);
+      setEntriesTotalPages(res.pagination.totalPages);
+      setEntriesPage(res.pagination.page);
     } finally {
       setLoading(false);
     }
@@ -135,7 +142,11 @@ export default function FinancialPage() {
     setLoading(true);
     setQueueLoading(true);
     void Promise.all([
-      api.financialEntries(token).then(setRows),
+      api.financialEntries(token, undefined, 1, LIST_PAGE_SIZE).then((res) => {
+        setRows(res.data);
+        setEntriesTotalPages(res.pagination.totalPages);
+        setEntriesPage(1);
+      }),
       api.cashCurrent(token).then(setCashSession).catch(() => setCashSession(null)),
       api.financialReceiveQueue(token).then(setReceiveQueue),
     ]).finally(() => {
@@ -315,7 +326,7 @@ export default function FinancialPage() {
       <ModulePageShell
         title="Financeiro"
         description="Contas, parcelas, caixa e formas de pagamento"
-        onSearch={tab === "entries" ? (q) => { setSearch(q); void loadEntries(q); } : undefined}
+        onSearch={tab === "entries" ? (q) => { setSearch(q); setEntriesPage(1); void loadEntries(q, 1); } : undefined}
       >
         {showMoney ? (
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 mb-4">
@@ -520,6 +531,11 @@ export default function FinancialPage() {
                 </tbody>
               </table>
             </div>
+            <ListPagination
+              page={entriesPage}
+              totalPages={entriesTotalPages}
+              onPageChange={(p) => void loadEntries(search, p)}
+            />
           </>
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

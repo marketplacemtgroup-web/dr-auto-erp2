@@ -126,7 +126,62 @@ export class CommissionEngineService {
     });
     if (!so) return [];
 
-    const created: string[] = [];
+    const employeeIds = new Set<string>();
+    for (const item of so.items) {
+      if (item.itemType === 'SERVICE') {
+        const employeeId = item.executorId ?? so.executionById;
+        if (employeeId) employeeIds.add(employeeId);
+      }
+      if (item.itemType === 'PART' && item.soldById) {
+        employeeIds.add(item.soldById);
+      }
+    }
+    for (const employeeId of [
+      so.finalizedById,
+      so.executionById,
+      so.generalResponsibleId,
+    ]) {
+      if (employeeId) employeeIds.add(employeeId);
+    }
+
+    const employeeIdList = [...employeeIds];
+    const [allRules, existingCommissions] = await Promise.all([
+      employeeIdList.length
+        ? this.prisma.employeeCommissionRule.findMany({
+            where: {
+              employeeId: { in: employeeIdList },
+              isActive: true,
+              trigger,
+            },
+          })
+        : Promise.resolve([]),
+      this.prisma.generatedCommission.findMany({
+        where: {
+          organizationId,
+          serviceOrderId,
+          status: { not: 'CANCELADA' },
+        },
+        select: { employeeId: true, itemId: true, itemType: true },
+      }),
+    ]);
+
+    const rulesByEmployee = new Map<string, RuleRow[]>();
+    for (const rule of allRules) {
+      const list = rulesByEmployee.get(rule.employeeId) ?? [];
+      list.push(rule);
+      rulesByEmployee.set(rule.employeeId, list);
+    }
+
+    const existingKeys = new Set(
+      existingCommissions.map((row) =>
+        row.itemType === 'OS'
+          ? `${row.employeeId}:OS`
+          : `${row.employeeId}:${row.itemId ?? ''}`,
+      ),
+    );
+
+    const toCreate: Prisma.GeneratedCommissionCreateManyInput[] = [];
+    const itemCommissionUpdates: Array<{ id: string; amount: number }> = [];
 
     for (const item of so.items) {
       const discount = Number(item.discount ?? 0);
@@ -144,7 +199,7 @@ export class CommissionEngineService {
         const employeeId = item.executorId ?? so.executionById;
         if (!employeeId) continue;
 
-        const rules = await this.getActiveRules(employeeId, trigger);
+        const rules = rulesByEmployee.get(employeeId) ?? [];
         const applicable = rules.filter(
           (r) =>
             r.baseCalculation === 'MAO_DE_OBRA' ||
@@ -153,47 +208,36 @@ export class CommissionEngineService {
         );
 
         for (const rule of applicable) {
-          const base = rule.considerDiscount ? lineTotal : item.quantity * Number(item.unitPrice);
+          const base = rule.considerDiscount
+            ? lineTotal
+            : item.quantity * Number(item.unitPrice);
           const commissionAmount = this.calculateAmount(rule, base);
           if (commissionAmount <= 0) continue;
 
-          const existing = await this.prisma.generatedCommission.findFirst({
-            where: {
-              organizationId,
-              employeeId,
-              itemId: item.id,
-              status: { not: 'CANCELADA' },
-            },
-          });
-          if (existing) continue;
+          const key = `${employeeId}:${item.id}`;
+          if (existingKeys.has(key)) continue;
+          existingKeys.add(key);
 
-          const row = await this.prisma.generatedCommission.create({
-            data: {
-              organizationId,
-              employeeId,
-              serviceOrderId,
-              itemId: item.id,
-              itemType: 'SERVICO' as CommissionItemType,
-              ruleType: rule.ruleType,
-              description: `Comissão — ${item.description}`,
-              baseAmount: base,
-              percentage: rule.percentage,
-              fixedAmount: rule.fixedAmount,
-              commissionAmount,
-              status: 'PENDENTE' as GeneratedCommissionStatus,
-            },
+          toCreate.push({
+            organizationId,
+            employeeId,
+            serviceOrderId,
+            itemId: item.id,
+            itemType: 'SERVICO' as CommissionItemType,
+            ruleType: rule.ruleType,
+            description: `Comissão — ${item.description}`,
+            baseAmount: base,
+            percentage: rule.percentage,
+            fixedAmount: rule.fixedAmount,
+            commissionAmount,
+            status: 'PENDENTE' as GeneratedCommissionStatus,
           });
-          created.push(row.id);
-
-          await this.prisma.serviceOrderItem.update({
-            where: { id: item.id },
-            data: { expectedCommission: commissionAmount },
-          });
+          itemCommissionUpdates.push({ id: item.id, amount: commissionAmount });
         }
       }
 
       if (item.itemType === 'PART' && item.soldById) {
-        const rules = await this.getActiveRules(item.soldById, trigger);
+        const rules = rulesByEmployee.get(item.soldById) ?? [];
         const applicable = rules.filter(
           (r) =>
             r.baseCalculation === 'PECAS' ||
@@ -202,86 +246,81 @@ export class CommissionEngineService {
         );
 
         for (const rule of applicable) {
-          const base = rule.considerDiscount ? lineTotal : item.quantity * Number(item.unitPrice);
+          const base = rule.considerDiscount
+            ? lineTotal
+            : item.quantity * Number(item.unitPrice);
           const commissionAmount = this.calculateAmount(rule, base);
           if (commissionAmount <= 0) continue;
 
-          const existing = await this.prisma.generatedCommission.findFirst({
-            where: {
-              organizationId,
-              employeeId: item.soldById,
-              itemId: item.id,
-              status: { not: 'CANCELADA' },
-            },
-          });
-          if (existing) continue;
+          const key = `${item.soldById}:${item.id}`;
+          if (existingKeys.has(key)) continue;
+          existingKeys.add(key);
 
-          await this.prisma.generatedCommission.create({
-            data: {
-              organizationId,
-              employeeId: item.soldById,
-              serviceOrderId,
-              itemId: item.id,
-              itemType: 'PECA' as CommissionItemType,
-              ruleType: rule.ruleType,
-              description: `Comissão peça — ${item.description}`,
-              baseAmount: base,
-              percentage: rule.percentage,
-              fixedAmount: rule.fixedAmount,
-              commissionAmount,
-              status: 'PENDENTE',
-            },
+          toCreate.push({
+            organizationId,
+            employeeId: item.soldById,
+            serviceOrderId,
+            itemId: item.id,
+            itemType: 'PECA' as CommissionItemType,
+            ruleType: rule.ruleType,
+            description: `Comissão peça — ${item.description}`,
+            baseAmount: base,
+            percentage: rule.percentage,
+            fixedAmount: rule.fixedAmount,
+            commissionAmount,
+            status: 'PENDENTE',
           });
         }
       }
     }
 
-    // OS-level fixed commission rules
     const osTotal = Number(so.totalAmount);
-    const osEmployees = [
-      so.finalizedById,
-      so.executionById,
-      so.generalResponsibleId,
-    ].filter(Boolean) as string[];
-
-    for (const employeeId of [...new Set(osEmployees)]) {
-      const rules = await this.getActiveRules(employeeId, trigger);
+    for (const employeeId of employeeIdList) {
+      const rules = rulesByEmployee.get(employeeId) ?? [];
       for (const rule of rules.filter(
-        (r) => r.baseCalculation === 'TOTAL_OS' || r.baseCalculation === 'OS_FINALIZADA',
+        (r) =>
+          r.baseCalculation === 'TOTAL_OS' ||
+          r.baseCalculation === 'OS_FINALIZADA',
       )) {
         const commissionAmount = this.calculateAmount(rule, osTotal);
         if (commissionAmount <= 0) continue;
 
-        const existing = await this.prisma.generatedCommission.findFirst({
-          where: {
-            organizationId,
-            employeeId,
-            serviceOrderId,
-            itemType: 'OS',
-            status: { not: 'CANCELADA' },
-          },
-        });
-        if (existing) continue;
+        const key = `${employeeId}:OS`;
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
 
-        await this.prisma.generatedCommission.create({
-          data: {
-            organizationId,
-            employeeId,
-            serviceOrderId,
-            itemType: 'OS',
-            ruleType: rule.ruleType,
-            description: `Comissão OS #${so.number}`,
-            baseAmount: osTotal,
-            percentage: rule.percentage,
-            fixedAmount: rule.fixedAmount,
-            commissionAmount,
-            status: 'PENDENTE',
-          },
+        toCreate.push({
+          organizationId,
+          employeeId,
+          serviceOrderId,
+          itemType: 'OS',
+          ruleType: rule.ruleType,
+          description: `Comissão OS #${so.number}`,
+          baseAmount: osTotal,
+          percentage: rule.percentage,
+          fixedAmount: rule.fixedAmount,
+          commissionAmount,
+          status: 'PENDENTE',
         });
       }
     }
 
-    return created;
+    if (toCreate.length) {
+      await this.prisma.generatedCommission.createMany({ data: toCreate });
+    }
+
+    if (itemCommissionUpdates.length) {
+      await this.prisma.$transaction(
+        itemCommissionUpdates.map((row) =>
+          this.prisma.serviceOrderItem.update({
+            where: { id: row.id },
+            data: { expectedCommission: row.amount },
+          }),
+        ),
+      );
+    }
+
+    return toCreate.map((_, index) => `batch-${index}`);
   }
 
   async cancelForServiceOrder(organizationId: string, serviceOrderId: string) {

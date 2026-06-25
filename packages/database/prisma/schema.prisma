@@ -350,6 +350,7 @@ model Organization {
   customerContacts CustomerContact[]
   auditLogs     AuditLog[]
   dailyRevenues DailyRevenue[]
+  dashboardCaches DashboardCache[]
   suppliers Supplier[]
   purchaseOrders PurchaseOrder[]
   purchaseOrderItems PurchaseOrderItem[]
@@ -1106,6 +1107,25 @@ model DailyRevenue {
 
   @@unique([organizationId, date])
   @@map("daily_revenues")
+}
+
+model DashboardCache {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  date           DateTime @db.Date
+  revenue        Decimal  @default(0) @db.Decimal(14, 2)
+  expenses       Decimal  @default(0) @db.Decimal(14, 2)
+  profit         Decimal  @default(0) @db.Decimal(14, 2)
+  ticketAverage  Decimal  @default(0) @map("ticket_average") @db.Decimal(14, 2)
+  serviceOrders  Int      @default(0) @map("service_orders")
+  closedOrders   Int      @default(0) @map("closed_orders")
+  computedAt     DateTime @default(now()) @map("computed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+  @@index([organizationId, date])
+  @@map("dashboard_cache")
 }
 
 model Supplier {

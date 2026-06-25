@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, Res, UseGuards, BadRequestException } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApproveLinesDto } from '../quotes/dto/approve-lines.dto';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { PortalLoginDto } from './dto/portal-login.dto';
@@ -20,9 +21,51 @@ export class PortalController {
     return this.portalService.loginByAccessToken(token);
   }
 
+  @Get('summary')
+  @UseGuards(PortalJwtGuard)
+  summary(@CurrentUser() user: { organizationId: string; vehicleId: string }) {
+    return this.portalService.getSummary(user);
+  }
+
+  @Get('orders')
+  @UseGuards(PortalJwtGuard)
+  orders(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.portalService.listOrders(user, { page, limit });
+  }
+
+  @Get('attachments')
+  @UseGuards(PortalJwtGuard)
+  attachments(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Query('serviceOrderId') serviceOrderId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.portalService.listAttachmentsMeta(user, { serviceOrderId, page, limit });
+  }
+
+  @Get('attachments/:id/url')
+  @UseGuards(PortalJwtGuard)
+  attachmentUrl(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Param('id') id: string,
+  ) {
+    return this.portalService.getAttachmentUrl(user, id);
+  }
+
   @Get('dashboard')
   @UseGuards(PortalJwtGuard)
-  dashboard(@CurrentUser() user: { organizationId: string; vehicleId: string }) {
+  @Header('Deprecation', 'true')
+  @Header('Link', '</api/portal/summary>; rel="successor-version"')
+  dashboard(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.setHeader('Sunset', 'Sat, 01 Nov 2026 00:00:00 GMT');
     return this.portalService.getDashboard(user);
   }
 
@@ -58,8 +101,13 @@ export class PortalController {
 
   @Get('quotes')
   @UseGuards(PortalJwtGuard)
-  listQuotes(@CurrentUser() user: { organizationId: string; vehicleId: string }) {
-    return this.portalService.listQuotes(user);
+  listQuotes(
+    @CurrentUser() user: { organizationId: string; vehicleId: string },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sync') sync?: string,
+  ) {
+    return this.portalService.listQuotes(user, { page, limit }, { sync: sync !== 'false' });
   }
 
   @Get('quotes/:id')
@@ -132,8 +180,12 @@ export class PortalController {
 
   @Get('vehicles')
   @UseGuards(PortalJwtGuard)
-  vehicles(@CurrentUser() user: { organizationId: string; customerId: string }) {
-    return this.portalService.listVehicles(user);
+  vehicles(
+    @CurrentUser() user: { organizationId: string; customerId: string },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.portalService.listVehicles(user, { page, limit });
   }
 
   @Post('switch-vehicle')

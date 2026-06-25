@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, ImageIcon, MinusCircle, XCircle } from "lucide-react";
 import type { PortalPhoto } from "../../lib/api";
 import {
@@ -26,6 +26,80 @@ function resultBadgeClass(result: ChecklistResult | null) {
   return "bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]";
 }
 
+function LazyPortalMedia({
+  photo,
+  href,
+}: {
+  photo: PortalPhoto;
+  href: string;
+}) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const [visible, setVisible] = useState(false);
+  const isImage = isImageMime(photo.mimeType);
+  const isVideo = isVideoMime(photo.mimeType);
+  const src = visible ? resolveMediaUrl(photo.url) : undefined;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "160px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <a
+      ref={ref}
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="block border-t"
+      style={{ borderColor: "var(--portal-border)" }}
+    >
+      {isVideo ? (
+        visible ? (
+          <video
+            src={src}
+            controls
+            className="w-full max-h-72 object-contain bg-black"
+            preload="metadata"
+          />
+        ) : (
+          <div className="h-48 flex items-center justify-center bg-[#F8FAFC] text-xs portal-text-muted">
+            Carregando mídia…
+          </div>
+        )
+      ) : isImage ? (
+        visible ? (
+          <img
+            src={src}
+            alt={photo.label}
+            loading="lazy"
+            decoding="async"
+            className="w-full max-h-72 object-contain bg-[#F8FAFC]"
+          />
+        ) : (
+          <div className="h-48 flex items-center justify-center bg-[#F8FAFC] text-xs portal-text-muted">
+            Carregando imagem…
+          </div>
+        )
+      ) : (
+        <div className="h-28 flex items-center justify-center text-xs portal-text-muted px-4 text-center">
+          {photo.label}
+        </div>
+      )}
+    </a>
+  );
+}
+
 export default function PortalPhotosTab({ photos }: { photos: PortalPhoto[] }) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -49,9 +123,7 @@ export default function PortalPhotosTab({ photos }: { photos: PortalPhoto[] }) {
 
       <ul className="space-y-3">
         {visiblePhotos.map((photo) => {
-          const src = resolveMediaUrl(photo.url);
-          const isImage = isImageMime(photo.mimeType);
-          const isVideo = isVideoMime(photo.mimeType);
+          const href = resolveMediaUrl(photo.url);
           const resultLabel = photo.result ? CHECKLIST_RESULT_LABELS[photo.result] : null;
 
           return (
@@ -89,33 +161,7 @@ export default function PortalPhotosTab({ photos }: { photos: PortalPhoto[] }) {
                 </div>
               </div>
 
-              <a
-                href={src}
-                target="_blank"
-                rel="noreferrer"
-                className="block border-t"
-                style={{ borderColor: "var(--portal-border)" }}
-              >
-                {isVideo ? (
-                  <video
-                    src={src}
-                    controls
-                    className="w-full max-h-72 object-contain bg-black"
-                    preload="metadata"
-                  />
-                ) : isImage ? (
-                  <img
-                    src={src}
-                    alt={photo.label}
-                    loading="lazy"
-                    className="w-full max-h-72 object-contain bg-[#F8FAFC]"
-                  />
-                ) : (
-                  <div className="h-28 flex items-center justify-center text-xs portal-text-muted px-4 text-center">
-                    {photo.label}
-                  </div>
-                )}
-              </a>
+              <LazyPortalMedia photo={photo} href={href} />
             </li>
           );
         })}

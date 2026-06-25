@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -31,31 +33,81 @@ export class ProductsService {
     });
   }
 
-  async list(organizationId: string, search?: string, lowStock?: boolean) {
-    const rows = await this.prisma.product.findMany({
-      where: {
-        organizationId,
-        ...notDeleted,
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { sku: { contains: search, mode: 'insensitive' } },
-                { location: { contains: search, mode: 'insensitive' } },
-                { category: { contains: search, mode: 'insensitive' } },
-                { brand: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { name: 'asc' },
-    });
+  private productSearchSql(search: string) {
+    const term = `%${search}%`;
+    return Prisma.sql`AND (
+      name ILIKE ${term}
+      OR sku ILIKE ${term}
+      OR location ILIKE ${term}
+      OR category ILIKE ${term}
+      OR brand ILIKE ${term}
+    )`;
+  }
+
+  async list(
+    organizationId: string,
+    search?: string,
+    lowStock?: boolean,
+    query: ListQueryInput = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    const searchFilter = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { sku: { contains: search, mode: 'insensitive' as const } },
+            { location: { contains: search, mode: 'insensitive' as const } },
+            { category: { contains: search, mode: 'insensitive' as const } },
+            { brand: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+
     if (lowStock) {
-      return rows.filter(
-        (p) => this.stockMovement.availableStock(p.stock, p.reservedStock) <= p.minStock,
-      );
+      const searchSql = search ? this.productSearchSql(search) : Prisma.empty;
+      const [countResult, idRows] = await Promise.all([
+        this.prisma.$queryRaw<[{ count: number }]>`
+          SELECT COUNT(*)::int AS count FROM products
+          WHERE organization_id = ${organizationId}
+            AND deleted_at IS NULL
+            AND (stock - reserved_stock) <= min_stock
+            ${searchSql}
+        `,
+        this.prisma.$queryRaw<[{ id: string }]>`
+          SELECT id FROM products
+          WHERE organization_id = ${organizationId}
+            AND deleted_at IS NULL
+            AND (stock - reserved_stock) <= min_stock
+            ${searchSql}
+          ORDER BY name ASC
+          LIMIT ${limit} OFFSET ${skip}
+        `,
+      ]);
+      const ids = idRows.map((r) => r.id);
+      const rows = ids.length
+        ? await this.prisma.product.findMany({
+            where: { id: { in: ids } },
+            orderBy: { name: 'asc' },
+          })
+        : [];
+      return paginatedResponse(rows, countResult[0]?.count ?? 0, page, limit);
     }
-    return rows;
+
+    const where: Prisma.ProductWhereInput = {
+      organizationId,
+      ...notDeleted,
+      ...searchFilter,
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
   }
 
   async findOne(organizationId: string, id: string) {

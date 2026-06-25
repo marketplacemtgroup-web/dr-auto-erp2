@@ -24,6 +24,8 @@ export class FinancialController {
     @Query('status') status?: string,
     @Query('origin') origin?: string,
     @Query('supplierId') supplierId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.financialService.list(
       user.organizationId,
@@ -32,7 +34,17 @@ export class FinancialController {
       status,
       origin,
       supplierId,
+      { page, limit },
     );
+  }
+
+  @Get('summary')
+  @RequirePermissions('financial.manage', 'dashboard.view')
+  summary(
+    @CurrentUser() user: { organizationId: string },
+    @Query('month') month?: string,
+  ) {
+    return this.financialService.getSummary(user.organizationId, month);
   }
 
   @Get('cash-flow')

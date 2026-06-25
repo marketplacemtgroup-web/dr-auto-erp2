@@ -54,9 +54,10 @@ export default function SolicitacoesPage() {
     description: "",
   });
 
-  const { data: employees } = useApiQuery(["employees-active"], (t) =>
-    api.employees(t, { status: "ACTIVE" }),
+  const { data: employeesRes } = useApiQuery(["employees-active"], (t) =>
+    api.employees(t, { status: "ACTIVE", limit: 50 }),
   );
+  const employees = employeesRes?.data;
 
   const { data, isLoading, error } = useApiQuery(
     ["solicitacoes", periodStart, periodEnd, employeeFilter, typeFilter, statusFilter],

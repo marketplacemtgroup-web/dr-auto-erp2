@@ -22,6 +22,7 @@ import {
 } from './dto/prepare-attachment-upload.dto';
 import { AttachmentsService } from './attachments.service';
 import { SupabaseStorageService } from '../storage/supabase-storage.service';
+import type { ListQueryInput } from '../common/pagination';
 
 @Controller('attachments')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -46,11 +47,22 @@ export class AttachmentsController {
   list(
     @CurrentUser() user: { organizationId: string },
     @Param('serviceOrderId') serviceOrderId: string,
+    @Query() query: ListQueryInput,
   ) {
     return this.attachmentsService.listForServiceOrder(
       user.organizationId,
       serviceOrderId,
+      query,
     );
+  }
+
+  @Get(':id/url')
+  @RequirePermissions('service_orders.manage', 'dashboard.view', 'vehicles.manage')
+  signedUrl(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+  ) {
+    return this.attachmentsService.getSignedUrlForClient(user.organizationId, id);
   }
 
   @Get(':id/file')

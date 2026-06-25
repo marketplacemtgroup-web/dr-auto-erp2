@@ -20,6 +20,7 @@ import {
   checklistMatchesTemplate,
 } from '../service-orders/checklist-template';
 import { notDeleted } from '../common/soft-delete';
+import { paginatedResponse, parseListQuery, type ListQueryInput } from '../common/pagination';
 import { PortalCreateAppointmentDto } from './dto/portal-create-appointment.dto';
 
 function normalizeDigits(value: string) {
@@ -382,31 +383,14 @@ export class PortalService {
     };
   }
 
-  async getDashboard(ctx: { organizationId: string; vehicleId: string }) {
+  async getSummary(ctx: { organizationId: string; vehicleId: string }) {
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: ctx.vehicleId, organizationId: ctx.organizationId, ...notDeleted },
       include: { customer: true, organization: true },
     });
     if (!vehicle) throw new UnauthorizedException();
 
-    const [quotes, serviceOrders, mainBranch, upcomingAppointments, maintenanceReminders] =
-      await Promise.all([
-      this.listQuotes(ctx),
-      this.prisma.serviceOrder.findMany({
-        where: { organizationId: ctx.organizationId, vehicleId: ctx.vehicleId, ...notDeleted },
-        orderBy: { updatedAt: 'desc' },
-        take: 20,
-        select: {
-          id: true,
-          number: true,
-          status: true,
-          totalAmount: true,
-          complaint: true,
-          estimatedAt: true,
-          updatedAt: true,
-          createdAt: true,
-        },
-      }),
+    const [mainBranch, upcomingAppointments, maintenanceReminders] = await Promise.all([
       this.prisma.branch.findFirst({
         where: { organizationId: ctx.organizationId, isMain: true },
         select: { address: true },
@@ -435,18 +419,6 @@ export class PortalService {
       }),
     ]);
 
-    const latestId = serviceOrders[0]?.id;
-    const attachments = latestId
-      ? await this.prisma.attachment.findMany({
-          where: {
-            organizationId: ctx.organizationId,
-            serviceOrderId: latestId,
-            visibleToCustomer: true,
-          },
-          orderBy: { createdAt: 'desc' },
-        })
-      : [];
-
     return {
       organization: {
         name: vehicle.organization.name,
@@ -473,12 +445,6 @@ export class PortalService {
         currentKm: vehicle.currentKm,
         vehicleKind: vehicle.vehicleKind,
       },
-      serviceOrders: serviceOrders.map((so) => ({
-        ...so,
-        totalAmount: Number(so.totalAmount),
-      })),
-      quotes,
-      attachments: await this.mapPortalAttachments(attachments),
       upcomingAppointment: upcomingAppointments[0]
         ? {
             id: upcomingAppointments[0].id,
@@ -495,6 +461,116 @@ export class PortalService {
         serviceOrderNumber: r.serviceOrder.number,
         serviceOrderId: r.serviceOrder.id,
       })),
+    };
+  }
+
+  async listOrders(
+    ctx: { organizationId: string; vehicleId: string },
+    query: ListQueryInput = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where = {
+      organizationId: ctx.organizationId,
+      vehicleId: ctx.vehicleId,
+      ...notDeleted,
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.serviceOrder.count({ where }),
+      this.prisma.serviceOrder.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          totalAmount: true,
+          complaint: true,
+          estimatedAt: true,
+          updatedAt: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+    return paginatedResponse(
+      rows.map((so) => ({ ...so, totalAmount: Number(so.totalAmount) })),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  async listAttachmentsMeta(
+    ctx: { organizationId: string; vehicleId: string },
+    query: ListQueryInput & { serviceOrderId?: string } = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    let serviceOrderId = query.serviceOrderId;
+    if (!serviceOrderId) {
+      const latest = await this.prisma.serviceOrder.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          vehicleId: ctx.vehicleId,
+          ...notDeleted,
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+      serviceOrderId = latest?.id;
+    }
+    if (!serviceOrderId) {
+      return paginatedResponse([], 0, page, limit);
+    }
+    const where = {
+      organizationId: ctx.organizationId,
+      serviceOrderId,
+      visibleToCustomer: true,
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.attachment.count({ where }),
+      this.prisma.attachment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          fileName: true,
+          mimeType: true,
+          category: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+    return paginatedResponse(rows, total, page, limit);
+  }
+
+  async getAttachmentUrl(
+    ctx: { organizationId: string; vehicleId: string },
+    attachmentId: string,
+  ) {
+    const row = await this.prisma.attachment.findFirst({
+      where: {
+        id: attachmentId,
+        organizationId: ctx.organizationId,
+        visibleToCustomer: true,
+        serviceOrder: { vehicleId: ctx.vehicleId },
+      },
+    });
+    if (!row) throw new NotFoundException('Anexo não encontrado');
+    const url = await this.attachments.resolvePortalUrl(row);
+    return { id: row.id, url, fileName: row.fileName, mimeType: row.mimeType };
+  }
+
+  /** @deprecated Use GET /portal/summary + endpoints split. Mantém shape legado com arrays vazios. */
+  async getDashboard(ctx: { organizationId: string; vehicleId: string }) {
+    const summary = await this.getSummary(ctx);
+    return {
+      ...summary,
+      serviceOrders: [],
+      quotes: [],
+      attachments: [],
     };
   }
 
@@ -860,28 +936,40 @@ export class PortalService {
     };
   }
 
-  async listQuotes(ctx: { organizationId: string; vehicleId: string }) {
-    await this.maybeSyncQuotesForVehicle(ctx.organizationId, ctx.vehicleId);
+  async listQuotes(
+    ctx: { organizationId: string; vehicleId: string },
+    query: ListQueryInput = {},
+    options: { sync?: boolean } = {},
+  ) {
+    if (options.sync !== false) {
+      await this.maybeSyncQuotesForVehicle(ctx.organizationId, ctx.vehicleId);
+    }
 
-    const rows = await this.prisma.quote.findMany({
-      where: {
-        organizationId: ctx.organizationId,
-        serviceOrder: { vehicleId: ctx.vehicleId },
-        status: { not: 'DRAFT' },
-        deletedAt: null,
-      },
-      include: {
-        lines: { orderBy: { sortOrder: 'asc' } },
-        serviceOrder: {
-          include: {
-            items: { orderBy: { createdAt: 'asc' } },
+    const { page, limit, skip } = parseListQuery(query);
+    const where = {
+      organizationId: ctx.organizationId,
+      serviceOrder: { vehicleId: ctx.vehicleId },
+      status: { not: 'DRAFT' as const },
+      deletedAt: null,
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.quote.count({ where }),
+      this.prisma.quote.findMany({
+        where,
+        include: {
+          lines: { orderBy: { sortOrder: 'asc' } },
+          serviceOrder: {
+            include: {
+              items: { orderBy: { createdAt: 'asc' } },
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return rows.map((q) => this.mapQuoteResponse(q));
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(rows.map((q) => this.mapQuoteResponse(q)), total, page, limit);
   }
 
   async getQuoteForPortal(
@@ -1439,25 +1527,40 @@ export class PortalService {
     return { ok: true };
   }
 
-  async listVehicles(ctx: { organizationId: string; customerId: string }) {
-    const vehicles = await this.prisma.vehicle.findMany({
-      where: {
-        organizationId: ctx.organizationId,
-        customerId: ctx.customerId,
-        deletedAt: null,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-    return vehicles.map((v) => ({
-      id: v.id,
-      plate: v.plate,
-      brand: v.brand,
-      model: v.model,
-      year: v.year,
-      color: v.color,
-      currentKm: v.currentKm,
-      vehicleKind: v.vehicleKind,
-    }));
+  async listVehicles(
+    ctx: { organizationId: string; customerId: string },
+    query: ListQueryInput = {},
+  ) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where = {
+      organizationId: ctx.organizationId,
+      customerId: ctx.customerId,
+      deletedAt: null,
+    };
+    const [total, vehicles] = await Promise.all([
+      this.prisma.vehicle.count({ where }),
+      this.prisma.vehicle.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResponse(
+      vehicles.map((v) => ({
+        id: v.id,
+        plate: v.plate,
+        brand: v.brand,
+        model: v.model,
+        year: v.year,
+        color: v.color,
+        currentKm: v.currentKm,
+        vehicleKind: v.vehicleKind,
+      })),
+      total,
+      page,
+      limit,
+    );
   }
 
   async switchVehicle(ctx: {

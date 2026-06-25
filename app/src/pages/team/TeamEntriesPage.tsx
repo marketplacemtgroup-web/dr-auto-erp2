@@ -30,7 +30,10 @@ export default function TeamEntriesPage() {
     entryDate: new Date().toISOString().slice(0, 10),
   });
 
-  const { data: employees } = useApiQuery(["employees-all"], (t) => api.employees(t));
+  const { data: employeesRes } = useApiQuery(["employees-picker"], (t) =>
+    api.employees(t, { limit: 50 }),
+  );
+  const employees = employeesRes?.data;
   const { data, isLoading, error } = useApiQuery(["team-entries"], (t) => api.teamEntries(t));
 
   const save = useMutation({

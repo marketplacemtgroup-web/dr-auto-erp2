@@ -14,12 +14,14 @@ interface Alert {
 interface AlertsPanelProps {
   lowStockParts?: number;
   delayedServices?: number;
+  pendingQuotes?: number;
   maintenanceOverdue?: number;
 }
 
 export default function AlertsPanel({
   lowStockParts = 0,
   delayedServices = 0,
+  pendingQuotes = 0,
   maintenanceOverdue = 0,
 }: AlertsPanelProps) {
   const alerts: Alert[] = [
@@ -43,7 +45,10 @@ export default function AlertsPanel({
       icon: <FileText size={16} strokeWidth={1.5} />,
       iconBg: "#FEF9C3",
       iconColor: "#CA8A04",
-      message: "3 orcamentos aguardando aprovacao",
+      message:
+        pendingQuotes > 0
+          ? `${pendingQuotes} orcamento${pendingQuotes > 1 ? "s" : ""} aguardando aprovacao`
+          : "Nenhum orcamento aguardando aprovacao",
       link: "Ver orcamentos",
       to: routes.orcamentos,
     },
