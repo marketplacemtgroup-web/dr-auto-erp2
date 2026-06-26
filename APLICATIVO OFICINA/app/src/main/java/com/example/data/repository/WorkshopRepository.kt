@@ -24,6 +24,39 @@ import java.io.File
 object WorkshopRepository {
     private val api get() = HttpClient.api
 
+    private suspend fun <T> fetchAllPages(
+        fetch: suspend (page: Int, limit: Int) -> Pair<List<T>, PaginationMetaDto?>,
+    ): List<T> {
+        val limit = WorkshopApi.LIST_LIMIT
+        var page = 1
+        val all = mutableListOf<T>()
+        while (true) {
+            val (rows, pagination) = fetch(page, limit)
+            all.addAll(rows)
+            if (pagination == null || page >= pagination.totalPages) break
+            page++
+        }
+        return all
+    }
+
+    private suspend fun listAllServiceOrders(search: String? = null): List<ServiceOrderRowDto> =
+        fetchAllPages { page, limit ->
+            val response = api.listServiceOrders(search = search, page = page, limit = limit)
+            response.data to response.pagination
+        }
+
+    private suspend fun listAllProducts(search: String? = null): List<ProductRowDto> =
+        fetchAllPages { page, limit ->
+            val response = api.listProducts(search = search, page = page, limit = limit)
+            response.data to response.pagination
+        }
+
+    private suspend fun listAllVehicles(search: String? = null): List<VehicleRowDto> =
+        fetchAllPages { page, limit ->
+            val response = api.listVehicles(search = search, page = page, limit = limit)
+            response.data to response.pagination
+        }
+
     private val _isOfflineMode = MutableStateFlow(false)
     val isOfflineMode: StateFlow<Boolean> = _isOfflineMode
 
@@ -101,7 +134,7 @@ object WorkshopRepository {
     }
 
     private suspend fun refreshOrdersCache(search: String? = null) {
-        val rows = api.listServiceOrders(search = search?.ifBlank { null })
+        val rows = listAllServiceOrders(search = search?.ifBlank { null })
         cachedOrders = rows.map { ApiMappers.toOrder(it) }
     }
 
@@ -377,7 +410,7 @@ object WorkshopRepository {
             }.onFailure { errors.add("Não foi possível carregar mecânicos: ${it.message ?: "erro desconhecido"}") }
 
             runCatching {
-                cachedProducts = api.listProducts().map { ApiMappers.toProduct(it) }
+                cachedProducts = listAllProducts().map { ApiMappers.toProduct(it) }
                 _productsFlow.value = cachedProducts
             }.onFailure { errors.add("Não foi possível carregar peças: ${it.message ?: "erro desconhecido"}") }
 
@@ -404,7 +437,7 @@ object WorkshopRepository {
             }
         },
     ) {
-        val rows = api.listProducts(search = query.trim().ifBlank { null })
+        val rows = listAllProducts(search = query.trim().ifBlank { null })
         val results = rows.map { ApiMappers.toProduct(it) }
         if (query.isBlank()) {
             cachedProducts = results
@@ -447,7 +480,7 @@ object WorkshopRepository {
     suspend fun ensureProducts(force: Boolean = false): String? {
         if (!force && cachedProducts.isNotEmpty()) return null
         return runCatching {
-            cachedProducts = api.listProducts().map { ApiMappers.toProduct(it) }
+            cachedProducts = listAllProducts().map { ApiMappers.toProduct(it) }
             _productsFlow.value = cachedProducts
         }.exceptionOrNull()?.message?.let { "Não foi possível carregar peças: $it" }
     }
@@ -554,7 +587,7 @@ object WorkshopRepository {
     }
 
     suspend fun searchVehicles(query: String): List<VehicleListItem> = apiCall {
-        api.listVehicles(search = query.ifBlank { null })
+        listAllVehicles(search = query.ifBlank { null })
             .map { ApiMappers.toVehicleListItem(it) }
     }
 

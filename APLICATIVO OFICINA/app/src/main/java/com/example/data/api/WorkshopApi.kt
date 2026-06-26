@@ -12,6 +12,10 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface WorkshopApi {
+    companion object {
+        const val LIST_LIMIT = 200
+    }
+
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): AuthSessionDto
 
@@ -28,7 +32,9 @@ interface WorkshopApi {
     suspend fun listServiceOrders(
         @Query("search") search: String? = null,
         @Query("status") status: String? = null,
-    ): List<ServiceOrderRowDto>
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): ServiceOrderListResponse
 
     @GET("service-orders/{id}")
     suspend fun getServiceOrder(@Path("id") id: String): ServiceOrderDetailDto
@@ -61,7 +67,11 @@ interface WorkshopApi {
     suspend fun createPortalLink(@Path("id") id: String): PortalLinkResponseDto
 
     @GET("attachments/service-order/{serviceOrderId}")
-    suspend fun listAttachments(@Path("serviceOrderId") serviceOrderId: String): List<AttachmentDto>
+    suspend fun listAttachments(
+        @Path("serviceOrderId") serviceOrderId: String,
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): AttachmentListResponse
 
     @POST("attachments/service-order/{serviceOrderId}/prepare-upload")
     suspend fun prepareUpload(
@@ -89,7 +99,9 @@ interface WorkshopApi {
     suspend fun listQuotes(
         @Query("search") search: String? = null,
         @Query("status") status: String? = null,
-    ): List<QuoteDetailDto>
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): QuoteListResponse
 
     @GET("quotes/{id}")
     suspend fun getQuote(@Path("id") id: String): QuoteDetailDto
@@ -110,7 +122,11 @@ interface WorkshopApi {
     suspend fun listTechnicians(): List<EmployeeRowDto>
 
     @GET("products")
-    suspend fun listProducts(@Query("search") search: String? = null): List<ProductRowDto>
+    suspend fun listProducts(
+        @Query("search") search: String? = null,
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): ProductListResponse
 
     @GET("service-catalog")
     suspend fun listServiceCatalog(@Query("search") search: String? = null): List<ServiceCatalogRowDto>
@@ -119,7 +135,11 @@ interface WorkshopApi {
     suspend fun createServiceCatalog(@Body body: CreateServiceCatalogRequest): ServiceCatalogRowDto
 
     @GET("vehicles")
-    suspend fun listVehicles(@Query("search") search: String? = null): List<VehicleRowDto>
+    suspend fun listVehicles(
+        @Query("search") search: String? = null,
+        @Query("page") page: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): VehicleListResponse
 
     @POST("vehicles")
     suspend fun createVehicle(@Body body: CreateVehicleRequest): VehicleRowDto

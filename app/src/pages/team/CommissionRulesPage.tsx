@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ModulePageShell from "../../components/modules/ModulePageShell";
+import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DataTable from "../../components/modules/DataTable";
 import { api, type CommissionRuleRow } from "../../lib/api";
@@ -42,7 +43,6 @@ export default function CommissionRulesPage() {
     api.employees(t, { limit: 50 }),
   );
   const employees = employeesRes?.data;
-  const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
   const { data, isLoading, error } = useApiQuery(["commission-rules"], (t) =>
     api.commissionRules(t),
   );
@@ -203,18 +203,11 @@ export default function CommissionRulesPage() {
         )}
         {form.baseCalculation === "SERVICO_ESPECIFICO" && (
           <FormField label="Serviço específico">
-            <select
-              className={selectClass}
+            <ServiceCatalogSearchSelect
               value={form.catalogItemId}
-              onChange={(e) => setForm((f) => ({ ...f, catalogItemId: e.target.value }))}
-            >
-              <option value="">Qualquer</option>
-              {(catalog ?? []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              onChange={(catalogItemId) => setForm((f) => ({ ...f, catalogItemId }))}
+              manualLabel="Qualquer serviço (sem filtro específico)"
+            />
           </FormField>
         )}
         <FormField label="Quando gerar">

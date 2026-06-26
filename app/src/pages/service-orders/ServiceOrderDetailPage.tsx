@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, Upload, X } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
+import ProductSearchSelect from "../../components/inventory/ProductSearchSelect";
+import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DateTimeField from "../../components/modules/DateTimeField";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
@@ -295,11 +297,6 @@ export default function ServiceOrderDetailPage() {
     void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
   };
 
-  const { data: productsRes } = useApiQuery(["products-picker"], (t) =>
-    api.products(t, undefined, false, 1, 50),
-  );
-  const products = productsRes?.data;
-  const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
   const { data: activeEmployeesRes } = useApiQuery(["employees-active"], (t) =>
     api.employees(t, { status: "ACTIVE", limit: 50 }),
   );
@@ -1525,54 +1522,32 @@ export default function ServiceOrderDetailPage() {
         )}
         {!editingItem && itemForm.itemType === "SERVICE" && (
           <FormField label="Servico do catalogo">
-            <select
-              className={selectClass}
+            <ServiceCatalogSearchSelect
               value={itemForm.catalogItemId}
-              onChange={(e) => {
-                const s = catalog?.find((x) => x.id === e.target.value);
+              onChange={(catalogItemId, item) =>
                 setItemForm((f) => ({
                   ...f,
-                  catalogItemId: e.target.value,
-                  description: s ? s.name : f.description,
-                  unitPrice: s ? String(s.defaultPrice) : f.unitPrice,
-                }));
-              }}
-            >
-              <option value="">Manual / outro</option>
-              {catalog?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.category ? ` (${s.category})` : ""}
-                </option>
-              ))}
-            </select>
+                  catalogItemId,
+                  description: item ? item.name : f.description,
+                  unitPrice: item ? String(item.defaultPrice) : f.unitPrice,
+                }))
+              }
+            />
           </FormField>
         )}
         {!editingItem && itemForm.itemType === "PART" && (
           <FormField label="Produto (estoque)">
-            <select
-              className={selectClass}
+            <ProductSearchSelect
               value={itemForm.productId}
-              onChange={(e) => {
-                const p = products?.find((x) => x.id === e.target.value);
+              onChange={(productId, product) =>
                 setItemForm((f) => ({
                   ...f,
-                  productId: e.target.value,
-                  description: p ? p.name : f.description,
-                  unitPrice: p ? String(p.salePrice) : f.unitPrice,
-                }));
-              }}
-            >
-              <option value="">Manual</option>
-              {products?.map((p) => {
-                const avail = p.stock - (p.reservedStock ?? 0);
-                return (
-                  <option key={p.id} value={p.id}>
-                    {p.name} (disp.: {avail})
-                  </option>
-                );
-              })}
-            </select>
+                  productId,
+                  description: product ? product.name : f.description,
+                  unitPrice: product ? String(product.salePrice) : f.unitPrice,
+                }))
+              }
+            />
           </FormField>
         )}
         <FormField label="Descricao *">

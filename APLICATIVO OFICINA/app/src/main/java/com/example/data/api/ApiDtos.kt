@@ -39,6 +39,44 @@ data class DashboardKpisDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class PaginationMetaDto(
+    val page: Int,
+    val limit: Int,
+    val total: Int,
+    val totalPages: Int,
+)
+
+@JsonClass(generateAdapter = true)
+data class ServiceOrderListResponse(
+    val data: List<ServiceOrderRowDto>,
+    val pagination: PaginationMetaDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ProductListResponse(
+    val data: List<ProductRowDto>,
+    val pagination: PaginationMetaDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class VehicleListResponse(
+    val data: List<VehicleRowDto>,
+    val pagination: PaginationMetaDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class QuoteListResponse(
+    val data: List<QuoteDetailDto>,
+    val pagination: PaginationMetaDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class AttachmentListResponse(
+    val data: List<AttachmentDto>,
+    val pagination: PaginationMetaDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class CustomerMiniDto(
     val id: String? = null,
     val name: String,

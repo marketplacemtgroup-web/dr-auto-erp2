@@ -2052,6 +2052,12 @@ export const api = {
       token,
     ),
 
+  serviceCatalogItem: (token: string, id: string) =>
+    request<ServiceCatalogRow>(`/service-catalog/${id}`, { method: "GET" }, token),
+
+  product: (token: string, id: string) =>
+    request<ProductRow>(`/products/${id}`, { method: "GET" }, token),
+
   createServiceCatalog: (
     token: string,
     data: {

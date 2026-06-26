@@ -6,6 +6,8 @@ import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import PrintPortal from "../../components/print/PrintPortal";
 import QuotePrintSheet, { buildQuotePrintData } from "../../components/quotes/QuotePrintSheet";
 import StatusBadge from "../../components/StatusBadge";
+import ProductSearchSelect from "../../components/inventory/ProductSearchSelect";
+import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/share/ShareLinkDialog";
 import { api, type ServiceOrderItemRow } from "../../lib/api";
@@ -52,11 +54,6 @@ export default function QuoteDetailPage() {
     !!id,
   );
 
-  const { data: productsRes } = useApiQuery(["products-picker"], (t) =>
-    api.products(t, undefined, false, 1, 50),
-  );
-  const products = productsRes?.data;
-  const { data: catalog } = useApiQuery(["service-catalog-all"], (t) => api.serviceCatalog(t));
   const org = useOrganizationBranding();
 
   const serviceOrderId = quote?.serviceOrder.id ?? "";
@@ -568,54 +565,32 @@ export default function QuoteDetailPage() {
         )}
         {!editingItem && itemForm.itemType === "SERVICE" && (
           <FormField label="Serviço do catálogo">
-            <select
-              className={selectClass}
+            <ServiceCatalogSearchSelect
               value={itemForm.catalogItemId}
-              onChange={(e) => {
-                const s = catalog?.find((x) => x.id === e.target.value);
+              onChange={(catalogItemId, item) =>
                 setItemForm((f) => ({
                   ...f,
-                  catalogItemId: e.target.value,
-                  description: s ? s.name : f.description,
-                  unitPrice: s ? String(s.defaultPrice) : f.unitPrice,
-                }));
-              }}
-            >
-              <option value="">Manual / outro</option>
-              {catalog?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.category ? ` (${s.category})` : ""}
-                </option>
-              ))}
-            </select>
+                  catalogItemId,
+                  description: item ? item.name : f.description,
+                  unitPrice: item ? String(item.defaultPrice) : f.unitPrice,
+                }))
+              }
+            />
           </FormField>
         )}
         {!editingItem && itemForm.itemType === "PART" && (
           <FormField label="Produto (estoque)">
-            <select
-              className={selectClass}
+            <ProductSearchSelect
               value={itemForm.productId}
-              onChange={(e) => {
-                const p = products?.find((x) => x.id === e.target.value);
+              onChange={(productId, product) =>
                 setItemForm((f) => ({
                   ...f,
-                  productId: e.target.value,
-                  description: p ? p.name : f.description,
-                  unitPrice: p ? String(p.salePrice) : f.unitPrice,
-                }));
-              }}
-            >
-              <option value="">Manual</option>
-              {products?.map((p) => {
-                const avail = p.stock - (p.reservedStock ?? 0);
-                return (
-                  <option key={p.id} value={p.id}>
-                    {p.name} (disp.: {avail})
-                  </option>
-                );
-              })}
-            </select>
+                  productId,
+                  description: product ? product.name : f.description,
+                  unitPrice: product ? String(product.salePrice) : f.unitPrice,
+                }))
+              }
+            />
           </FormField>
         )}
         <FormField label="Descrição *">
