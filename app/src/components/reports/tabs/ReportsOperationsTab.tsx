@@ -5,6 +5,13 @@ import ReportHorizontalBars from "../charts/ReportHorizontalBars";
 import ReportRankList from "../ReportRankList";
 import type { ReportTabProps } from "./reportTabTypes";
 
+function formatReportDate(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("pt-BR");
+}
+
 export default function ReportsOperationsTab({
   report,
   period,
@@ -14,8 +21,54 @@ export default function ReportsOperationsTab({
   statusChart,
   filteredDelayed,
 }: ReportTabProps) {
+  const detailedOrders = report.operations.serviceOrdersDetailed ?? [];
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <ReportSection
+        title="Ordens de serviço (detalhado)"
+        subtitle="Nº da OS, cliente, entrada, entrega e valor"
+        className="lg:col-span-2"
+        period={period}
+        token={token}
+        exportType="service-orders-detailed"
+        exportFile="ordens-servico-detalhado.csv"
+      >
+        {detailedOrders.length === 0 ? (
+          <p className="text-[13px] text-[#94A3B8] py-6 text-center">
+            Nenhuma OS entregue no período.
+          </p>
+        ) : (
+          <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[#F8FAFC] sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold text-[#64748B]">OS</th>
+                  <th className="text-left px-3 py-2 font-semibold text-[#64748B]">Cliente</th>
+                  <th className="text-left px-3 py-2 font-semibold text-[#64748B]">Placa</th>
+                  <th className="text-left px-3 py-2 font-semibold text-[#64748B]">Entrada</th>
+                  <th className="text-left px-3 py-2 font-semibold text-[#64748B]">Entregue</th>
+                  <th className="text-right px-3 py-2 font-semibold text-[#64748B]">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detailedOrders.map((o) => (
+                  <tr key={o.id} className="border-t border-[#E2E8F0]">
+                    <td className="px-3 py-2 font-medium text-[#0F3D4C]">#{o.number}</td>
+                    <td className="px-3 py-2 text-[#1E293B]">{o.customerName}</td>
+                    <td className="px-3 py-2 text-[#64748B]">{o.plate}</td>
+                    <td className="px-3 py-2 text-[#64748B]">{formatReportDate(o.enteredAt)}</td>
+                    <td className="px-3 py-2 text-[#64748B]">{formatReportDate(o.closedAt)}</td>
+                    <td className="px-3 py-2 text-right font-medium text-[#16A34A]">
+                      {formatMoney(o.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </ReportSection>
       <ReportSection title="OS por status" subtitle="Clique para filtrar atrasadas" period={period} token={token}>
         <div className="h-52">
           <ResponsiveContainer width="100%" height="100%">

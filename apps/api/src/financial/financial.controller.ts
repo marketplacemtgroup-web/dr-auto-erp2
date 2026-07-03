@@ -9,6 +9,10 @@ import {
   UpdateFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
 import { DeleteFinancialEntryDto } from './dto/delete-financial-entry.dto';
+import {
+  CreateFixedExpenseDto,
+  UpdateFixedExpenseDto,
+} from './dto/fixed-expense.dto';
 import { FinancialService } from './financial.service';
 
 @Controller('financial')
@@ -71,6 +75,40 @@ export class FinancialController {
   @RequirePermissions('financial.manage')
   receiveQueue(@CurrentUser() user: { organizationId: string }) {
     return this.financialService.receiveQueue(user.organizationId);
+  }
+
+  @Get('fixed-expenses')
+  @RequirePermissions('financial.manage', 'dashboard.view')
+  listFixedExpenses(@CurrentUser() user: { organizationId: string }) {
+    return this.financialService.listFixedExpenses(user.organizationId);
+  }
+
+  @Post('fixed-expenses')
+  @RequirePermissions('financial.manage')
+  createFixedExpense(
+    @CurrentUser() user: { organizationId: string },
+    @Body() dto: CreateFixedExpenseDto,
+  ) {
+    return this.financialService.createFixedExpense(user.organizationId, dto);
+  }
+
+  @Patch('fixed-expenses/:id')
+  @RequirePermissions('financial.manage')
+  updateFixedExpense(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateFixedExpenseDto,
+  ) {
+    return this.financialService.updateFixedExpense(user.organizationId, id, dto);
+  }
+
+  @Delete('fixed-expenses/:id')
+  @RequirePermissions('financial.manage')
+  deleteFixedExpense(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+  ) {
+    return this.financialService.deleteFixedExpense(user.organizationId, id);
   }
 
   @Post()

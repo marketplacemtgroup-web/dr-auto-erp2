@@ -381,6 +381,13 @@ export class ServiceOrdersService {
       where: { id },
       data: {
         ...(dto.status !== undefined ? { status: dto.status } : {}),
+        // Grava a data de fechamento apenas na primeira vez que a OS é
+        // concluída/entregue — mantém o reconhecimento de lucro estável.
+        ...(dto.status !== undefined &&
+        CLOSED_OS_STATUSES.includes(dto.status as ServiceOrderStatus) &&
+        !current.closedAt
+          ? { closedAt: new Date() }
+          : {}),
         ...(dto.priority !== undefined ? { priority: dto.priority } : {}),
         ...(dto.serviceType !== undefined ? { serviceType: dto.serviceType || null } : {}),
         ...(dto.entryChannel !== undefined ? { entryChannel: dto.entryChannel || null } : {}),

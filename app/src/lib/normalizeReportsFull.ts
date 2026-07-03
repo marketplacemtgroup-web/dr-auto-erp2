@@ -40,6 +40,7 @@ export function normalizeReportsFull(report: ReportsFull): ReportsFull {
       topServices: report.operations.topServices ?? [],
       topParts: report.operations.topParts ?? [],
       marginByOrder: report.operations.marginByOrder ?? [],
+      serviceOrdersDetailed: report.operations.serviceOrdersDetailed ?? [],
     },
     commercial: {
       ...report.commercial,

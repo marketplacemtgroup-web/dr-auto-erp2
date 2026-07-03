@@ -9,6 +9,7 @@ export const REPORT_EXPORTS = [
   { type: "cash-flow", file: "fluxo-caixa.csv", label: "Fluxo de caixa" },
   { type: "profit-margin", file: "margem-por-os.csv", label: "Margem por OS" },
   { type: "service-orders", file: "ordens-servico.csv", label: "Ordens de servico" },
+  { type: "service-orders-detailed", file: "ordens-servico-detalhado.csv", label: "OS detalhado (entrada/entrega)" },
   { type: "delayed-orders", file: "os-atrasadas.csv", label: "OS atrasadas" },
   { type: "mechanic-productivity", file: "produtividade-mecanicos.csv", label: "Mecanicos" },
   { type: "top-services", file: "servicos-mais-vendidos.csv", label: "Servicos" },

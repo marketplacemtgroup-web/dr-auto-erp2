@@ -74,7 +74,7 @@ export class DashboardCacheService {
         where: {
           ...active,
           status: { in: PROFIT_RECOGNIZED_STATUSES },
-          updatedAt: { gte: dayStart, lte: dayEnd },
+          closedAt: { gte: dayStart, lte: dayEnd },
         },
         select: { totalAmount: true },
       }),

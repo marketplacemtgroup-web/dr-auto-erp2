@@ -45,10 +45,12 @@ export function profitRecognizedOrderWhere(
   organizationId: string,
   period: { from: Date; to: Date },
 ) {
+  // Reconhecimento por closedAt (data de fechamento estável), não por updatedAt —
+  // assim editar uma OS depois não move o lucro para outro mês.
   return {
     organizationId,
     status: { in: PROFIT_RECOGNIZED_STATUSES },
-    updatedAt: { gte: period.from, lte: period.to },
+    closedAt: { gte: period.from, lte: period.to },
     deletedAt: null,
   };
 }

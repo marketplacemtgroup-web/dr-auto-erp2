@@ -762,6 +762,17 @@ export class ReportsService {
       marginByOrder: marginByOrder
         .sort((a, b) => b.margin - a.margin)
         .slice(0, 20),
+      serviceOrdersDetailed: deliveredOrders
+        .map((o) => ({
+          id: o.id,
+          number: o.number,
+          customerName: o.vehicle.customer.name,
+          plate: o.vehicle.plate,
+          enteredAt: o.enteredAt ?? o.createdAt,
+          closedAt: o.closedAt ?? o.updatedAt,
+          total: roundMoney(Number(o.totalAmount)),
+        }))
+        .sort((a, b) => b.number - a.number),
       ordersHeatmap,
       ordersCreatedCount: ordersCreated.length,
     };
@@ -1205,6 +1216,15 @@ export class ReportsService {
           include: { vehicle: { include: { customer: true } } },
           orderBy: { number: 'desc' },
         });
+      case 'service-orders-detailed':
+        return report.operations.serviceOrdersDetailed.map((o) => ({
+          OS: o.number,
+          Cliente: o.customerName,
+          Placa: o.plate,
+          Entrada: o.enteredAt ? this.toLocalIsoDate(new Date(o.enteredAt)) : '',
+          Entregue: o.closedAt ? this.toLocalIsoDate(new Date(o.closedAt)) : '',
+          Valor: o.total,
+        }));
       case 'low-stock':
         return report.inventory.lowStock;
       case 'inactive-customers':

@@ -9,6 +9,10 @@ import {
   PayFinancialEntryDto,
   UpdateFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
+import {
+  CreateFixedExpenseDto,
+  UpdateFixedExpenseDto,
+} from './dto/fixed-expense.dto';
 import { AuditService } from '../audit/audit.service';
 import { ReportsService } from '../reports/reports.service';
 import {
@@ -206,6 +210,54 @@ export class FinancialService {
 
   private toIsoDate(date: Date) {
     return date.toISOString().slice(0, 10);
+  }
+
+  listFixedExpenses(organizationId: string) {
+    return this.prisma.fixedExpense.findMany({
+      where: { organizationId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  createFixedExpense(organizationId: string, dto: CreateFixedExpenseDto) {
+    return this.prisma.fixedExpense.create({
+      data: {
+        organizationId,
+        name: dto.name.trim(),
+        amount: new Prisma.Decimal(dto.amount),
+        color: dto.color ?? '#DC2626',
+      },
+    });
+  }
+
+  async updateFixedExpense(
+    organizationId: string,
+    id: string,
+    dto: UpdateFixedExpenseDto,
+  ) {
+    const existing = await this.prisma.fixedExpense.findFirst({
+      where: { id, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Despesa fixa não encontrada');
+    return this.prisma.fixedExpense.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.amount !== undefined
+          ? { amount: new Prisma.Decimal(dto.amount) }
+          : {}),
+        ...(dto.color !== undefined ? { color: dto.color } : {}),
+      },
+    });
+  }
+
+  async deleteFixedExpense(organizationId: string, id: string) {
+    const existing = await this.prisma.fixedExpense.findFirst({
+      where: { id, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Despesa fixa não encontrada');
+    await this.prisma.fixedExpense.delete({ where: { id } });
+    return { ok: true };
   }
 
   async createInstallments(organizationId: string, dto: CreateInstallmentsDto) {

@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
-import { Calculator, Pencil, Trash2 } from "lucide-react";
+import { Calculator, Pencil, Repeat, Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
 import CalculatorModal from "../../components/financial/CalculatorModal";
 import DeleteEntryModal from "../../components/financial/DeleteEntryModal";
 import PayEntryModal from "../../components/financial/PayEntryModal";
+import FixedExpensesModal from "../../components/financial/FixedExpensesModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
 import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
 import KpiStrip from "../../components/modules/KpiStrip";
@@ -19,6 +20,7 @@ import {
   type FinancialProfitSummary,
   type FinancialReceiveQueue,
   type FinancialReceiveQueueOrder,
+  type FixedExpenseRow,
 } from "../../lib/api";
 import {
   FINANCIAL_PERIOD_PRESETS,
@@ -92,6 +94,10 @@ export default function FinancialPage() {
   const [deletingOsId, setDeletingOsId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FinancialEntryRow | null>(null);
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseRow[]>([]);
+  const [fixedLoading, setFixedLoading] = useState(false);
+  const [fixedModalOpen, setFixedModalOpen] = useState(false);
+  const [generatingFixedId, setGeneratingFixedId] = useState<string | null>(null);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
 
   async function loadProfitSummary(period: FinancialPeriodPreset = profitPeriod) {
@@ -138,6 +144,51 @@ export default function FinancialPage() {
     }
   }
 
+  async function loadFixedExpenses() {
+    if (!token) return;
+    setFixedLoading(true);
+    try {
+      setFixedExpenses(await api.fixedExpenses(token));
+    } catch {
+      setFixedExpenses([]);
+    } finally {
+      setFixedLoading(false);
+    }
+  }
+
+  async function createFixedExpense(data: { name: string; amount: number; color: string }) {
+    if (!token) return;
+    await api.createFixedExpense(token, data);
+    await loadFixedExpenses();
+  }
+
+  async function deleteFixedExpense(id: string) {
+    if (!token) return;
+    await api.deleteFixedExpense(token, id);
+    await loadFixedExpenses();
+  }
+
+  async function generateFixedExpense(item: FixedExpenseRow) {
+    if (!token) return;
+    setGeneratingFixedId(item.id);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await api.createFinancialEntry(token, {
+        description: item.name,
+        type: "PAYABLE",
+        dueDate: today.toISOString().slice(0, 10),
+        amount: Number(item.amount),
+        paid: false,
+      });
+      void loadEntries(search);
+      void loadProfitSummary();
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
+    } finally {
+      setGeneratingFixedId(null);
+    }
+  }
+
   useEffect(() => {
     if (!token) return;
     setLoading(true);
@@ -154,6 +205,7 @@ export default function FinancialPage() {
       setLoading(false);
       setQueueLoading(false);
     });
+    void loadFixedExpenses();
   }, [token]);
 
   useEffect(() => {
@@ -470,6 +522,14 @@ export default function FinancialPage() {
               </button>
               <button type="button" onClick={() => openNew("PAYABLE")} className="h-10 px-4 rounded-lg bg-[#DC2626] text-white text-sm font-medium">
                 + Nova despesa
+              </button>
+              <button
+                type="button"
+                onClick={() => setFixedModalOpen(true)}
+                className="h-10 px-4 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-medium inline-flex items-center gap-1.5"
+              >
+                <Repeat size={16} />
+                Despesas fixas
               </button>
             </div>
             <div className="bg-white rounded-xl card-shadow overflow-hidden">
@@ -804,6 +864,35 @@ export default function FinancialPage() {
         onSubmit={(e) => { e.preventDefault(); create.mutate(); }}
         loading={create.isPending}
       >
+        {drawerType === "PAYABLE" && !editingId && fixedExpenses.length > 0 ? (
+          <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+            <p className="text-[11px] font-medium uppercase text-[#94A3B8] mb-2">
+              Despesas fixas — clique para preencher
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {fixedExpenses.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      description: item.name,
+                      amount: String(Number(item.amount)),
+                      paid: false,
+                    }))
+                  }
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-[#E2E8F0] bg-white text-[12px] font-medium text-[#334155] hover:border-[#CBD5E1]"
+                  style={{ borderLeft: `4px solid ${item.color}` }}
+                >
+                  <span>{item.name}</span>
+                  <span className="text-[#94A3B8]">{formatMoney(Number(item.amount))}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <FormField label="Descricao *">
           <input className={inputClass} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} required />
         </FormField>
@@ -877,6 +966,17 @@ export default function FinancialPage() {
       />
 
       <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
+
+      <FixedExpensesModal
+        open={fixedModalOpen}
+        items={fixedExpenses}
+        loading={fixedLoading}
+        generatingId={generatingFixedId}
+        onClose={() => setFixedModalOpen(false)}
+        onCreate={createFixedExpense}
+        onDelete={deleteFixedExpense}
+        onGenerate={generateFixedExpense}
+      />
     </>
   );
 }

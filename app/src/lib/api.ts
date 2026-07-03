@@ -432,6 +432,13 @@ export interface FinancialProfitSummary {
   outsourcedRevenue?: number;
 }
 
+export interface FixedExpenseRow {
+  id: string;
+  name: string;
+  amount: string | number;
+  color: string;
+}
+
 export interface FinancialEntryRow {
   id: string;
   description: string;
@@ -624,6 +631,15 @@ export interface ReportsFull {
       margin: number;
       marginPercent: number;
       deliveredAt: string;
+    }>;
+    serviceOrdersDetailed: Array<{
+      id: string;
+      number: number;
+      customerName: string;
+      plate: string;
+      enteredAt: string | null;
+      closedAt: string | null;
+      total: number;
     }>;
     ordersHeatmap: Array<{ dow: number; hour: number; dayLabel: string; count: number }>;
     ordersCreatedCount: number;
@@ -1990,6 +2006,37 @@ export const api = {
     request<FinancialEntryRow>(`/financial/from-service-order/${serviceOrderId}`, {
       method: "POST",
     }, token),
+
+  fixedExpenses: (token: string) =>
+    request<FixedExpenseRow[]>("/financial/fixed-expenses", { method: "GET" }, token),
+
+  createFixedExpense: (
+    token: string,
+    data: { name: string; amount: number; color?: string },
+  ) =>
+    request<FixedExpenseRow>(
+      "/financial/fixed-expenses",
+      { method: "POST", body: JSON.stringify(data) },
+      token,
+    ),
+
+  updateFixedExpense: (
+    token: string,
+    id: string,
+    data: { name?: string; amount?: number; color?: string },
+  ) =>
+    request<FixedExpenseRow>(
+      `/financial/fixed-expenses/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+      token,
+    ),
+
+  deleteFixedExpense: (token: string, id: string) =>
+    request<{ ok: boolean }>(
+      `/financial/fixed-expenses/${id}`,
+      { method: "DELETE" },
+      token,
+    ),
 
   financialReceiveQueue: (token: string) =>
     request<FinancialReceiveQueue>("/financial/receive-queue", { method: "GET" }, token),

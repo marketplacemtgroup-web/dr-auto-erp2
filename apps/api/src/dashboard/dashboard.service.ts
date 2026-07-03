@@ -135,9 +135,9 @@ export class DashboardService {
           where: {
             ...active,
             status: { in: PROFIT_RECOGNIZED_STATUSES },
-            updatedAt: { gte: monthStart, lte: todayEnd },
+            closedAt: { gte: monthStart, lte: todayEnd },
           },
-          select: { totalAmount: true, createdAt: true, updatedAt: true },
+          select: { totalAmount: true, createdAt: true, closedAt: true },
         }),
       ]);
 
@@ -157,7 +157,8 @@ export class DashboardService {
 
     let totalServiceMs = 0;
     for (const order of deliveredOrdersMonth) {
-      totalServiceMs += order.updatedAt.getTime() - order.createdAt.getTime();
+      const closed = order.closedAt ?? order.createdAt;
+      totalServiceMs += closed.getTime() - order.createdAt.getTime();
     }
     const averageServiceTimeMinutes =
       deliveredOrdersMonth.length > 0
