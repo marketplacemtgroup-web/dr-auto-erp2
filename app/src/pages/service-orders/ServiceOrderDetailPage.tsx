@@ -710,7 +710,7 @@ export default function ServiceOrderDetailPage() {
           >
             <Trash2 size={16} />
           </button>
-          {Number(os.totalAmount) > 0 && token ? (
+          {Number(os.totalAmount) > 0 && token && os.status === "DELIVERED" ? (
             <button
               type="button"
               className="h-9 px-3 rounded-lg bg-[#16A34A] text-white text-sm print:hidden"
@@ -725,7 +725,7 @@ export default function ServiceOrderDetailPage() {
                 })
               }
             >
-              Gerar recebível e entregar
+              Gerar cobranca
             </button>
           ) : null}
           <div className="text-right">

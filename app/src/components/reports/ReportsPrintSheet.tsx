@@ -1,7 +1,7 @@
 import type { ReportsFull } from "../../lib/api";
 import { branding } from "../../lib/branding";
 import { formatPeriodLabel } from "../../lib/reportPeriod";
-import { formatMoney, formatNegativeMoney } from "../../lib/format";
+import { formatMoney, formatNegativeMoney, formatDate } from "../../lib/format";
 import { PAYMENT_LABELS } from "../../lib/paymentMethods";
 import type { PaymentMethod } from "../../lib/api";
 
@@ -96,11 +96,33 @@ export default function ReportsPrintSheet({ report }: Props) {
           </tr>
         </thead>
         <tbody>
-          {c.topCustomers.slice(0, 10).map((client) => (
+          {(f.billedCustomers?.length ? f.billedCustomers : c.topCustomers).slice(0, 10).map((client) => (
             <tr key={client.id} className="border-b border-[#F1F5F9]">
               <td className="py-1">{client.name}</td>
               <td className="py-1 text-right">{formatMoney(client.revenue)}</td>
               <td className="py-1 text-right">{client.orderCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2 className="text-[15px] font-semibold mb-2">Despesas pagas</h2>
+      <table className="w-full mb-6 text-[12px]">
+        <thead>
+          <tr className="border-b border-[#E2E8F0] text-left text-[#64748B]">
+            <th className="py-1">Descricao</th>
+            <th className="py-1">Fornecedor</th>
+            <th className="py-1">Data</th>
+            <th className="py-1 text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(f.expensesList ?? []).slice(0, 30).map((exp) => (
+            <tr key={exp.id} className="border-b border-[#F1F5F9]">
+              <td className="py-1">{exp.description}</td>
+              <td className="py-1">{exp.supplierName ?? exp.categoryName ?? "—"}</td>
+              <td className="py-1">{exp.paidAt ? formatDate(exp.paidAt) : "—"}</td>
+              <td className="py-1 text-right">{formatNegativeMoney(exp.amount)}</td>
             </tr>
           ))}
         </tbody>

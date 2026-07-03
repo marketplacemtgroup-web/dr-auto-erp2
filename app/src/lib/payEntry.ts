@@ -61,10 +61,39 @@ export function computePayNetDue(
   const discount = computePayDiscount(gross, form.discountMoney, form.discountPercent);
   const interest = Number(form.interestAmount.replace(",", ".")) || 0;
   const penalty = Number(form.penaltyAmount.replace(",", ".")) || 0;
+  const fee = Number(form.feeAmount.replace(",", ".")) || 0;
   if (type === "PAYABLE") {
     return roundMoney(gross - discount + interest + penalty);
   }
-  return roundMoney(gross - discount);
+  return roundMoney(gross - discount - fee);
+}
+
+/** Ajusta valores das formas de pagamento quando desconto/taxa alteram o liquido. */
+export function syncPaySplitsToNetDue(
+  form: PayEntryFormState,
+  netDue: number,
+): PayEntryFormState {
+  if (form.splits.length === 0) return form;
+  if (form.splits.length === 1) {
+    return {
+      ...form,
+      splits: [{ ...form.splits[0], amount: netDue > 0 ? netDue.toFixed(2) : "" }],
+    };
+  }
+  const paid = splitSum(form.splits);
+  const remaining = roundMoney(netDue - paid);
+  if (Math.abs(remaining) < 0.01) return form;
+  const last = form.splits[form.splits.length - 1];
+  const lastAmount = Number(last.amount.replace(",", ".")) || 0;
+  const nextLast = roundMoney(Math.max(0, lastAmount + remaining));
+  return {
+    ...form,
+    splits: form.splits.map((row, index) =>
+      index === form.splits.length - 1
+        ? { ...row, amount: nextLast > 0 ? nextLast.toFixed(2) : "" }
+        : row,
+    ),
+  };
 }
 
 export function splitSum(splits: PaySplitFormRow[]) {

@@ -18,6 +18,8 @@ export function normalizeReportsFull(report: ReportsFull): ReportsFull {
       totalProfit: report.financial.totalProfit ?? 0,
       paymentMethods: report.financial.paymentMethods ?? [],
       paymentReceipts: report.financial.paymentReceipts ?? [],
+      expensesList: report.financial.expensesList ?? [],
+      billedCustomers: report.financial.billedCustomers ?? [],
       revenueByDay: report.financial.revenueByDay ?? [],
       dreByMonth: report.financial.dreByMonth ?? [],
       overdueReceivables: report.financial.overdueReceivables ?? [],

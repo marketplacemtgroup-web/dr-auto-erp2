@@ -574,6 +574,20 @@ export interface ReportsFull {
       serviceOrderNumber: number | null;
       paidAt: string | null;
     }>;
+    expensesList: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      paidAt: string | null;
+      supplierName: string | null;
+      categoryName: string | null;
+    }>;
+    billedCustomers: Array<{
+      id: string;
+      name: string;
+      revenue: number;
+      orderCount: number;
+    }>;
   };
   operations: {
     ordersByStatus: Array<{ status: string; count: number }>;
@@ -1906,6 +1920,24 @@ export const api = {
       { method: "POST", body: JSON.stringify(data) },
       token,
     ),
+
+  updateFinancialEntry: (
+    token: string,
+    id: string,
+    data: {
+      description?: string;
+      type?: "PAYABLE" | "RECEIVABLE";
+      dueDate?: string;
+      amount?: number;
+      paid?: boolean;
+      paidAt?: string;
+      paymentMethod?: PaymentMethod;
+    },
+  ) =>
+    request<FinancialEntryRow>(`/financial/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }, token),
 
   payFinancialEntry: (
     token: string,

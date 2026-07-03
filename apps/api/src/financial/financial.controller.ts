@@ -6,6 +6,7 @@ import {
   CreateFinancialEntryDto,
   CreateInstallmentsDto,
   PayFinancialEntryDto,
+  UpdateFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
 import { DeleteFinancialEntryDto } from './dto/delete-financial-entry.dto';
 import { FinancialService } from './financial.service';
@@ -94,6 +95,16 @@ export class FinancialController {
     @Param('serviceOrderId') serviceOrderId: string,
   ) {
     return this.financialService.createFromServiceOrder(user.organizationId, serviceOrderId);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('financial.manage')
+  update(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateFinancialEntryDto,
+  ) {
+    return this.financialService.update(user.organizationId, id, dto, user.userId);
   }
 
   @Patch(':id/pay')

@@ -154,6 +154,8 @@ export class ReportsService {
 
     const [
       paidEntries,
+      paidPayableDetails,
+      paidReceivableDetails,
       paymentSplitDetails,
       openReceivablesAgg,
       openPayablesAgg,
@@ -169,6 +171,33 @@ export class ReportsService {
           paidAt: { gte: period.from, lte: period.to },
         },
         select: { type: true, amount: true, amountReceived: true, paidAt: true },
+      }),
+      this.prisma.financialEntry.findMany({
+        where: {
+          organizationId,
+          status: 'PAID',
+          type: 'PAYABLE',
+          paidAt: { gte: period.from, lte: period.to },
+          parentEntryId: null,
+        },
+        include: {
+          supplier: { select: { legalName: true, tradeName: true } },
+          financialCategory: { select: { name: true } },
+        },
+        orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      }),
+      this.prisma.financialEntry.findMany({
+        where: {
+          organizationId,
+          status: 'PAID',
+          type: 'RECEIVABLE',
+          paidAt: { gte: period.from, lte: period.to },
+          parentEntryId: null,
+        },
+        include: {
+          customer: { select: { id: true, name: true } },
+          serviceOrder: { select: { number: true } },
+        },
       }),
       this.prisma.financialPaymentSplit.findMany({
         where: {
@@ -355,6 +384,37 @@ export class ReportsService {
         amount: roundMoney(row.amount),
       }));
 
+    const expensesList = paidPayableDetails.map((entry) => ({
+      id: entry.id,
+      description: entry.description,
+      amount: roundMoney(this.paidEntryAmount(entry)),
+      paidAt: entry.paidAt,
+      supplierName:
+        entry.supplier?.tradeName || entry.supplier?.legalName || null,
+      categoryName: entry.financialCategory?.name ?? null,
+    }));
+
+    const billedCustomerMap = new Map<
+      string,
+      { id: string; name: string; revenue: number; orderCount: number }
+    >();
+    for (const entry of paidReceivableDetails) {
+      const customerId = entry.customer?.id ?? `anon-${entry.id}`;
+      const customerName = entry.customer?.name ?? entry.description;
+      const cur = billedCustomerMap.get(customerId) ?? {
+        id: customerId,
+        name: customerName,
+        revenue: 0,
+        orderCount: 0,
+      };
+      cur.revenue += this.paidEntryAmount(entry);
+      if (entry.serviceOrderId) cur.orderCount += 1;
+      billedCustomerMap.set(customerId, cur);
+    }
+    const billedCustomers = Array.from(billedCustomerMap.values())
+      .map((c) => ({ ...c, revenue: roundMoney(c.revenue) }))
+      .sort((a, b) => b.revenue - a.revenue);
+
     return {
       revenueToday,
       revenue: roundMoney(revenue),
@@ -422,6 +482,8 @@ export class ReportsService {
       paymentReceipts: paymentReceipts.sort(
         (a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0),
       ),
+      expensesList,
+      billedCustomers,
     };
   }
 

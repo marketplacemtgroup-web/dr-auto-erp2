@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
-import { Trash2 } from "lucide-react";
+import { Calculator, Pencil, Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
+import CalculatorModal from "../../components/financial/CalculatorModal";
 import DeleteEntryModal from "../../components/financial/DeleteEntryModal";
 import PayEntryModal from "../../components/financial/PayEntryModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
@@ -32,14 +33,10 @@ import {
   formatPaymentSplitsLabel,
   type PayEntryFormState,
 } from "../../lib/payEntry";
-import { formatMoney, formatNegativeMoney } from "../../lib/format";
+import { formatDate, formatMoney, formatNegativeMoney } from "../../lib/format";
 
 function formatCurrency(value: number) {
   return formatMoney(value);
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR");
 }
 
 function cashBalance(session: CashSessionRow) {
@@ -76,6 +73,7 @@ export default function FinancialPage() {
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"RECEIVABLE" | "PAYABLE">("RECEIVABLE");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [payTarget, setPayTarget] = useState<FinancialEntryRow | null>(null);
   const [payForm, setPayForm] = useState<PayEntryFormState>(() => createDefaultPayForm(0));
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -94,6 +92,7 @@ export default function FinancialPage() {
   const [deletingOsId, setDeletingOsId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FinancialEntryRow | null>(null);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
 
   async function loadProfitSummary(period: FinancialPeriodPreset = profitPeriod) {
     if (!token || !showMoney) return;
@@ -189,6 +188,14 @@ export default function FinancialPage() {
         dueDate: form.dueDate,
         amount: Number(form.amount),
       };
+      // Edição de um lançamento existente.
+      if (editingId) {
+        return api.updateFinancialEntry(token!, editingId, {
+          ...base,
+          paid: form.paid,
+          paidAt: form.paid ? form.paidAt || form.dueDate : undefined,
+        });
+      }
       const n = Number(form.installments);
       if (n > 1) return api.createFinancialInstallments(token!, { ...base, installments: n });
       return api.createFinancialEntry(token!, {
@@ -203,6 +210,7 @@ export default function FinancialPage() {
       void loadProfitSummary();
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       setDrawerOpen(false);
+      setEditingId(null);
       setForm({ description: "", dueDate: "", amount: "", installments: "1", paid: false, paidAt: "" });
     },
   });
@@ -257,6 +265,7 @@ export default function FinancialPage() {
   }, [rows]);
 
   function openNew(type: "RECEIVABLE" | "PAYABLE") {
+    setEditingId(null);
     setDrawerType(type);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -269,6 +278,21 @@ export default function FinancialPage() {
       // Despesas em geral já foram pagas quando lançadas — vem marcado por padrão.
       paid: type === "PAYABLE",
       paidAt: todayIso,
+    });
+    setDrawerOpen(true);
+  }
+
+  function openEdit(row: FinancialEntryRow) {
+    setEditingId(row.id);
+    setDrawerType(row.type);
+    const isPaid = row.status === "PAID";
+    setForm({
+      description: row.description,
+      dueDate: row.dueDate ? row.dueDate.slice(0, 10) : "",
+      amount: String(Number(row.amount ?? 0)),
+      installments: "1",
+      paid: isPaid,
+      paidAt: row.paidAt ? row.paidAt.slice(0, 10) : row.dueDate?.slice(0, 10) ?? "",
     });
     setDrawerOpen(true);
   }
@@ -414,7 +438,7 @@ export default function FinancialPage() {
           ]}
         />
 
-        <div className="flex gap-2 mb-4 border-b border-[#E2E8F0]">
+        <div className="flex items-center gap-2 mb-4 border-b border-[#E2E8F0]">
           {(["entries", "cash"] as const).map((t) => (
             <button
               key={t}
@@ -427,6 +451,15 @@ export default function FinancialPage() {
               {t === "entries" ? "Lancamentos" : "Caixa"}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setCalculatorOpen(true)}
+            className="ml-auto mb-1 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[#E2E8F0] text-sm font-medium text-[#334155] hover:bg-[#F8FAFC]"
+            title="Abrir calculadora"
+          >
+            <Calculator size={16} />
+            Calculadora
+          </button>
         </div>
 
         {tab === "entries" ? (
@@ -505,6 +538,15 @@ export default function FinancialPage() {
                             )}
                             <button
                               type="button"
+                              title="Editar lançamento"
+                              disabled={!token}
+                              onClick={() => openEdit(r)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#0E7490] hover:bg-cyan-50 disabled:opacity-50"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              type="button"
                               title="Excluir lancamento"
                               disabled={!token || deletingId === r.id}
                               onClick={() => void deleteEntry(r)}
@@ -557,7 +599,7 @@ export default function FinancialPage() {
                 <div className="px-5 py-3 border-b border-[#E2E8F0]">
                   <h3 className="text-[14px] font-semibold text-[#1E293B]">Receber pagamento</h3>
                   <p className="text-[12px] text-[#64748B] mt-0.5">
-                    OS finalizadas ou entregues — gere o recebivel e baixe na hora
+                    OS entregues — gere o recebivel e baixe na hora
                   </p>
                 </div>
                 {queueLoading ? (
@@ -749,8 +791,16 @@ export default function FinancialPage() {
 
       <FormDrawer
         open={drawerOpen}
-        title={drawerType === "RECEIVABLE" ? "Novo recebimento" : "Nova despesa"}
-        onClose={() => setDrawerOpen(false)}
+        title={
+          editingId
+            ? drawerType === "RECEIVABLE"
+              ? "Editar recebimento"
+              : "Editar despesa"
+            : drawerType === "RECEIVABLE"
+              ? "Novo recebimento"
+              : "Nova despesa"
+        }
+        onClose={() => { setDrawerOpen(false); setEditingId(null); }}
         onSubmit={(e) => { e.preventDefault(); create.mutate(); }}
         loading={create.isPending}
       >
@@ -801,7 +851,7 @@ export default function FinancialPage() {
               Define o mês em que entra nos relatórios — pode ser de um mês anterior.
             </p>
           </FormField>
-        ) : (
+        ) : editingId ? null : (
           <FormField label="Parcelas">
             <input type="number" min={1} max={24} className={inputClass} value={form.installments} onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))} />
           </FormField>
@@ -825,6 +875,8 @@ export default function FinancialPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={(reason) => void confirmDeleteEntry(reason)}
       />
+
+      <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
     </>
   );
 }

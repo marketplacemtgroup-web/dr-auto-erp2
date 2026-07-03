@@ -64,6 +64,38 @@ export class CreateInstallmentsDto extends CreateFinancialEntryDto {
   installments!: number;
 }
 
+export class UpdateFinancialEntryDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  description?: string;
+
+  @IsOptional()
+  @IsEnum(FinancialEntryType)
+  type?: FinancialEntryType;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  amount?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+
+  @IsOptional()
+  @IsBoolean()
+  paid?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  paidAt?: string;
+}
+
 export class PayFinancialSplitDto {
   @IsEnum(PaymentMethod)
   paymentMethod!: PaymentMethod;

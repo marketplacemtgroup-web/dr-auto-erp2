@@ -7,6 +7,7 @@ import {
   computePayNetDue,
   roundMoney,
   splitSum,
+  syncPaySplitsToNetDue,
   type PayEntryFormState,
 } from "../../lib/payEntry";
 import { PAYMENT_LABELS, PAYMENT_METHODS } from "../../lib/paymentMethods";
@@ -55,20 +56,30 @@ export default function PayEntryModal({
   const isReceivable = entry.type === "RECEIVABLE";
   const gross = Number(entry.amount);
   const discount = computePayDiscount(gross, form.discountMoney, form.discountPercent);
+  const fee = Number(form.feeAmount.replace(",", ".")) || 0;
   const netDue = computePayNetDue(gross, form, entry.type);
   const paid = splitSum(form.splits);
   const remaining = roundMoney(netDue - paid);
   const balanced = Math.abs(remaining) < 0.01 && netDue > 0;
 
+  function applyFormChange(next: PayEntryFormState, syncSplits = false) {
+    if (!syncSplits) {
+      onFormChange(next);
+      return;
+    }
+    const nextNet = computePayNetDue(gross, next, entry.type);
+    onFormChange(syncPaySplitsToNetDue(next, nextNet));
+  }
+
   function updateSplit(id: string, patch: Partial<PayEntryFormState["splits"][0]>) {
-    onFormChange({
+    applyFormChange({
       ...form,
       splits: form.splits.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     });
   }
 
   function addSplit() {
-    onFormChange({
+    applyFormChange({
       ...form,
       splits: [
         ...form.splits,
@@ -84,26 +95,36 @@ export default function PayEntryModal({
 
   function removeSplit(id: string) {
     if (form.splits.length <= 1) return;
-    onFormChange({
+    applyFormChange({
       ...form,
       splits: form.splits.filter((row) => row.id !== id),
     });
   }
 
   function setDiscountMoney(value: string) {
-    onFormChange({
-      ...form,
-      discountMoney: value,
-      discountPercent: value ? "" : form.discountPercent,
-    });
+    applyFormChange(
+      {
+        ...form,
+        discountMoney: value,
+        discountPercent: value ? "" : form.discountPercent,
+      },
+      true,
+    );
   }
 
   function setDiscountPercent(value: string) {
-    onFormChange({
-      ...form,
-      discountPercent: value,
-      discountMoney: value ? "" : form.discountMoney,
-    });
+    applyFormChange(
+      {
+        ...form,
+        discountPercent: value,
+        discountMoney: value ? "" : form.discountMoney,
+      },
+      true,
+    );
+  }
+
+  function setFeeAmount(value: string) {
+    applyFormChange({ ...form, feeAmount: value }, true);
   }
 
   return createPortal(
@@ -159,11 +180,19 @@ export default function PayEntryModal({
           <div className="text-center py-1">
             <p className="text-[11px] uppercase tracking-wide text-[#94A3B8] mb-1">Valor bruto</p>
             <p className="text-2xl font-bold text-[#0F3D4C]">{formatCurrency(gross)}</p>
-            {discount > 0 ? (
-              <p className="text-[13px] text-[#16A34A] mt-1">
-                Desconto {formatCurrency(discount)} — liquido {formatCurrency(netDue)}
-              </p>
-            ) : null}
+            {(discount > 0 || fee > 0) && (
+              <div className="text-[13px] mt-1 space-y-0.5">
+                {discount > 0 ? (
+                  <p className="text-[#16A34A]">Desconto {formatCurrency(discount)}</p>
+                ) : null}
+                {fee > 0 ? (
+                  <p className="text-[#DC2626]">Taxa cartao {formatCurrency(fee)}</p>
+                ) : null}
+                <p className="font-semibold text-[#0F3D4C]">
+                  Liquido {formatCurrency(netDue)}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -234,7 +263,7 @@ export default function PayEntryModal({
                 step="0.01"
                 className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm"
                 value={form.feeAmount}
-                onChange={(e) => onFormChange({ ...form, feeAmount: e.target.value })}
+                onChange={(e) => setFeeAmount(e.target.value)}
               />
             </div>
           )}

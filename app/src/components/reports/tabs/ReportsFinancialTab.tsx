@@ -7,7 +7,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMoney, formatNegativeMoney } from "../../../lib/format";
+import { formatMoney, formatNegativeMoney, formatDate } from "../../../lib/format";
 import ReportSection from "../ReportSection";
 import ReportInteractivePie from "../charts/ReportInteractivePie";
 import ReportCashFlowChart from "../charts/ReportCashFlowChart";
@@ -102,6 +102,92 @@ export default function ReportsFinancialTab({
           }))}
           empty="Nenhum vencido."
         />
+      </ReportSection>
+
+      <ReportSection
+        title="Clientes faturados no periodo"
+        className="lg:col-span-2"
+        period={period}
+        token={token}
+        exportType="top-customers"
+        exportFile="clientes-faturados.csv"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-[#E2E8F0] text-left text-[11px] uppercase text-[#94A3B8]">
+                <th className="py-2 pr-3 font-medium">Cliente</th>
+                <th className="py-2 pr-3 font-medium text-right">OS</th>
+                <th className="py-2 font-medium text-right">Faturamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.financial.billedCustomers.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="py-6 text-center text-[#94A3B8]">
+                    Nenhum recebimento no periodo.
+                  </td>
+                </tr>
+              ) : (
+                report.financial.billedCustomers.map((c) => (
+                  <tr key={c.id} className="border-b border-[#F1F5F9]">
+                    <td className="py-2 pr-3 font-medium text-[#1E293B]">{c.name}</td>
+                    <td className="py-2 pr-3 text-right text-[#64748B]">{c.orderCount}</td>
+                    <td className="py-2 text-right font-semibold text-[#16A34A]">
+                      {formatMoney(c.revenue)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </ReportSection>
+
+      <ReportSection
+        title="Despesas do periodo"
+        className="lg:col-span-2"
+        period={period}
+        token={token}
+        exportType="financial"
+        exportFile="despesas-periodo.csv"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-[#E2E8F0] text-left text-[11px] uppercase text-[#94A3B8]">
+                <th className="py-2 pr-3 font-medium">Descricao</th>
+                <th className="py-2 pr-3 font-medium">Fornecedor / categoria</th>
+                <th className="py-2 pr-3 font-medium">Data</th>
+                <th className="py-2 font-medium text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.financial.expensesList.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-[#94A3B8]">
+                    Nenhuma despesa paga no periodo.
+                  </td>
+                </tr>
+              ) : (
+                report.financial.expensesList.map((e) => (
+                  <tr key={e.id} className="border-b border-[#F1F5F9]">
+                    <td className="py-2 pr-3 text-[#1E293B]">{e.description}</td>
+                    <td className="py-2 pr-3 text-[#64748B]">
+                      {[e.supplierName, e.categoryName].filter(Boolean).join(" · ") || "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-[#64748B]">
+                      {e.paidAt ? formatDate(e.paidAt) : "—"}
+                    </td>
+                    <td className="py-2 text-right font-semibold text-[#DC2626]">
+                      {formatNegativeMoney(e.amount)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </ReportSection>
     </div>
   );

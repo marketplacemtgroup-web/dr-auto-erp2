@@ -7,6 +7,7 @@ import {
   CreateFinancialEntryDto,
   CreateInstallmentsDto,
   PayFinancialEntryDto,
+  UpdateFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
 import { AuditService } from '../audit/audit.service';
 import { ReportsService } from '../reports/reports.service';
@@ -41,6 +42,19 @@ export class FinancialService {
   private async invalidateDashboardCache(organizationId: string, date?: Date) {
     if (!this.dashboardCache) return;
     await this.dashboardCache.invalidate(organizationId, date);
+  }
+
+  /**
+   * Converte a data escolhida no formulário (geralmente "YYYY-MM-DD") em um
+   * Date ancorado ao meio-dia UTC. Isso evita que a data "escorregue" para o
+   * dia anterior ao ser exibida/agrupada em fusos negativos (ex.: UTC-3), pois
+   * meia-noite UTC vira 21h do dia anterior no Brasil.
+   */
+  private resolveEntryDate(value: string): Date {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return new Date(`${value}T12:00:00.000Z`);
+    }
+    return new Date(value);
   }
 
   profitSummary(organizationId: string, period: FinancialPeriodPreset = 'month') {
@@ -90,7 +104,7 @@ export class FinancialService {
     const paid = dto.paid === true;
     // Quando já pago, a data efetiva (paidAt) define o mês nos relatórios.
     // Se não informada, usa a data de vencimento escolhida (permite lançar mês passado).
-    const paidAt = paid ? new Date(dto.paidAt ?? dto.dueDate) : null;
+    const paidAt = paid ? this.resolveEntryDate(dto.paidAt ?? dto.dueDate) : null;
 
     const entry = await this.prisma.financialEntry.create({
       data: {
@@ -111,6 +125,87 @@ export class FinancialService {
     });
     await this.invalidateDashboardCache(organizationId, paidAt ?? undefined);
     return entry;
+  }
+
+  async update(
+    organizationId: string,
+    id: string,
+    dto: UpdateFinancialEntryDto,
+    userId?: string,
+  ) {
+    const entry = await this.prisma.financialEntry.findFirst({
+      where: { id, organizationId },
+    });
+    if (!entry) throw new NotFoundException('Lançamento não encontrado');
+
+    const nextAmount =
+      dto.amount !== undefined ? new Prisma.Decimal(dto.amount) : entry.amount;
+
+    // Estado de pagamento resultante (mantém o atual se não for informado).
+    const willBePaid = dto.paid !== undefined ? dto.paid : entry.status === 'PAID';
+
+    const data: Prisma.FinancialEntryUpdateInput = {
+      ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
+      ...(dto.type !== undefined ? { type: dto.type } : {}),
+      ...(dto.dueDate !== undefined ? { dueDate: new Date(dto.dueDate) } : {}),
+      ...(dto.amount !== undefined ? { amount: nextAmount } : {}),
+      ...(dto.paymentMethod !== undefined ? { paymentMethod: dto.paymentMethod } : {}),
+    };
+
+    if (willBePaid) {
+      // Data efetiva: usa a informada; senão a que já tinha; senão o vencimento.
+      const paidSource =
+        dto.paidAt ??
+        (entry.paidAt ? undefined : (dto.dueDate ?? this.toIsoDate(entry.dueDate)));
+      data.status = 'PAID';
+      data.paidAt = paidSource ? this.resolveEntryDate(paidSource) : entry.paidAt;
+      data.amountReceived = nextAmount;
+    } else {
+      data.status = 'OPEN';
+      data.paidAt = null;
+      data.amountReceived = null;
+    }
+
+    const updated = await this.prisma.financialEntry.update({
+      where: { id },
+      data,
+      include: entryInclude,
+    });
+
+    await this.audit.log(organizationId, 'financial.update', 'financial_entry', {
+      userId,
+      metadata: {
+        entryId: id,
+        before: {
+          description: entry.description,
+          type: entry.type,
+          status: entry.status,
+          amount: Number(entry.amount),
+          dueDate: this.toIsoDate(entry.dueDate),
+          paidAt: entry.paidAt ? entry.paidAt.toISOString() : null,
+        },
+        after: {
+          description: updated.description,
+          type: updated.type,
+          status: updated.status,
+          amount: Number(updated.amount),
+          dueDate: this.toIsoDate(updated.dueDate),
+          paidAt: updated.paidAt ? updated.paidAt.toISOString() : null,
+        },
+      },
+    });
+
+    // Recalcula o dashboard tanto na data antiga quanto na nova.
+    await this.invalidateDashboardCache(organizationId, entry.paidAt ?? undefined);
+    if (updated.paidAt) {
+      await this.invalidateDashboardCache(organizationId, updated.paidAt);
+    }
+
+    return updated;
+  }
+
+  private toIsoDate(date: Date) {
+    return date.toISOString().slice(0, 10);
   }
 
   async createInstallments(organizationId: string, dto: CreateInstallmentsDto) {
@@ -167,7 +262,7 @@ export class FinancialService {
   }
 
   async receiveQueue(organizationId: string) {
-    const billableStatuses = ['FINISHED', 'DELIVERED', 'AWAITING_PAYMENT'] as const;
+    const billableStatuses = ['DELIVERED', 'AWAITING_PAYMENT'] as const;
 
     const orders = await this.prisma.serviceOrder.findMany({
       where: {
@@ -223,18 +318,7 @@ export class FinancialService {
     serviceOrderId: string,
     currentStatus: ServiceOrderStatus,
   ) {
-    const deliverFrom: ServiceOrderStatus[] = [
-      'FINISHED',
-      'IN_PROGRESS',
-      'AWAITING_PAYMENT',
-      'APPROVED',
-    ];
-
-    if (deliverFrom.includes(currentStatus)) {
-      await this.prisma.serviceOrder.update({
-        where: { id: serviceOrderId },
-        data: { status: 'DELIVERED' },
-      });
+    if (currentStatus === 'DELIVERED') {
       await this.commissionEngine.generateForServiceOrder(
         organizationId,
         serviceOrderId,
@@ -251,6 +335,13 @@ export class FinancialService {
       include: { vehicle: { select: { customerId: true } } },
     });
     if (!so) throw new NotFoundException('OS não encontrada');
+
+    const billableStatuses: ServiceOrderStatus[] = ['DELIVERED', 'AWAITING_PAYMENT'];
+    if (!billableStatuses.includes(so.status)) {
+      throw new BadRequestException(
+        'Somente OS entregues podem gerar cobrança. Finalize o serviço e marque como entregue antes de faturar.',
+      );
+    }
 
     const existing = await this.prisma.financialEntry.findFirst({
       where: { organizationId, serviceOrderId, type: 'RECEIVABLE', status: 'OPEN' },
@@ -479,7 +570,7 @@ export class FinancialService {
     const netDue =
       entry.type === 'PAYABLE'
         ? this.roundMoney(gross - discount + interest + penalty)
-        : this.roundMoney(gross - discount);
+        : this.roundMoney(gross - discount - fee);
 
     let splits =
       dto.splits?.map((split) => ({
@@ -506,7 +597,7 @@ export class FinancialService {
       );
     }
 
-    const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
+    const paidAt = dto.paidAt ? this.resolveEntryDate(dto.paidAt) : new Date();
     const primaryMethod = splits.length === 1 ? splits[0].paymentMethod : null;
 
     const updated = await this.prisma.$transaction(async (tx) => {
