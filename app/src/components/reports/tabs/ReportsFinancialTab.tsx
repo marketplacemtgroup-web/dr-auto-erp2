@@ -83,10 +83,11 @@ export default function ReportsFinancialTab({
           ].filter((r) => r.value > 0)}
         />
         <div className="mt-3 space-y-1 text-[12px] text-[#64748B] text-center">
-          <p>Lucro bruto: <span className="font-semibold text-[#1E293B]">{formatMoney(grossProfit)}</span></p>
-          <p>Despesas: <span className="font-semibold text-[#DC2626]">{formatNegativeMoney(expenses)}</span></p>
+          <p>Lucro bruto (margem OS): <span className="font-semibold text-[#1E293B]">{formatMoney(grossProfit)}</span></p>
+          <p>Despesas operacionais: <span className="font-semibold text-[#DC2626]">{formatNegativeMoney(report.financial.operationalExpenses ?? expenses)}</span></p>
+          <p>Lucro operacional: <span className="font-semibold text-[#1E293B]">{formatMoney(report.financial.operationalProfit ?? 0)}</span></p>
           <p className="text-[14px] font-bold text-[#16A34A] pt-1">
-            Lucro total: {formatMoney(report.financial.totalProfit)}
+            Lucro total (caixa): {formatMoney(report.financial.totalProfit)}
           </p>
         </div>
       </ReportSection>

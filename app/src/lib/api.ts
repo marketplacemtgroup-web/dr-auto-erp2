@@ -426,6 +426,9 @@ export interface FinancialProfitSummary {
   outsourcedProfit?: number;
   grossProfit: number;
   totalProfit: number;
+  operationalProfit?: number;
+  operationalExpenses?: number;
+  nonOperationalExpenses?: number;
   partsRevenue: number;
   servicesRevenue: number;
   scannerRevenue?: number;
@@ -548,6 +551,9 @@ export interface ReportsFull {
     outsourcedProfit?: number;
     grossProfit: number;
     totalProfit: number;
+    operationalProfit?: number;
+    operationalExpenses?: number;
+    nonOperationalExpenses?: number;
     partsRevenue: number;
     servicesRevenue: number;
     scannerRevenue?: number;

@@ -54,3 +54,14 @@ export function profitRecognizedOrderWhere(
     deletedAt: null,
   };
 }
+
+/** Saídas que não são custo operacional (retiradas, empréstimos, cartão). */
+export function isNonOperationalPayable(description: string) {
+  const d = description.toUpperCase();
+  return (
+    d.includes('RETIRADA') ||
+    d.includes('DEVOLU') ||
+    d.includes('EMPR') ||
+    d.includes('CART')
+  );
+}

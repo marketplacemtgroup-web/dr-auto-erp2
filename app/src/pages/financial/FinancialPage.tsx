@@ -476,7 +476,16 @@ export default function FinancialPage() {
                       (profitSummary?.totalProfit ?? 0) >= 0
                         ? ("success" as const)
                         : ("danger" as const),
-                    hint: "Pecas + servicos − despesas pagas",
+                    hint: "Faturamento − despesas pagas",
+                  },
+                  {
+                    label: "Lucro operacional",
+                    value: profitLoading ? "—" : formatCurrency(profitSummary?.operationalProfit ?? 0),
+                    tone:
+                      (profitSummary?.operationalProfit ?? 0) >= 0
+                        ? ("success" as const)
+                        : ("danger" as const),
+                    hint: "Margem OS − despesas operacionais",
                   },
                 ]
               : []),

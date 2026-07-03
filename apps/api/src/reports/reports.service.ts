@@ -11,6 +11,7 @@ import {
 import {
   PROFIT_RECOGNIZED_STATUSES,
   calcItemProfit,
+  isNonOperationalPayable,
   itemPartUnitCost,
   itemRevenue,
   profitRecognizedOrderWhere,
@@ -295,7 +296,8 @@ export class ReportsService {
 
     const profitMetrics = this.composeProfitMetrics(
       profit,
-      paidEntries.filter((entry) => entry.type === 'PAYABLE'),
+      paidPayableDetails,
+      roundMoney(revenue),
     );
 
     const paymentMethodMap = new Map<string, { amount: number; count: number }>();
@@ -427,6 +429,9 @@ export class ReportsService {
       outsourcedProfit: profitMetrics.outsourcedProfit,
       grossProfit: profitMetrics.grossProfit,
       totalProfit: profitMetrics.totalProfit,
+      operationalProfit: profitMetrics.operationalProfit,
+      operationalExpenses: profitMetrics.operationalExpenses,
+      nonOperationalExpenses: profitMetrics.nonOperationalExpenses,
       partsRevenue: profit.partsRevenue,
       servicesRevenue: profit.servicesRevenue,
       scannerRevenue: profit.scannerRevenue,
@@ -1075,7 +1080,7 @@ export class ReportsService {
           type: 'PAYABLE',
           paidAt: { gte: period.from, lte: period.to },
         },
-        select: { amountReceived: true, amount: true },
+        select: { amountReceived: true, amount: true, description: true },
       }),
     ]);
 
@@ -1083,14 +1088,15 @@ export class ReportsService {
     const servicesProfit = profit.servicesProfit;
     const scannerProfit = profit.scannerProfit;
     const outsourcedProfit = profit.outsourcedProfit;
-    const metrics = this.composeProfitMetrics(profit, paidPayables);
+    const revenue = roundMoney(
+      paidReceivables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
+    );
+    const metrics = this.composeProfitMetrics(profit, paidPayables, revenue);
 
     return {
       from: this.toLocalIsoDate(period.from),
       to: this.toLocalIsoDate(period.to),
-      revenue: roundMoney(
-        paidReceivables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
-      ),
+      revenue,
       expenses: metrics.expenses,
       partsProfit,
       servicesProfit,
@@ -1098,6 +1104,9 @@ export class ReportsService {
       outsourcedProfit,
       grossProfit: metrics.grossProfit,
       totalProfit: metrics.totalProfit,
+      operationalProfit: metrics.operationalProfit,
+      operationalExpenses: metrics.operationalExpenses,
+      nonOperationalExpenses: metrics.nonOperationalExpenses,
       partsRevenue: profit.partsRevenue,
       servicesRevenue: profit.servicesRevenue,
       scannerRevenue: profit.scannerRevenue,
@@ -1115,9 +1124,11 @@ export class ReportsService {
   private composeProfitMetrics(
     profit: ProfitTotals,
     paidPayables: Array<{
+      description?: string;
       amount: { toString(): string } | number;
       amountReceived?: { toString(): string } | number | null;
     }>,
+    revenue = 0,
   ) {
     const partsProfit = profit.partsProfit;
     const servicesProfit = profit.servicesProfit;
@@ -1129,6 +1140,12 @@ export class ReportsService {
     const expenses = roundMoney(
       paidPayables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
     );
+    const operationalExpenses = roundMoney(
+      paidPayables
+        .filter((entry) => !isNonOperationalPayable(entry.description ?? ''))
+        .reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
+    );
+    const nonOperationalExpenses = roundMoney(expenses - operationalExpenses);
     return {
       partsProfit,
       servicesProfit,
@@ -1136,7 +1153,12 @@ export class ReportsService {
       outsourcedProfit,
       grossProfit,
       expenses,
-      totalProfit: roundMoney(grossProfit - expenses),
+      operationalExpenses,
+      nonOperationalExpenses,
+      // Lucro total = caixa (faturamento − despesas pagas no período).
+      totalProfit: roundMoney(revenue - expenses),
+      // Lucro operacional = margem das OS − despesas operacionais (sem retiradas/empréstimos/cartão).
+      operationalProfit: roundMoney(grossProfit - operationalExpenses),
     };
   }
 
