@@ -46,6 +46,16 @@ export class CreateFinancialEntryDto {
   @IsOptional()
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;
+
+  /** Marca o lançamento como já pago/recebido no ato da criação. */
+  @IsOptional()
+  @IsBoolean()
+  paid?: boolean;
+
+  /** Data efetiva do pagamento/recebimento (competência que define o mês nos relatórios). */
+  @IsOptional()
+  @IsDateString()
+  paidAt?: string;
 }
 
 export class CreateInstallmentsDto extends CreateFinancialEntryDto {

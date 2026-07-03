@@ -86,14 +86,22 @@ export class FinancialService {
   }
 
   async create(organizationId: string, dto: CreateFinancialEntryDto) {
+    const amount = new Prisma.Decimal(dto.amount);
+    const paid = dto.paid === true;
+    // Quando já pago, a data efetiva (paidAt) define o mês nos relatórios.
+    // Se não informada, usa a data de vencimento escolhida (permite lançar mês passado).
+    const paidAt = paid ? new Date(dto.paidAt ?? dto.dueDate) : null;
+
     const entry = await this.prisma.financialEntry.create({
       data: {
         organizationId,
         description: dto.description.trim(),
         type: dto.type,
         dueDate: new Date(dto.dueDate),
-        amount: new Prisma.Decimal(dto.amount),
-        status: 'OPEN',
+        amount,
+        status: paid ? 'PAID' : 'OPEN',
+        paidAt,
+        amountReceived: paid ? amount : null,
         customerId: dto.customerId ?? null,
         serviceOrderId: dto.serviceOrderId ?? null,
         quoteId: dto.quoteId ?? null,
@@ -101,7 +109,7 @@ export class FinancialService {
       },
       include: entryInclude,
     });
-    await this.invalidateDashboardCache(organizationId);
+    await this.invalidateDashboardCache(organizationId, paidAt ?? undefined);
     return entry;
   }
 

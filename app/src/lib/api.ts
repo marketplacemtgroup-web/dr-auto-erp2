@@ -1892,7 +1892,14 @@ export const api = {
 
   createFinancialEntry: (
     token: string,
-    data: { description: string; type: "PAYABLE" | "RECEIVABLE"; dueDate: string; amount: number },
+    data: {
+      description: string;
+      type: "PAYABLE" | "RECEIVABLE";
+      dueDate: string;
+      amount: number;
+      paid?: boolean;
+      paidAt?: string;
+    },
   ) =>
     request<FinancialEntryRow>(
       "/financial",

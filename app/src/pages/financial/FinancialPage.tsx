@@ -84,6 +84,8 @@ export default function FinancialPage() {
     dueDate: "",
     amount: "",
     installments: "1",
+    paid: false,
+    paidAt: "",
   });
   const [cashForm, setCashForm] = useState({ openingBalance: "0", closingBalance: "", movementAmount: "", movementDesc: "" });
   const [receiveQueue, setReceiveQueue] = useState<FinancialReceiveQueue | null>(null);
@@ -189,12 +191,19 @@ export default function FinancialPage() {
       };
       const n = Number(form.installments);
       if (n > 1) return api.createFinancialInstallments(token!, { ...base, installments: n });
-      return api.createFinancialEntry(token!, base);
+      return api.createFinancialEntry(token!, {
+        ...base,
+        paid: form.paid,
+        // Data da despesa/recebimento; se vazia usa o vencimento. Define o mês nos relatórios.
+        paidAt: form.paid ? form.paidAt || form.dueDate : undefined,
+      });
     },
     onSuccess: () => {
       void loadEntries(search);
+      void loadProfitSummary();
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       setDrawerOpen(false);
-      setForm({ description: "", dueDate: "", amount: "", installments: "1" });
+      setForm({ description: "", dueDate: "", amount: "", installments: "1", paid: false, paidAt: "" });
     },
   });
 
@@ -251,11 +260,15 @@ export default function FinancialPage() {
     setDrawerType(type);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayIso = today.toISOString().slice(0, 10);
     setForm({
       description: "",
-      dueDate: today.toISOString().slice(0, 10),
+      dueDate: todayIso,
       amount: "",
       installments: "1",
+      // Despesas em geral já foram pagas quando lançadas — vem marcado por padrão.
+      paid: type === "PAYABLE",
+      paidAt: todayIso,
     });
     setDrawerOpen(true);
   }
@@ -750,9 +763,49 @@ export default function FinancialPage() {
         <FormField label="Valor (R$) *">
           <input type="number" step="0.01" className={inputClass} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} required />
         </FormField>
-        <FormField label="Parcelas">
-          <input type="number" min={1} max={24} className={inputClass} value={form.installments} onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))} />
-        </FormField>
+
+        <label className="flex items-center gap-2 py-1 text-[13px] text-[#334155] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-[#0E7490]"
+            checked={form.paid}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                paid: e.target.checked,
+                // ao marcar como paga, zera parcelamento (lançamento à vista)
+                installments: e.target.checked ? "1" : f.installments,
+                paidAt: e.target.checked && !f.paidAt ? f.dueDate : f.paidAt,
+              }))
+            }
+          />
+          {drawerType === "PAYABLE" ? "Despesa já paga" : "Já recebido"}
+        </label>
+
+        {form.paid ? (
+          <FormField
+            label={
+              drawerType === "PAYABLE"
+                ? "Data da despesa (pagamento) *"
+                : "Data do recebimento *"
+            }
+          >
+            <input
+              type="date"
+              className={inputClass}
+              value={form.paidAt}
+              onChange={(e) => setForm((f) => ({ ...f, paidAt: e.target.value }))}
+              required
+            />
+            <p className="mt-1 text-[11px] text-[#94A3B8]">
+              Define o mês em que entra nos relatórios — pode ser de um mês anterior.
+            </p>
+          </FormField>
+        ) : (
+          <FormField label="Parcelas">
+            <input type="number" min={1} max={24} className={inputClass} value={form.installments} onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))} />
+          </FormField>
+        )}
       </FormDrawer>
 
       <PayEntryModal
