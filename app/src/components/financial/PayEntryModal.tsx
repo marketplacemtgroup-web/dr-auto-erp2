@@ -53,11 +53,12 @@ export default function PayEntryModal({
 
   if (!open || !entry) return null;
 
-  const isReceivable = entry.type === "RECEIVABLE";
+  const entryType = entry.type;
+  const isReceivable = entryType === "RECEIVABLE";
   const gross = Number(entry.amount);
   const discount = computePayDiscount(gross, form.discountMoney, form.discountPercent);
   const fee = Number(form.feeAmount.replace(",", ".")) || 0;
-  const netDue = computePayNetDue(gross, form, entry.type);
+  const netDue = computePayNetDue(gross, form, entryType);
   const paid = splitSum(form.splits);
   const remaining = roundMoney(netDue - paid);
   const balanced = Math.abs(remaining) < 0.01 && netDue > 0;
@@ -67,7 +68,7 @@ export default function PayEntryModal({
       onFormChange(next);
       return;
     }
-    const nextNet = computePayNetDue(gross, next, entry.type);
+    const nextNet = computePayNetDue(gross, next, entryType);
     onFormChange(syncPaySplitsToNetDue(next, nextNet));
   }
 
