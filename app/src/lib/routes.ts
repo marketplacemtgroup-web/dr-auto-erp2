@@ -15,6 +15,7 @@ export const routes = {
   servicos: "/dashboard/servicos",
   agenda: "/dashboard/agenda",
   estoque: "/dashboard/estoque",
+  terceirizados: "/dashboard/terceirizados",
   compras: "/dashboard/compras",
   fornecedores: "/dashboard/fornecedores",
   fornecedorDetalhe: (id: string) => `/dashboard/fornecedores/${id}`,

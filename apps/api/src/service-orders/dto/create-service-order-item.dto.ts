@@ -28,6 +28,10 @@ export class CreateServiceOrderItemDto {
   catalogItemId?: string;
 
   @IsOptional()
+  @IsString()
+  outsourcedServiceId?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   discount?: number;

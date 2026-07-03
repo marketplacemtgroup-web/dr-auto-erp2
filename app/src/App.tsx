@@ -22,6 +22,9 @@ const QuotesPage = lazyWithRetry(() => import("./pages/quotes/QuotesPage"));
 const QuoteDetailPage = lazyWithRetry(() => import("./pages/quotes/QuoteDetailPage"));
 const ServicesPage = lazyWithRetry(() => import("./pages/services/ServicesPage"));
 const InventoryPage = lazyWithRetry(() => import("./pages/inventory/InventoryPage"));
+const OutsourcedServicesPage = lazyWithRetry(
+  () => import("./pages/outsourced-services/OutsourcedServicesPage"),
+);
 const AgendaPage = lazyWithRetry(() => import("./pages/agenda/AgendaPage"));
 const SettingsPage = lazyWithRetry(() => import("./pages/settings/SettingsPage"));
 const PurchasesPage = lazyWithRetry(() => import("./pages/purchases/PurchasesPage"));
@@ -165,6 +168,14 @@ export default function App() {
             element={
               <Lazy>
                 <InventoryPage />
+              </Lazy>
+            }
+          />
+          <Route
+            path="terceirizados"
+            element={
+              <Lazy>
+                <OutsourcedServicesPage />
               </Lazy>
             }
           />

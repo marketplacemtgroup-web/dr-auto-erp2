@@ -36,6 +36,7 @@ export const MENU_ITEMS: Array<{
   { label: "Servicos", path: routes.servicos, permission: PERMISSIONS.serviceOrders },
   { label: "Agenda", path: routes.agenda, permission: PERMISSIONS.serviceOrders },
   { label: "Estoque", path: routes.estoque, permission: PERMISSIONS.inventory },
+  { label: "Terceirizados", path: routes.terceirizados, permission: PERMISSIONS.inventory },
   { label: "Fornecedores", path: routes.fornecedores, permission: [PERMISSIONS.suppliers, PERMISSIONS.inventory] },
   { label: "Compras", path: routes.compras, permission: [PERMISSIONS.purchases, PERMISSIONS.inventory] },
   { label: "Financeiro", path: routes.financeiro, permission: PERMISSIONS.financial },

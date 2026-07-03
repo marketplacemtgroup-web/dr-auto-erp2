@@ -330,7 +330,9 @@ export class FinancialService {
         financialEntries: {
           where: {
             type: 'RECEIVABLE',
-            status: 'OPEN',
+            // Considera recebíveis em aberto E já pagos: se a OS já foi
+            // faturada (mesmo que quitada), não deve voltar para a fila.
+            status: { in: ['OPEN', 'PAID'] },
             parentEntryId: null,
           },
           take: 1,
@@ -394,6 +396,18 @@ export class FinancialService {
     if (!billableStatuses.includes(so.status)) {
       throw new BadRequestException(
         'Somente OS entregues podem gerar cobrança. Finalize o serviço e marque como entregue antes de faturar.',
+      );
+    }
+
+    // Trava: se a OS já foi paga, não gera nova cobrança (evita duplicar
+    // o recebimento e jogá-lo para o mês vigente).
+    const alreadyPaid = await this.prisma.financialEntry.findFirst({
+      where: { organizationId, serviceOrderId, type: 'RECEIVABLE', status: 'PAID' },
+      include: entryInclude,
+    });
+    if (alreadyPaid) {
+      throw new BadRequestException(
+        'Esta OS já foi paga. Não é possível cobrar novamente.',
       );
     }
 

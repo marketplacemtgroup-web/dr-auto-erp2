@@ -18,6 +18,7 @@ import { FinancialModule } from './financial/financial.module';
 import { ReportsModule } from './reports/reports.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { ServiceCatalogModule } from './service-catalog/service-catalog.module';
+import { OutsourcedServicesModule } from './outsourced-services/outsourced-services.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { CashModule } from './cash/cash.module';
 import { AuditModule } from './audit/audit.module';
@@ -60,6 +61,7 @@ import { ColaboradorAppModule } from './colaborador-app/colaborador-app.module';
     ReportsModule,
     AttachmentsModule,
     ServiceCatalogModule,
+    OutsourcedServicesModule,
     AppointmentsModule,
     CashModule,
     SearchModule,

@@ -568,6 +568,8 @@ export class ServiceOrdersService {
     let unitPrice = dto.unitPrice;
     let itemType = dto.itemType ?? 'SERVICE';
     let catalogItemId: string | null = dto.catalogItemId ?? null;
+    const outsourcedServiceId: string | null = dto.outsourcedServiceId ?? null;
+    let outsourcedUnitCost: number | null = null;
 
     if (dto.catalogItemId) {
       const catalog = await this.prisma.serviceCatalog.findFirst({
@@ -578,6 +580,17 @@ export class ServiceOrdersService {
       unitPrice = unitPrice ?? Number(catalog.defaultPrice);
       itemType = 'SERVICE';
       catalogItemId = catalog.id;
+    }
+
+    if (outsourcedServiceId) {
+      const outsourced = await this.prisma.outsourcedService.findFirst({
+        where: { id: outsourcedServiceId, organizationId, isActive: true },
+      });
+      if (!outsourced) throw new NotFoundException('Serviço terceirizado não encontrado');
+      description = description || outsourced.name;
+      unitPrice = unitPrice ?? Number(outsourced.salePrice);
+      itemType = 'THIRD_PARTY';
+      outsourcedUnitCost = Number(outsourced.costPrice) || 0;
     }
 
     const executorId =
@@ -674,10 +687,15 @@ export class ServiceOrdersService {
         serviceOrderId: so.id,
         productId: dto.productId ?? null,
         catalogItemId,
+        outsourcedServiceId,
         description,
         itemType,
         quantity: qty,
         unitPrice,
+        unitCost:
+          outsourcedUnitCost != null && outsourcedUnitCost > 0
+            ? new Prisma.Decimal(outsourcedUnitCost)
+            : null,
         discount: dto.discount ?? 0,
         executorId,
         soldById: dto.soldById ?? null,

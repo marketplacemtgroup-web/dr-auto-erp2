@@ -361,6 +361,7 @@ model Organization {
   paymentFeeRecords PaymentFeeRecord[]
   financialPaymentSplits FinancialPaymentSplit[]
   serviceCatalog ServiceCatalog[]
+  outsourcedServices OutsourcedService[]
   stockMovements StockMovement[]
   appointments Appointment[]
   maintenanceReminders MaintenanceReminder[]
@@ -766,6 +767,7 @@ model ServiceOrderItem {
   serviceOrderId String               @map("service_order_id")
   productId      String?              @map("product_id")
   catalogItemId  String?              @map("catalog_item_id")
+  outsourcedServiceId String?         @map("outsourced_service_id")
   description    String
   itemType       ServiceOrderItemType @default(SERVICE) @map("item_type")
   quantity           Int                  @default(1)
@@ -784,6 +786,7 @@ model ServiceOrderItem {
   serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
   product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   catalogItem  ServiceCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  outsourcedService OutsourcedService? @relation(fields: [outsourcedServiceId], references: [id], onDelete: SetNull)
   executor     Employee?    @relation("ItemExecutor", fields: [executorId], references: [id], onDelete: SetNull)
   soldBy       Employee?    @relation("ItemSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
   appliedBy    Employee?    @relation("ItemAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
@@ -980,6 +983,25 @@ model ServiceCatalog {
 
   @@index([organizationId, isActive])
   @@map("service_catalog")
+}
+
+model OutsourcedService {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  provider       String?
+  category       String?
+  costPrice      Decimal  @default(0) @map("cost_price") @db.Decimal(12, 2)
+  salePrice      Decimal  @default(0) @map("sale_price") @db.Decimal(12, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orderItems   ServiceOrderItem[]
+
+  @@index([organizationId, isActive])
+  @@map("outsourced_services")
 }
 
 model Product {

@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, Upload, X } fro
 import StatusBadge from "../../components/StatusBadge";
 import ProductSearchSelect from "../../components/inventory/ProductSearchSelect";
 import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
+import OutsourcedServiceSearchSelect from "../../components/inventory/OutsourcedServiceSearchSelect";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import DateTimeField from "../../components/modules/DateTimeField";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
@@ -271,6 +272,7 @@ export default function ServiceOrderDetailPage() {
     unitPrice: "",
     productId: "",
     catalogItemId: "",
+    outsourcedServiceId: "",
     executorId: "",
     soldById: "",
     appliedById: "",
@@ -386,6 +388,7 @@ export default function ServiceOrderDetailPage() {
       unitPrice: "",
       productId: "",
       catalogItemId: "",
+      outsourcedServiceId: "",
       executorId: "",
       soldById: "",
       appliedById: "",
@@ -406,6 +409,7 @@ export default function ServiceOrderDetailPage() {
       unitPrice: String(item.unitPrice),
       productId: item.product?.id ?? "",
       catalogItemId: "",
+      outsourcedServiceId: "",
       executorId: item.executor?.id ?? "",
       soldById: item.soldBy?.id ?? "",
       appliedById: item.appliedBy?.id ?? "",
@@ -431,6 +435,7 @@ export default function ServiceOrderDetailPage() {
         ...payload,
         productId: itemForm.productId || undefined,
         catalogItemId: itemForm.catalogItemId || undefined,
+        outsourcedServiceId: itemForm.outsourcedServiceId || undefined,
         executorId: itemForm.executorId || undefined,
         soldById: itemForm.soldById || undefined,
         appliedById: itemForm.appliedById || undefined,
@@ -1545,6 +1550,21 @@ export default function ServiceOrderDetailPage() {
                   productId,
                   description: product ? product.name : f.description,
                   unitPrice: product ? String(product.salePrice) : f.unitPrice,
+                }))
+              }
+            />
+          </FormField>
+        )}
+        {!editingItem && itemForm.itemType === "THIRD_PARTY" && (
+          <FormField label="Servico terceirizado (cadastro)">
+            <OutsourcedServiceSearchSelect
+              value={itemForm.outsourcedServiceId}
+              onChange={(outsourcedServiceId, item) =>
+                setItemForm((f) => ({
+                  ...f,
+                  outsourcedServiceId,
+                  description: item ? item.name : f.description,
+                  unitPrice: item ? String(item.salePrice) : f.unitPrice,
                 }))
               }
             />

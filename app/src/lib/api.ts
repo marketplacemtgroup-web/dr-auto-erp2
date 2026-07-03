@@ -1478,6 +1478,7 @@ export const api = {
       unitPrice: number;
       productId?: string;
       catalogItemId?: string;
+      outsourcedServiceId?: string;
       discount?: number;
       executorId?: string;
       soldById?: string;
@@ -2179,6 +2180,53 @@ export const api = {
   deleteServiceCatalog: (token: string, id: string) =>
     request<{ ok: boolean }>(`/service-catalog/${id}`, { method: "DELETE" }, token),
 
+  outsourcedServices: (token: string, search?: string) =>
+    request<OutsourcedServiceRow[]>(
+      `/outsourced-services${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+      { method: "GET" },
+      token,
+    ),
+
+  outsourcedService: (token: string, id: string) =>
+    request<OutsourcedServiceRow>(`/outsourced-services/${id}`, { method: "GET" }, token),
+
+  createOutsourcedService: (
+    token: string,
+    data: {
+      name: string;
+      provider?: string;
+      category?: string;
+      costPrice?: number;
+      salePrice?: number;
+    },
+  ) =>
+    request<OutsourcedServiceRow>(
+      "/outsourced-services",
+      { method: "POST", body: JSON.stringify(data) },
+      token,
+    ),
+
+  updateOutsourcedService: (
+    token: string,
+    id: string,
+    data: Partial<{
+      name: string;
+      provider: string;
+      category: string;
+      costPrice: number;
+      salePrice: number;
+      isActive: boolean;
+    }>,
+  ) =>
+    request<OutsourcedServiceRow>(
+      `/outsourced-services/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+      token,
+    ),
+
+  deleteOutsourcedService: (token: string, id: string) =>
+    request<{ ok: boolean }>(`/outsourced-services/${id}`, { method: "DELETE" }, token),
+
   stockMovements: (token: string, productId?: string) =>
     request<StockMovementRow[]>(
       `/products/movements${productId ? `?productId=${productId}` : ""}`,
@@ -2766,6 +2814,16 @@ export interface ServiceCatalogRow {
   estimatedMinutes: number | null;
   defaultPrice: string | number;
   warrantyDays: number | null;
+  isActive: boolean;
+}
+
+export interface OutsourcedServiceRow {
+  id: string;
+  name: string;
+  provider: string | null;
+  category: string | null;
+  costPrice: string | number;
+  salePrice: string | number;
   isActive: boolean;
 }
 
