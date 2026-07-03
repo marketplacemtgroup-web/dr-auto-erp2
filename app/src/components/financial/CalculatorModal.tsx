@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useReducer } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -22,6 +22,13 @@ function compute(a: number, b: number, op: Op): number {
   }
 }
 
+// Converte numero para string limitando artefatos de ponto flutuante (ex.: 0.1 + 0.2).
+function toNumStr(n: number): string {
+  if (!Number.isFinite(n)) return "Erro";
+  const rounded = Math.round((n + Number.EPSILON) * 1e10) / 1e10;
+  return String(rounded);
+}
+
 function formatDisplay(value: string): string {
   if (value === "Erro") return value;
   const [intPart, decPart] = value.split(".");
@@ -32,143 +39,180 @@ function formatDisplay(value: string): string {
   return decPart !== undefined ? `${withSign},${decPart}` : withSign;
 }
 
-export default function CalculatorModal({ open, onClose }: Props) {
-  const [display, setDisplay] = useState("0");
-  const [previous, setPrevious] = useState<number | null>(null);
-  const [operator, setOperator] = useState<Op | null>(null);
-  const [waitingForOperand, setWaitingForOperand] = useState(false);
-  const [expression, setExpression] = useState("");
+type State = {
+  display: string;
+  previous: number | null;
+  operator: Op | null;
+  waitingForOperand: boolean;
+  expression: string;
+};
 
-  const clearAll = useCallback(() => {
-    setDisplay("0");
-    setPrevious(null);
-    setOperator(null);
-    setWaitingForOperand(false);
-    setExpression("");
-  }, []);
+const initialState: State = {
+  display: "0",
+  previous: null,
+  operator: null,
+  waitingForOperand: false,
+  expression: "",
+};
 
-  const inputDigit = useCallback(
-    (digit: string) => {
-      setDisplay((prev) => {
-        if (prev === "Erro") return digit;
-        if (waitingForOperand) {
-          setWaitingForOperand(false);
-          return digit;
-        }
-        if (prev === "0") return digit;
-        if (prev.replace(/[^\d]/g, "").length >= 15) return prev;
-        return prev + digit;
-      });
-    },
-    [waitingForOperand],
-  );
+type Action =
+  | { type: "digit"; digit: string }
+  | { type: "dot" }
+  | { type: "clear" }
+  | { type: "toggleSign" }
+  | { type: "percent" }
+  | { type: "backspace" }
+  | { type: "operator"; op: Op }
+  | { type: "equals" };
 
-  const inputDot = useCallback(() => {
-    setDisplay((prev) => {
-      if (prev === "Erro") return "0.";
-      if (waitingForOperand) {
-        setWaitingForOperand(false);
-        return "0.";
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "clear":
+      return initialState;
+
+    case "digit": {
+      const { digit } = action;
+      if (state.display === "Erro") {
+        return { ...initialState, display: digit };
       }
-      if (prev.includes(".")) return prev;
-      return prev + ".";
-    });
-  }, [waitingForOperand]);
-
-  const toggleSign = useCallback(() => {
-    setDisplay((prev) => {
-      if (prev === "0" || prev === "Erro") return prev;
-      return prev.startsWith("-") ? prev.slice(1) : "-" + prev;
-    });
-  }, []);
-
-  const inputPercent = useCallback(() => {
-    setDisplay((prev) => {
-      if (prev === "Erro") return prev;
-      const current = parseFloat(prev);
-      if (Number.isNaN(current)) return prev;
-      const base = previous !== null && operator ? previous : 1;
-      const result =
-        operator === "+" || operator === "-"
-          ? (base * current) / 100
-          : current / 100;
-      return String(result);
-    });
-  }, [previous, operator]);
-
-  const backspace = useCallback(() => {
-    setDisplay((prev) => {
-      if (prev === "Erro" || waitingForOperand) return prev;
-      if (prev.length <= 1 || (prev.length === 2 && prev.startsWith("-"))) return "0";
-      return prev.slice(0, -1);
-    });
-  }, [waitingForOperand]);
-
-  const performOperation = useCallback(
-    (nextOp: Op) => {
-      const current = parseFloat(display);
-      if (Number.isNaN(current)) return;
-      if (previous === null) {
-        setPrevious(current);
-      } else if (operator && !waitingForOperand) {
-        const result = compute(previous, current, operator);
-        if (Number.isNaN(result) || !Number.isFinite(result)) {
-          setDisplay("Erro");
-          setPrevious(null);
-          setOperator(null);
-          setWaitingForOperand(true);
-          setExpression("");
-          return;
-        }
-        setPrevious(result);
-        setDisplay(String(result));
+      if (state.waitingForOperand) {
+        return { ...state, display: digit, waitingForOperand: false };
       }
-      setOperator(nextOp);
-      setWaitingForOperand(true);
-      const baseValue = previous === null || operator === null || waitingForOperand
-        ? current
-        : compute(previous, current, operator);
-      setExpression(`${formatDisplay(String(baseValue))} ${nextOp}`);
-    },
-    [display, previous, operator, waitingForOperand],
-  );
-
-  const equals = useCallback(() => {
-    const current = parseFloat(display);
-    if (Number.isNaN(current) || operator === null || previous === null) return;
-    const result = compute(previous, current, operator);
-    if (Number.isNaN(result) || !Number.isFinite(result)) {
-      setDisplay("Erro");
-    } else {
-      setDisplay(String(result));
+      if (state.display === "0") {
+        return { ...state, display: digit };
+      }
+      if (state.display.replace(/[^\d]/g, "").length >= 15) {
+        return state;
+      }
+      return { ...state, display: state.display + digit };
     }
-    setExpression("");
-    setPrevious(null);
-    setOperator(null);
-    setWaitingForOperand(true);
-  }, [display, operator, previous]);
+
+    case "dot": {
+      if (state.display === "Erro") {
+        return { ...initialState, display: "0." };
+      }
+      if (state.waitingForOperand) {
+        return { ...state, display: "0.", waitingForOperand: false };
+      }
+      if (state.display.includes(".")) return state;
+      return { ...state, display: state.display + "." };
+    }
+
+    case "toggleSign": {
+      if (state.display === "0" || state.display === "Erro") return state;
+      const next = state.display.startsWith("-")
+        ? state.display.slice(1)
+        : "-" + state.display;
+      return { ...state, display: next };
+    }
+
+    case "percent": {
+      if (state.display === "Erro") return state;
+      const current = parseFloat(state.display);
+      if (Number.isNaN(current)) return state;
+      let result: number;
+      if (state.previous !== null && state.operator) {
+        result =
+          state.operator === "+" || state.operator === "-"
+            ? (state.previous * current) / 100
+            : current / 100;
+      } else {
+        result = current / 100;
+      }
+      return { ...state, display: toNumStr(result), waitingForOperand: false };
+    }
+
+    case "backspace": {
+      if (state.display === "Erro" || state.waitingForOperand) return state;
+      const d = state.display;
+      if (d.length <= 1 || (d.length === 2 && d.startsWith("-"))) {
+        return { ...state, display: "0" };
+      }
+      return { ...state, display: d.slice(0, -1) };
+    }
+
+    case "operator": {
+      const { op } = action;
+      const current = parseFloat(state.display);
+      if (Number.isNaN(current)) return state;
+
+      // Trocar de operador sem digitar novo numero: apenas atualiza o operador.
+      if (state.waitingForOperand && state.previous !== null) {
+        return {
+          ...state,
+          operator: op,
+          expression: `${formatDisplay(toNumStr(state.previous))} ${op}`,
+        };
+      }
+
+      let newPrevious: number;
+      if (state.previous === null) {
+        newPrevious = current;
+      } else if (state.operator) {
+        const result = compute(state.previous, current, state.operator);
+        if (!Number.isFinite(result)) {
+          return { ...initialState, display: "Erro", waitingForOperand: true };
+        }
+        newPrevious = Number(toNumStr(result));
+      } else {
+        newPrevious = current;
+      }
+
+      return {
+        ...state,
+        previous: newPrevious,
+        display: toNumStr(newPrevious),
+        operator: op,
+        waitingForOperand: true,
+        expression: `${formatDisplay(toNumStr(newPrevious))} ${op}`,
+      };
+    }
+
+    case "equals": {
+      if (state.operator === null || state.previous === null) return state;
+      const current = parseFloat(state.display);
+      if (Number.isNaN(current)) return state;
+      const result = compute(state.previous, current, state.operator);
+      if (!Number.isFinite(result)) {
+        return { ...initialState, display: "Erro", waitingForOperand: true };
+      }
+      return {
+        ...initialState,
+        display: toNumStr(result),
+        waitingForOperand: true,
+      };
+    }
+
+    default:
+      return state;
+  }
+}
+
+export default function CalculatorModal({ open, onClose }: Props) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const { display, expression } = state;
 
   useEffect(() => {
     if (!open) return;
-    clearAll();
+    dispatch({ type: "clear" });
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
       } else if (e.key >= "0" && e.key <= "9") {
-        inputDigit(e.key);
+        dispatch({ type: "digit", digit: e.key });
       } else if (e.key === "." || e.key === ",") {
-        inputDot();
+        dispatch({ type: "dot" });
       } else if (e.key === "+" || e.key === "-" || e.key === "*" || e.key === "/") {
-        performOperation(e.key as Op);
+        dispatch({ type: "operator", op: e.key as Op });
       } else if (e.key === "Enter" || e.key === "=") {
         e.preventDefault();
-        equals();
+        dispatch({ type: "equals" });
       } else if (e.key === "Backspace") {
-        backspace();
+        dispatch({ type: "backspace" });
       } else if (e.key === "%") {
-        inputPercent();
+        dispatch({ type: "percent" });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -176,8 +220,7 @@ export default function CalculatorModal({ open, onClose }: Props) {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKey);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -216,65 +259,65 @@ export default function CalculatorModal({ open, onClose }: Props) {
         </div>
 
         <div className="grid grid-cols-4 gap-2">
-          <button type="button" className={fnKey} onClick={clearAll}>
+          <button type="button" className={fnKey} onClick={() => dispatch({ type: "clear" })}>
             C
           </button>
-          <button type="button" className={fnKey} onClick={toggleSign}>
+          <button type="button" className={fnKey} onClick={() => dispatch({ type: "toggleSign" })}>
             +/−
           </button>
-          <button type="button" className={fnKey} onClick={inputPercent}>
+          <button type="button" className={fnKey} onClick={() => dispatch({ type: "percent" })}>
             %
           </button>
-          <button type="button" className={opKey} onClick={() => performOperation("/")}>
+          <button type="button" className={opKey} onClick={() => dispatch({ type: "operator", op: "/" })}>
             ÷
           </button>
 
-          <button type="button" className={numKey} onClick={() => inputDigit("7")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "7" })}>
             7
           </button>
-          <button type="button" className={numKey} onClick={() => inputDigit("8")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "8" })}>
             8
           </button>
-          <button type="button" className={numKey} onClick={() => inputDigit("9")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "9" })}>
             9
           </button>
-          <button type="button" className={opKey} onClick={() => performOperation("*")}>
+          <button type="button" className={opKey} onClick={() => dispatch({ type: "operator", op: "*" })}>
             ×
           </button>
 
-          <button type="button" className={numKey} onClick={() => inputDigit("4")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "4" })}>
             4
           </button>
-          <button type="button" className={numKey} onClick={() => inputDigit("5")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "5" })}>
             5
           </button>
-          <button type="button" className={numKey} onClick={() => inputDigit("6")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "6" })}>
             6
           </button>
-          <button type="button" className={opKey} onClick={() => performOperation("-")}>
+          <button type="button" className={opKey} onClick={() => dispatch({ type: "operator", op: "-" })}>
             −
           </button>
 
-          <button type="button" className={numKey} onClick={() => inputDigit("1")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "1" })}>
             1
           </button>
-          <button type="button" className={numKey} onClick={() => inputDigit("2")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "2" })}>
             2
           </button>
-          <button type="button" className={numKey} onClick={() => inputDigit("3")}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "digit", digit: "3" })}>
             3
           </button>
-          <button type="button" className={opKey} onClick={() => performOperation("+")}>
+          <button type="button" className={opKey} onClick={() => dispatch({ type: "operator", op: "+" })}>
             +
           </button>
 
-          <button type="button" className={`${numKey} col-span-2`} onClick={() => inputDigit("0")}>
+          <button type="button" className={`${numKey} col-span-2`} onClick={() => dispatch({ type: "digit", digit: "0" })}>
             0
           </button>
-          <button type="button" className={numKey} onClick={inputDot}>
+          <button type="button" className={numKey} onClick={() => dispatch({ type: "dot" })}>
             ,
           </button>
-          <button type="button" className={eqKey} onClick={equals}>
+          <button type="button" className={eqKey} onClick={() => dispatch({ type: "equals" })}>
             =
           </button>
         </div>
@@ -282,7 +325,7 @@ export default function CalculatorModal({ open, onClose }: Props) {
         <button
           type="button"
           className="mt-2 h-10 w-full rounded-xl border border-[#E2E8F0] text-sm text-[#64748B] hover:bg-[#F8FAFC]"
-          onClick={backspace}
+          onClick={() => dispatch({ type: "backspace" })}
         >
           ← Apagar
         </button>

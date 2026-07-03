@@ -95,7 +95,9 @@ export class FinancialService {
           ...entryInclude,
           installments: { orderBy: { installmentNumber: 'asc' } },
         },
-        orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+        // Mais recentes primeiro: o que foi lançado/finalizado hoje abre na
+        // primeira página; os lançamentos antigos ficam nas últimas.
+        orderBy: [{ createdAt: 'desc' }, { dueDate: 'desc' }],
         skip,
         take: limit,
       }),
