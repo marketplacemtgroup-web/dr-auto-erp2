@@ -8,6 +8,7 @@ import ReportHeatmapChart from "../charts/ReportHeatmapChart";
 import ReportInteractivePie from "../charts/ReportInteractivePie";
 import ReportFunnelChart from "../charts/ReportFunnelChart";
 import ReportRankList from "../ReportRankList";
+import ReportProfitMetricGrid from "../ReportProfitMetricGrid";
 import type { PaymentMethod } from "../../../lib/api";
 import type { ReportTabProps } from "./reportTabTypes";
 
@@ -61,8 +62,8 @@ export default function ReportsOverviewTab({
         period={period}
         token={token}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="h-[240px]">
+        <div className="flex flex-col gap-4">
+          <div className="h-[220px] sm:h-[240px] w-full min-h-[200px]">
             <ReportWaterfallChart
               revenue={grossProfit}
               expense={expenses}
@@ -74,34 +75,36 @@ export default function ReportsOverviewTab({
               }}
             />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 text-[13px] content-center">
-            <div className="rounded-xl border border-[#E2E8F0] p-4">
-              <p className="text-[#64748B]">Lucro pecas</p>
-              <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.partsProfit)}</p>
-            </div>
-            <div className="rounded-xl border border-[#E2E8F0] p-4">
-              <p className="text-[#64748B]">Lucro servicos</p>
-              <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.servicesProfit)}</p>
-            </div>
-            <div className="rounded-xl border border-[#E2E8F0] p-4">
-              <p className="text-[#64748B]">Lucro scanner</p>
-              <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.scannerProfit ?? 0)}</p>
-            </div>
-            <div className="rounded-xl border border-[#E2E8F0] p-4">
-              <p className="text-[#64748B]">Lucro terceirizado</p>
-              <p className="text-lg font-bold text-[#1E293B]">{formatMoney(report.financial.outsourcedProfit ?? 0)}</p>
-            </div>
-            <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
-              <p className="text-[#991B1B]">Despesas pagas</p>
-              <p className="text-lg font-bold text-[#DC2626]">{formatNegativeMoney(expenses)}</p>
-            </div>
-            <div className="rounded-xl border border-[#E2E8F0] p-4">
-              <p className="text-[#64748B]">Lucro total</p>
-              <p className={`text-lg font-bold ${report.financial.totalProfit >= 0 ? "text-[#16A34A]" : "text-[#DC2626]"}`}>
-                {formatMoney(report.financial.totalProfit)}
-              </p>
-            </div>
-          </div>
+          <ReportProfitMetricGrid
+            items={[
+              {
+                label: "Lucro pecas",
+                value: formatMoney(report.financial.partsProfit),
+              },
+              {
+                label: "Lucro servicos",
+                value: formatMoney(report.financial.servicesProfit),
+              },
+              {
+                label: "Lucro scanner",
+                value: formatMoney(report.financial.scannerProfit ?? 0),
+              },
+              {
+                label: "Lucro terceirizado",
+                value: formatMoney(report.financial.outsourcedProfit ?? 0),
+              },
+              {
+                label: "Despesas pagas",
+                value: formatNegativeMoney(expenses),
+                tone: "expense",
+              },
+              {
+                label: "Lucro total",
+                value: formatMoney(report.financial.totalProfit),
+                tone: report.financial.totalProfit >= 0 ? "success" : "danger",
+              },
+            ]}
+          />
         </div>
       </ReportSection>
       <ReportSection
