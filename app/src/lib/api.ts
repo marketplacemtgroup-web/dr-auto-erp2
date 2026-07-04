@@ -449,6 +449,7 @@ export interface FinancialEntryRow {
   status: string;
   dueDate: string;
   amount: string | number;
+  amountPaid?: string | number;
   createdAt: string;
   paymentMethod?: PaymentMethod | null;
   discountAmount?: string | number;
@@ -472,6 +473,129 @@ export interface FinancialEntryRow {
   serviceOrder?: { id: string; number: number } | null;
   quote?: { id: string; number: number } | null;
   installments?: FinancialEntryRow[];
+}
+
+export interface FinancialAccountRow {
+  id: string;
+  name: string;
+  type: "CAIXA" | "BANCO" | "CARTEIRA_DIGITAL" | "MAQUININHA" | "COFRE" | "SOCIO_PF";
+  bank?: string | null;
+  agency?: string | null;
+  accountNumber?: string | null;
+  holder?: string | null;
+  openingBalance: string | number;
+  currentBalance: string | number;
+  status: "ACTIVE" | "INACTIVE";
+  color: string;
+  icon?: string | null;
+  allowsMovement: boolean;
+  isPrimary: boolean;
+}
+
+export interface FinancialTransferRow {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: string | number;
+  transferDate: string;
+  notes?: string | null;
+  status: string;
+  fromAccount?: { id: string; name: string };
+  toAccount?: { id: string; name: string };
+}
+
+export interface CapitalContributionRow {
+  id: string;
+  partnerName: string;
+  toAccountId: string;
+  amount: string | number;
+  contributionDate: string;
+  reason?: string | null;
+  toAccount?: { id: string; name: string };
+}
+
+export interface PartnerWithdrawalRow {
+  id: string;
+  partnerName: string;
+  fromAccountId: string;
+  amount: string | number;
+  withdrawalDate: string;
+  withdrawalType: "PRO_LABORE" | "LUCROS" | "PARTICULAR" | "ADIANTAMENTO" | "OUTRO";
+  reason?: string | null;
+  fromAccount?: { id: string; name: string };
+}
+
+export interface LoanInstallmentRow {
+  id: string;
+  installmentNumber: number;
+  dueDate: string;
+  amount: string | number;
+  status: string;
+  financialEntryId?: string | null;
+}
+
+export interface LoanRow {
+  id: string;
+  bankName: string;
+  contractNumber?: string | null;
+  principalAmount: string | number;
+  interestRate?: string | number | null;
+  installments: number;
+  installmentAmount: string | number;
+  firstDueDate: string;
+  outstandingBalance: string | number;
+  status: string;
+  loanInstallments?: LoanInstallmentRow[];
+  destinationAccount?: { id: string; name: string };
+}
+
+export interface BankReconciliationRow {
+  id: string;
+  accountId: string;
+  periodStart: string;
+  periodEnd: string;
+  bankBalance: string | number;
+  systemBalance: string | number;
+  difference: string | number;
+  notes?: string | null;
+  reconciledAt?: string | null;
+}
+
+export interface CashFlowReport {
+  from: string;
+  to: string;
+  groupBy: string;
+  accountId: string | null;
+  openingBalance: number;
+  closingBalance: number;
+  totalInflows: number;
+  totalOutflows: number;
+  transfers: number;
+  contributions: number;
+  withdrawals: number;
+  receivables: number;
+  payables: number;
+  periods: Array<{
+    period: string;
+    inflows: number;
+    outflows: number;
+    transfers: number;
+    contributions: number;
+    withdrawals: number;
+    receivables: number;
+    payables: number;
+    net: number;
+  }>;
+  movements: Array<{
+    id: string;
+    accountName: string;
+    direction: string;
+    amount: number;
+    movementKind: string;
+    movementDate: string;
+    description?: string | null;
+    reconciliationStatus: string;
+  }>;
 }
 
 export interface CashSessionRow {
@@ -1966,6 +2090,9 @@ export const api = {
     token: string,
     id: string,
     data?: {
+      accountId?: string;
+      amountToPay?: number;
+      costCenterId?: string;
       paymentMethod?: PaymentMethod;
       paidAt?: string;
       registerInCash?: boolean;
@@ -1977,6 +2104,7 @@ export const api = {
       splits?: Array<{
         paymentMethod: PaymentMethod;
         amount: number;
+        accountId?: string;
         registerInCash?: boolean;
       }>;
     },
@@ -1985,6 +2113,131 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data ?? {}),
     }, token),
+
+  reverseFinancialEntry: (token: string, id: string, reason: string) =>
+    request<FinancialEntryRow>(`/financial/${id}/reverse`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason }),
+    }, token),
+
+  financialAccounts: (token: string) =>
+    request<FinancialAccountRow[]>("/financial/accounts", { method: "GET" }, token),
+
+  financialAccountsSummary: (token: string) =>
+    request<{ totalBalance: number; cashBalance: number; bankBalance: number; accounts: FinancialAccountRow[] }>(
+      "/financial/accounts/summary",
+      { method: "GET" },
+      token,
+    ),
+
+  createFinancialAccount: (
+    token: string,
+    data: {
+      name: string;
+      type: FinancialAccountRow["type"];
+      bank?: string;
+      agency?: string;
+      accountNumber?: string;
+      holder?: string;
+      openingBalance?: number;
+      color?: string;
+    },
+  ) =>
+    request<FinancialAccountRow>("/financial/accounts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  financialTransfers: (token: string, page = 1, limit = 50) =>
+    request<FinancialTransferRow[] | Paginated<FinancialTransferRow>>(
+      `/financial/transfers${buildQuery({ page, limit })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
+
+  createFinancialTransfer: (
+    token: string,
+    data: { fromAccountId: string; toAccountId: string; amount: number; transferDate: string; notes?: string },
+  ) =>
+    request<FinancialTransferRow>("/financial/transfers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  capitalContributions: (token: string) =>
+    request<CapitalContributionRow[]>("/financial/contributions", { method: "GET" }, token),
+
+  createCapitalContribution: (
+    token: string,
+    data: { partnerName: string; toAccountId: string; amount: number; contributionDate: string; reason?: string },
+  ) =>
+    request<CapitalContributionRow>("/financial/contributions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  partnerWithdrawals: (token: string) =>
+    request<PartnerWithdrawalRow[]>("/financial/withdrawals", { method: "GET" }, token),
+
+  createPartnerWithdrawal: (
+    token: string,
+    data: {
+      partnerName: string;
+      fromAccountId: string;
+      amount: number;
+      withdrawalDate: string;
+      withdrawalType: PartnerWithdrawalRow["withdrawalType"];
+      reason?: string;
+    },
+  ) =>
+    request<PartnerWithdrawalRow>("/financial/withdrawals", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  financialLoans: (token: string) =>
+    request<LoanRow[]>("/financial/loans", { method: "GET" }, token),
+
+  createFinancialLoan: (
+    token: string,
+    data: {
+      bankName: string;
+      contractNumber?: string;
+      principalAmount: number;
+      interestRate?: number;
+      installments: number;
+      installmentAmount: number;
+      firstDueDate: string;
+      destinationAccountId: string;
+      notes?: string;
+    },
+  ) =>
+    request<LoanRow>("/financial/loans", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  bankReconciliations: (token: string) =>
+    request<BankReconciliationRow[]>("/financial/reconciliations", { method: "GET" }, token),
+
+  createBankReconciliation: (
+    token: string,
+    data: { accountId: string; periodStart: string; periodEnd: string; bankBalance: number; notes?: string },
+  ) =>
+    request<BankReconciliationRow>("/financial/reconciliations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, token),
+
+  financialCashFlowReport: (
+    token: string,
+    params: { from: string; to: string; groupBy?: string; accountId?: string },
+  ) =>
+    request<CashFlowReport>(
+      `/financial/cash-flow-report${buildQuery(params)}`,
+      { method: "GET" },
+      token,
+    ),
 
   deleteFinancialEntry: (token: string, id: string, reason: string) =>
     request<{ ok: boolean }>(`/financial/${id}`, {

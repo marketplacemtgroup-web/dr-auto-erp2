@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
-import { Calculator, Pencil, Repeat, Trash2 } from "lucide-react";
+import { Calculator, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
 import CalculatorModal from "../../components/financial/CalculatorModal";
 import DeleteEntryModal from "../../components/financial/DeleteEntryModal";
@@ -16,6 +16,7 @@ import {
   api,
   LIST_PAGE_SIZE,
   type CashSessionRow,
+  type FinancialAccountRow,
   type FinancialEntryRow,
   type FinancialProfitSummary,
   type FinancialReceiveQueue,
@@ -78,6 +79,12 @@ export default function FinancialPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [payTarget, setPayTarget] = useState<FinancialEntryRow | null>(null);
   const [payForm, setPayForm] = useState<PayEntryFormState>(() => createDefaultPayForm(0));
+  const [accounts, setAccounts] = useState<FinancialAccountRow[]>([]);
+  const [accountsSummary, setAccountsSummary] = useState<{ totalBalance: number } | null>(null);
+  const primaryAccountId = useMemo(
+    () => accounts.find((a) => a.isPrimary)?.id ?? accounts[0]?.id ?? "",
+    [accounts],
+  );
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [form, setForm] = useState({
     description: "",
@@ -200,6 +207,8 @@ export default function FinancialPage() {
         setEntriesPage(1);
       }),
       api.cashCurrent(token).then(setCashSession).catch(() => setCashSession(null)),
+      api.financialAccounts(token).then(setAccounts).catch(() => setAccounts([])),
+      api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => setAccountsSummary(null)),
       api.financialReceiveQueue(token).then(setReceiveQueue),
     ]).finally(() => {
       setLoading(false);
@@ -225,7 +234,12 @@ export default function FinancialPage() {
     if (state.payEntry) {
       setPayTarget(state.payEntry);
       setPayForm(
-        createDefaultPayForm(Number(state.payEntry.amount), state.tab === "cash"),
+        createDefaultPayForm(
+          Number(state.payEntry.amount),
+          state.tab === "cash",
+          primaryAccountId,
+          Number(state.payEntry.amountPaid ?? 0),
+        ),
       );
     }
 
@@ -278,10 +292,13 @@ export default function FinancialPage() {
       const splits = payForm.splits.map((row) => ({
         paymentMethod: row.paymentMethod,
         amount: Number(row.amount.replace(",", ".")) || 0,
+        accountId: row.accountId || payForm.accountId || undefined,
         registerInCash: row.registerInCash && row.paymentMethod === "CASH",
       }));
 
       return api.payFinancialEntry(token!, payTarget!.id, {
+        accountId: payForm.accountId || undefined,
+        amountToPay: Number(payForm.amountToPay.replace(",", ".")) || undefined,
         discountAmount: discount > 0 && payForm.discountMoney ? discount : undefined,
         discountPercent:
           discount > 0 && payForm.discountPercent
@@ -300,7 +317,25 @@ export default function FinancialPage() {
       void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       void loadProfitSummary();
+      if (token) {
+        void api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => null);
+      }
       setPayTarget(null);
+    },
+  });
+
+  const reverseEntry = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.reverseFinancialEntry(token!, id, reason),
+    onSuccess: () => {
+      void loadEntries(search);
+      void loadCash();
+      void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
+      void loadProfitSummary();
+      if (token) {
+        void api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => null);
+      }
     },
   });
 
@@ -351,7 +386,20 @@ export default function FinancialPage() {
 
   function openPay(row: FinancialEntryRow, preferCash = tab === "cash") {
     setPayTarget(row);
-    setPayForm(createDefaultPayForm(Number(row.amount), preferCash && !!cashSession));
+    setPayForm(
+      createDefaultPayForm(
+        Number(row.amount),
+        preferCash && !!cashSession,
+        primaryAccountId,
+        Number(row.amountPaid ?? 0),
+      ),
+    );
+  }
+
+  function handleReverse(row: FinancialEntryRow) {
+    const reason = window.prompt("Motivo do estorno:");
+    if (!reason?.trim()) return;
+    reverseEntry.mutate({ id: row.id, reason: reason.trim() });
   }
 
   async function chargeOrder(order: FinancialReceiveQueueOrder) {
@@ -413,8 +461,8 @@ export default function FinancialPage() {
   return (
     <>
       <ModulePageShell
-        title="Financeiro"
-        description="Contas, parcelas, caixa e formas de pagamento"
+        title="Lançamentos"
+        description="Contas a pagar e receber, parcelas, caixa e formas de pagamento"
         onSearch={tab === "entries" ? (q) => { setSearch(q); setEntriesPage(1); void loadEntries(q, 1); } : undefined}
       >
         {showMoney ? (
@@ -477,6 +525,12 @@ export default function FinancialPage() {
                         ? ("success" as const)
                         : ("danger" as const),
                     hint: "Faturamento − despesas pagas",
+                  },
+                  {
+                    label: "Saldo contas",
+                    value: accountsSummary ? formatCurrency(accountsSummary.totalBalance) : "—",
+                    tone: "default" as const,
+                    hint: "Caixa + bancos + carteiras",
                   },
                   {
                     label: "Lucro operacional",
@@ -594,16 +648,28 @@ export default function FinancialPage() {
                                 Parcelas
                               </button>
                             ) : null}
-                            {r.status === "PAID" ? (
+                            {r.status === "PAID" || r.status === "REVERSED" ? (
                               <span className="inline-flex items-center h-8 px-3 text-[11px] font-medium text-[#94A3B8]">
-                                Pago
+                                {r.status === "REVERSED" ? "Estornado" : "Pago"}
                               </span>
                             ) : (
                               <FinancialPayButton
                                 type={r.type}
                                 disabled={!token}
+                                label={r.status === "PARTIAL" ? "Completar" : undefined}
                                 onClick={() => openPay(r)}
                               />
+                            )}
+                            {(r.status === "PAID" || r.status === "PARTIAL") && (
+                              <button
+                                type="button"
+                                title="Estornar lançamento"
+                                disabled={!token || reverseEntry.isPending}
+                                onClick={() => handleReverse(r)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-[#94A3B8] hover:text-[#D97706] hover:bg-amber-50 disabled:opacity-50"
+                              >
+                                <RotateCcw size={16} />
+                              </button>
                             )}
                             <button
                               type="button"
@@ -632,10 +698,16 @@ export default function FinancialPage() {
                             <td className="px-4 py-2 text-[12px]">{formatDate(p.dueDate)}</td>
                             <td className="px-4 py-2 text-right text-[12px]">{formatCurrency(Number(p.amount))}</td>
                             <td className="px-4 py-2 text-right space-x-1">
-                              {p.status === "OPEN" ? (
-                                <FinancialPayButton type={p.type} onClick={() => openPay(p)} />
+                              {p.status === "OPEN" || p.status === "PARTIAL" ? (
+                                <FinancialPayButton
+                                  type={p.type}
+                                  label={p.status === "PARTIAL" ? "Completar" : undefined}
+                                  onClick={() => openPay(p)}
+                                />
                               ) : (
-                                <span className="text-[11px] text-[#94A3B8]">Pago</span>
+                                <span className="text-[11px] text-[#94A3B8]">
+                                  {p.status === "REVERSED" ? "Estornado" : "Pago"}
+                                </span>
                               )}
                               <button
                                 type="button"
@@ -960,6 +1032,7 @@ export default function FinancialPage() {
         open={!!payTarget}
         entry={payTarget}
         form={payForm}
+        accounts={accounts}
         cashOpen={!!cashSession}
         loading={pay.isPending}
         onFormChange={setPayForm}

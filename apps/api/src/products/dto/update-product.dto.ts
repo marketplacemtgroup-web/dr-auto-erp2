@@ -29,6 +29,47 @@ export class UpdateProductDto {
   location?: string;
 
   @IsOptional()
+  @IsString()
+  internalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  barcode?: string;
+
+  @IsOptional()
+  @IsString()
+  subcategory?: string;
+
+  @IsOptional()
+  @IsString()
+  cest?: string;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @IsNumber()
+  weight?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxStock?: number;
+
+  @IsOptional()
+  @IsNumber()
+  markup?: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   minStock?: number;

@@ -39,7 +39,7 @@ export const MENU_ITEMS: Array<{
   { label: "Terceirizados", path: routes.terceirizados, permission: PERMISSIONS.inventory },
   { label: "Fornecedores", path: routes.fornecedores, permission: [PERMISSIONS.suppliers, PERMISSIONS.inventory] },
   { label: "Compras", path: routes.compras, permission: [PERMISSIONS.purchases, PERMISSIONS.inventory] },
-  { label: "Financeiro", path: routes.financeiro, permission: PERMISSIONS.financial },
+  { label: "Financeiro", path: routes.financeiroLancamentos, permission: PERMISSIONS.financial },
   { label: "Equipe & Comissoes", path: routes.equipeFuncionarios, permission: [PERMISSIONS.team, PERMISSIONS.pontoVer, PERMISSIONS.escalasVer, PERMISSIONS.solicitacoesVer] },
   { label: "Relatorios", path: routes.relatorios, permission: PERMISSIONS.reports },
   { label: "Admin", path: routes.admin, permission: PERMISSIONS.admin },
@@ -76,6 +76,9 @@ export function permissionForPath(pathname: string): string | string[] | null {
       PERMISSIONS.escalasVerTodas,
       PERMISSIONS.solicitacoesVer,
     ];
+  }
+  if (normalized.startsWith(routes.financeiro) || normalized.startsWith("/dashboard/financeiro")) {
+    return PERMISSIONS.financial;
   }
   const sorted = [...MENU_ITEMS].sort((a, b) => b.path.length - a.path.length);
   for (const item of sorted) {

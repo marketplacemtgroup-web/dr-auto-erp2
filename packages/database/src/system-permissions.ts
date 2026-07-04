@@ -17,6 +17,7 @@ export const SYSTEM_PERMISSIONS = [
   { slug: 'suppliers.manage', name: 'Gerenciar fornecedores', module: 'suppliers' },
   { slug: 'purchases.manage', name: 'Gerenciar compras', module: 'purchases' },
   { slug: 'financial.manage', name: 'Gerenciar financeiro', module: 'financial' },
+  { slug: 'financial.accounts.manage', name: 'Gerenciar contas financeiras', module: 'financial' },
   { slug: 'users.manage', name: 'Gerenciar usuários', module: 'users' },
   { slug: 'settings.manage', name: 'Configurações', module: 'settings' },
   { slug: 'admin.access', name: 'Painel administrativo', module: 'admin' },

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Trash2, X } from "lucide-react";
-import type { FinancialEntryRow } from "../../lib/api";
+import type { FinancialAccountRow, FinancialEntryRow } from "../../lib/api";
 import {
   computePayDiscount,
   computePayNetDue,
@@ -16,6 +16,7 @@ type Props = {
   open: boolean;
   entry: FinancialEntryRow | null;
   form: PayEntryFormState;
+  accounts: FinancialAccountRow[];
   cashOpen: boolean;
   loading?: boolean;
   onFormChange: (form: PayEntryFormState) => void;
@@ -31,6 +32,7 @@ export default function PayEntryModal({
   open,
   entry,
   form,
+  accounts,
   cashOpen,
   loading,
   onFormChange,
@@ -56,12 +58,15 @@ export default function PayEntryModal({
   const entryType = entry.type;
   const isReceivable = entryType === "RECEIVABLE";
   const gross = Number(entry.amount);
+  const alreadyPaid = Number(entry.amountPaid ?? 0);
   const discount = computePayDiscount(gross, form.discountMoney, form.discountPercent);
   const fee = Number(form.feeAmount.replace(",", ".")) || 0;
   const netDue = computePayNetDue(gross, form, entryType);
+  const remainingDue = roundMoney(Math.max(netDue - alreadyPaid, 0));
+  const payTarget = Number(form.amountToPay.replace(",", ".")) || remainingDue;
   const paid = splitSum(form.splits);
-  const remaining = roundMoney(netDue - paid);
-  const balanced = Math.abs(remaining) < 0.01 && netDue > 0;
+  const remaining = roundMoney(payTarget - paid);
+  const balanced = Math.abs(remaining) < 0.01 && payTarget > 0;
 
   function applyFormChange(next: PayEntryFormState, syncSplits = false) {
     if (!syncSplits) {
@@ -88,6 +93,7 @@ export default function PayEntryModal({
           id: crypto.randomUUID(),
           paymentMethod: "PIX",
           amount: remaining > 0 ? remaining.toFixed(2) : "",
+          accountId: form.accountId,
           registerInCash: false,
         },
       ],
@@ -181,6 +187,11 @@ export default function PayEntryModal({
           <div className="text-center py-1">
             <p className="text-[11px] uppercase tracking-wide text-[#94A3B8] mb-1">Valor bruto</p>
             <p className="text-2xl font-bold text-[#0F3D4C]">{formatCurrency(gross)}</p>
+            {alreadyPaid > 0 ? (
+              <p className="text-[12px] text-[#64748B] mt-1">
+                Já pago: {formatCurrency(alreadyPaid)} · Restante: {formatCurrency(remainingDue)}
+              </p>
+            ) : null}
             {(discount > 0 || fee > 0) && (
               <div className="text-[13px] mt-1 space-y-0.5">
                 {discount > 0 ? (
@@ -194,6 +205,43 @@ export default function PayEntryModal({
                 </p>
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-[#64748B] mb-1.5 block">Valor desta baixa (R$)</label>
+              <input
+                type="number"
+                min={0.01}
+                step="0.01"
+                max={remainingDue}
+                className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm"
+                value={form.amountToPay}
+                onChange={(e) => {
+                  const next = { ...form, amountToPay: e.target.value };
+                  onFormChange(syncPaySplitsToNetDue(next, Number(e.target.value.replace(",", ".")) || remainingDue));
+                }}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[#64748B] mb-1.5 block">Conta financeira</label>
+              <select
+                className="w-full h-10 px-3 rounded-lg border border-[#E2E8F0] text-sm"
+                value={form.accountId}
+                onChange={(e) =>
+                  onFormChange({
+                    ...form,
+                    accountId: e.target.value,
+                    splits: form.splits.map((s) => ({ ...s, accountId: e.target.value })),
+                  })
+                }
+              >
+                <option value="">Caixa principal</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -378,7 +426,7 @@ export default function PayEntryModal({
               <span>
                 Falta {formatCurrency(Math.max(remaining, 0))}
                 {remaining < -0.01 ? ` (excesso de ${formatCurrency(Math.abs(remaining))})` : ""}{" "}
-                para fechar {formatCurrency(netDue)}.
+                para fechar {formatCurrency(payTarget)}.
               </span>
             )}
           </div>

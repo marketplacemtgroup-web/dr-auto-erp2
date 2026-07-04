@@ -15,6 +15,8 @@ import {
 } from './dto/fixed-expense.dto';
 import { AuditService } from '../audit/audit.service';
 import { ReportsService } from '../reports/reports.service';
+import { LedgerService } from '../ledger/ledger.service';
+import { AccountsService } from '../accounts/accounts.service';
 import {
   FinancialPeriodPreset,
   resolveFinancialPeriod,
@@ -29,6 +31,8 @@ const entryInclude = {
   supplier: { select: { id: true, legalName: true, tradeName: true } },
   purchaseOrder: { select: { id: true, number: true } },
   financialCategory: { select: { id: true, name: true, type: true } },
+  account: { select: { id: true, name: true, type: true } },
+  costCenter: { select: { id: true, name: true } },
   paymentSplits: { orderBy: { createdAt: 'asc' as const } },
 };
 
@@ -40,6 +44,8 @@ export class FinancialService {
     private readonly reports: ReportsService,
     private readonly appointments: AppointmentsService,
     private readonly commissionEngine: CommissionEngineService,
+    private readonly ledger: LedgerService,
+    private readonly accounts: AccountsService,
     @Optional() private readonly dashboardCache?: DashboardCacheService,
   ) {}
 
@@ -605,6 +611,46 @@ export class FinancialService {
     return Math.round(value * 100) / 100;
   }
 
+  private async resolveAccountId(
+    organizationId: string,
+    accountId?: string | null,
+  ) {
+    if (accountId) {
+      const account = await this.prisma.financialAccount.findFirst({
+        where: { id: accountId, organizationId, status: 'ACTIVE' },
+      });
+      if (!account) throw new BadRequestException('Conta financeira inválida');
+      return account.id;
+    }
+    const primary = await this.accounts.ensurePrimaryAccount(organizationId);
+    return primary.id;
+  }
+
+  private entryRemainingAmount(entry: {
+    amount: Prisma.Decimal;
+    amountPaid: Prisma.Decimal;
+    discountAmount?: Prisma.Decimal;
+    interestAmount?: Prisma.Decimal;
+    penaltyAmount?: Prisma.Decimal;
+    feeAmount?: Prisma.Decimal;
+    type: string;
+  }, dto: PayFinancialEntryDto) {
+    const gross = Number(entry.amount);
+    const discount = this.resolveDiscount(gross, dto);
+    const interest = this.roundMoney(dto.interestAmount ?? 0);
+    const penalty = this.roundMoney(dto.penaltyAmount ?? 0);
+    const fee = this.roundMoney(dto.feeAmount ?? 0);
+
+    const netDue =
+      entry.type === 'PAYABLE'
+        ? this.roundMoney(gross - discount + interest + penalty)
+        : this.roundMoney(gross - discount - fee);
+
+    const alreadyPaid = this.roundMoney(Number(entry.amountPaid ?? 0));
+    const remaining = this.roundMoney(netDue - alreadyPaid);
+    return { netDue, alreadyPaid, remaining, discount, interest, penalty, fee };
+  }
+
   private resolveDiscount(gross: number, dto: PayFinancialEntryDto) {
     if (dto.discountAmount != null && dto.discountAmount > 0) {
       return this.roundMoney(Math.min(dto.discountAmount, gross));
@@ -626,73 +672,114 @@ export class FinancialService {
     });
     if (!entry) throw new NotFoundException('Lançamento não encontrado');
     if (entry.status === 'PAID') {
-      throw new BadRequestException('Lançamento já foi baixado');
+      throw new BadRequestException('Lançamento já foi baixado integralmente');
+    }
+    if (entry.status === 'REVERSED' || entry.status === 'CANCELLED') {
+      throw new BadRequestException('Lançamento não pode ser baixado neste status');
     }
 
-    const gross = Number(entry.amount);
-    const discount = this.resolveDiscount(gross, dto);
-    const interest = this.roundMoney(dto.interestAmount ?? 0);
-    const penalty = this.roundMoney(dto.penaltyAmount ?? 0);
-    const fee = this.roundMoney(dto.feeAmount ?? 0);
+    const { netDue, alreadyPaid, remaining, discount, interest, penalty, fee } =
+      this.entryRemainingAmount(entry, dto);
 
-    const netDue =
-      entry.type === 'PAYABLE'
-        ? this.roundMoney(gross - discount + interest + penalty)
-        : this.roundMoney(gross - discount - fee);
+    if (remaining <= 0) {
+      throw new BadRequestException('Lançamento já quitado');
+    }
+
+    const payAmount = this.roundMoney(dto.amountToPay ?? remaining);
+    if (payAmount <= 0 || payAmount > remaining + 0.01) {
+      throw new BadRequestException(
+        `Valor da baixa deve ser entre R$ 0,01 e R$ ${remaining.toFixed(2)}`,
+      );
+    }
 
     let splits =
       dto.splits?.map((split) => ({
         paymentMethod: split.paymentMethod,
         amount: this.roundMoney(split.amount),
+        accountId: split.accountId,
         registerInCash: split.registerInCash ?? false,
       })) ?? [];
 
     if (splits.length === 0) {
       const method = (dto.paymentMethod ?? entry.paymentMethod ?? 'PIX') as PaymentMethod;
+      const accountId = await this.resolveAccountId(organizationId, dto.accountId);
       splits = [
         {
           paymentMethod: method,
-          amount: netDue,
+          amount: payAmount,
+          accountId,
           registerInCash: dto.registerInCash ?? false,
         },
       ];
     }
 
     const splitTotal = this.roundMoney(splits.reduce((sum, split) => sum + split.amount, 0));
-    if (Math.abs(splitTotal - netDue) > 0.01) {
+    if (Math.abs(splitTotal - payAmount) > 0.01) {
       throw new BadRequestException(
-        `A soma dos pagamentos (R$ ${splitTotal.toFixed(2)}) deve ser igual ao valor liquido (R$ ${netDue.toFixed(2)})`,
+        `A soma dos pagamentos (R$ ${splitTotal.toFixed(2)}) deve ser igual ao valor da baixa (R$ ${payAmount.toFixed(2)})`,
       );
     }
 
     const paidAt = dto.paidAt ? this.resolveEntryDate(dto.paidAt) : new Date();
     const primaryMethod = splits.length === 1 ? splits[0].paymentMethod : null;
+    const newAmountPaid = this.roundMoney(alreadyPaid + payAmount);
+    const isFullyPaid = newAmountPaid >= netDue - 0.01;
+    const newStatus = isFullyPaid ? 'PAID' : 'PARTIAL';
+    const resolvedAccountId = dto.accountId
+      ? await this.resolveAccountId(organizationId, dto.accountId)
+      : entry.accountId ?? (await this.resolveAccountId(organizationId, null));
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.financialPaymentSplit.createMany({
-        data: splits.map((split) => ({
+      for (const split of splits) {
+        const accountId = await this.resolveAccountId(
           organizationId,
+          split.accountId ?? dto.accountId,
+        );
+        await tx.financialPaymentSplit.create({
+          data: {
+            organizationId,
+            financialEntryId: id,
+            paymentMethod: split.paymentMethod,
+            amount: new Prisma.Decimal(split.amount),
+            accountId,
+          },
+        });
+
+        await this.ledger.post(tx, {
+          organizationId,
+          accountId,
+          direction: entry.type === 'RECEIVABLE' ? 'CREDIT' : 'DEBIT',
+          amount: split.amount,
+          movementKind: entry.type === 'RECEIVABLE' ? 'RECEIVABLE' : 'PAYABLE',
+          movementDate: paidAt,
+          description: `${entry.description} — ${split.paymentMethod}`,
           financialEntryId: id,
-          paymentMethod: split.paymentMethod,
-          amount: new Prisma.Decimal(split.amount),
-        })),
-      });
+          createdByUserId: userId,
+        });
+      }
 
       const row = await tx.financialEntry.update({
         where: { id },
         data: {
-          status: 'PAID',
-          paidAt,
-          paymentMethod: primaryMethod,
+          status: newStatus,
+          paidAt: isFullyPaid ? paidAt : entry.paidAt ?? paidAt,
+          paymentMethod: primaryMethod ?? entry.paymentMethod,
+          accountId: resolvedAccountId,
+          costCenterId: dto.costCenterId ?? entry.costCenterId,
           discountAmount: new Prisma.Decimal(discount),
           discountPercent:
             dto.discountPercent != null && dto.discountPercent > 0
               ? new Prisma.Decimal(dto.discountPercent)
-              : null,
-          amountReceived: new Prisma.Decimal(netDue),
-          interestAmount: new Prisma.Decimal(interest),
-          penaltyAmount: new Prisma.Decimal(penalty),
-          feeAmount: new Prisma.Decimal(fee),
+              : entry.discountPercent,
+          amountReceived: new Prisma.Decimal(isFullyPaid ? netDue : newAmountPaid),
+          amountPaid: new Prisma.Decimal(newAmountPaid),
+          interestAmount: new Prisma.Decimal(
+            this.roundMoney(Number(entry.interestAmount) + interest),
+          ),
+          penaltyAmount: new Prisma.Decimal(
+            this.roundMoney(Number(entry.penaltyAmount) + penalty),
+          ),
+          feeAmount: new Prisma.Decimal(this.roundMoney(Number(entry.feeAmount) + fee)),
         },
         include: entryInclude,
       });
@@ -740,7 +827,7 @@ export class FinancialService {
           }
         }
 
-        if (entry.serviceOrderId) {
+        if (entry.serviceOrderId && isFullyPaid) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           await tx.dailyRevenue.upsert({
@@ -801,9 +888,9 @@ export class FinancialService {
       metadata: {
         entryId: id,
         description: entry.description,
-        gross,
-        discount,
-        amountReceived: netDue,
+        payAmount,
+        newAmountPaid,
+        status: newStatus,
         splits,
       },
     });
@@ -811,6 +898,89 @@ export class FinancialService {
     await this.invalidateDashboardCache(organizationId, paidAt);
 
     return updated;
+  }
+
+  async reverse(
+    organizationId: string,
+    id: string,
+    reason: string,
+    userId?: string,
+  ) {
+    const trimmedReason = reason?.trim();
+    if (!trimmedReason || trimmedReason.length < 3) {
+      throw new BadRequestException('Informe o motivo do estorno');
+    }
+
+    const entry = await this.prisma.financialEntry.findFirst({
+      where: { id, organizationId },
+      include: { paymentSplits: true },
+    });
+    if (!entry) throw new NotFoundException('Lançamento não encontrado');
+    if (entry.status !== 'PAID' && entry.status !== 'PARTIAL') {
+      throw new BadRequestException('Somente lançamentos pagos ou parciais podem ser estornados');
+    }
+
+    const amountToReverse = this.roundMoney(Number(entry.amountPaid ?? entry.amountReceived ?? entry.amount));
+    if (amountToReverse <= 0) {
+      throw new BadRequestException('Nenhum valor pago para estornar');
+    }
+
+    const reversed = await this.prisma.$transaction(async (tx) => {
+      const movements = await tx.financialAccountMovement.findMany({
+        where: { financialEntryId: id, organizationId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      for (const mov of movements) {
+        await this.ledger.post(tx, {
+          organizationId,
+          accountId: mov.accountId,
+          direction: mov.direction === 'CREDIT' ? 'DEBIT' : 'CREDIT',
+          amount: Number(mov.amount),
+          movementKind: 'ADJUSTMENT',
+          movementDate: new Date(),
+          description: `Estorno: ${entry.description}`,
+          financialEntryId: id,
+          createdByUserId: userId,
+        });
+      }
+
+      if (entry.type === 'RECEIVABLE' && entry.serviceOrderId && entry.paidAt) {
+        await this.reversePaidEntryEffects(tx, organizationId, entry);
+      }
+
+      await tx.cashRegisterMovement.deleteMany({
+        where: { financialEntryId: id },
+      });
+
+      return tx.financialEntry.update({
+        where: { id },
+        data: {
+          status: 'REVERSED',
+          amountPaid: new Prisma.Decimal(0),
+          amountReceived: null,
+          reversedAt: new Date(),
+          reversedByUserId: userId ?? null,
+          reversalReason: trimmedReason,
+        },
+        include: entryInclude,
+      });
+    });
+
+    await this.audit.log(organizationId, 'financial.reverse', 'financial_entry', {
+      userId,
+      reason: trimmedReason,
+      metadata: {
+        entryId: id,
+        amountReversed: amountToReverse,
+      },
+    });
+
+    if (entry.paidAt) {
+      await this.invalidateDashboardCache(organizationId, entry.paidAt);
+    }
+
+    return reversed;
   }
 
   private startOfDay(date: Date) {
@@ -866,6 +1036,11 @@ export class FinancialService {
       include: { installments: true },
     });
     if (!entry) throw new NotFoundException('Lançamento não encontrado');
+    if (entry.status === 'PAID' || entry.status === 'PARTIAL') {
+      throw new BadRequestException(
+        'Lançamentos pagos devem ser estornados, não excluídos. Use a função de estorno.',
+      );
+    }
 
     const entriesToRemove = entry.parentEntryId
       ? [entry]
@@ -904,11 +1079,7 @@ export class FinancialService {
       },
     });
 
-    if (entry.status === 'PAID' && entry.paidAt) {
-      await this.invalidateDashboardCache(organizationId, entry.paidAt);
-    } else {
-      await this.invalidateDashboardCache(organizationId);
-    }
+    await this.invalidateDashboardCache(organizationId, entry.paidAt ?? undefined);
 
     return { ok: true };
   }

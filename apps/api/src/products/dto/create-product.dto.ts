@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
@@ -11,7 +11,19 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  internalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  barcode?: string;
+
+  @IsOptional()
+  @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  subcategory?: string;
 
   @IsOptional()
   @IsString()
@@ -20,6 +32,18 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   ncm?: string;
+
+  @IsOptional()
+  @IsString()
+  cest?: string;
+
+  @IsOptional()
+  @IsString()
+  unit?: string;
+
+  @IsOptional()
+  @IsNumber()
+  weight?: number;
 
   @IsOptional()
   @IsString()
@@ -32,6 +56,22 @@ export class CreateProductDto {
   @IsOptional()
   @IsInt()
   minStock?: number;
+
+  @IsOptional()
+  @IsInt()
+  maxStock?: number;
+
+  @IsOptional()
+  @IsNumber()
+  markup?: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 
   @IsOptional()
   @IsNumber()

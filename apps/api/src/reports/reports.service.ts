@@ -489,6 +489,17 @@ export class ReportsService {
       ),
       expensesList,
       billedCustomers,
+      accountBalances: await this.prisma.financialAccount.findMany({
+        where: { organizationId, status: 'ACTIVE' },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          currentBalance: true,
+          isPrimary: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
     };
   }
 
@@ -1080,7 +1091,7 @@ export class ReportsService {
           type: 'PAYABLE',
           paidAt: { gte: period.from, lte: period.to },
         },
-        select: { amountReceived: true, amount: true, description: true },
+        select: { amountReceived: true, amount: true, description: true, origin: true },
       }),
     ]);
 
@@ -1125,6 +1136,7 @@ export class ReportsService {
     profit: ProfitTotals,
     paidPayables: Array<{
       description?: string;
+      origin?: string | null;
       amount: { toString(): string } | number;
       amountReceived?: { toString(): string } | number | null;
     }>,
@@ -1142,7 +1154,7 @@ export class ReportsService {
     );
     const operationalExpenses = roundMoney(
       paidPayables
-        .filter((entry) => !isNonOperationalPayable(entry.description ?? ''))
+        .filter((entry) => !isNonOperationalPayable(entry.description ?? '', entry.origin))
         .reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
     );
     const nonOperationalExpenses = roundMoney(expenses - operationalExpenses);

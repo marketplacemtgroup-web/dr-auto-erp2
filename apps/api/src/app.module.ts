@@ -14,6 +14,11 @@ import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { CashFlowModule } from './cashflow/cashflow.module';
+import { EquityModule } from './equity/equity.module';
+import { LoansModule } from './loans/loans.module';
+import { LedgerModule } from './ledger/ledger.module';
+import { AccountsModule } from './accounts/accounts.module';
 import { FinancialModule } from './financial/financial.module';
 import { ReportsModule } from './reports/reports.module';
 import { AttachmentsModule } from './attachments/attachments.module';
@@ -58,6 +63,11 @@ import { ColaboradorAppModule } from './colaborador-app/colaborador-app.module';
     PurchasesModule,
     SuppliersModule,
     FinancialModule,
+    LedgerModule,
+    AccountsModule,
+    EquityModule,
+    LoansModule,
+    CashFlowModule,
     ReportsModule,
     AttachmentsModule,
     ServiceCatalogModule,

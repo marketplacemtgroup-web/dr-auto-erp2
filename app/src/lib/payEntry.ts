@@ -5,10 +5,13 @@ export type PaySplitFormRow = {
   id: string;
   paymentMethod: PaymentMethod;
   amount: string;
+  accountId: string;
   registerInCash: boolean;
 };
 
 export type PayEntryFormState = {
+  accountId: string;
+  amountToPay: string;
   discountMoney: string;
   discountPercent: string;
   interestAmount: string;
@@ -34,9 +37,17 @@ export function computePayDiscount(gross: number, discountMoney: string, discoun
   return 0;
 }
 
-export function createDefaultPayForm(gross: number, preferCash = false): PayEntryFormState {
+export function createDefaultPayForm(
+  gross: number,
+  preferCash = false,
+  defaultAccountId = "",
+  alreadyPaid = 0,
+): PayEntryFormState {
+  const remaining = roundMoney(Math.max(gross - alreadyPaid, 0));
   const method: PaymentMethod = preferCash ? "CASH" : "PIX";
   return {
+    accountId: defaultAccountId,
+    amountToPay: remaining > 0 ? remaining.toFixed(2) : "",
     discountMoney: "",
     discountPercent: "",
     interestAmount: "",
@@ -46,7 +57,8 @@ export function createDefaultPayForm(gross: number, preferCash = false): PayEntr
       {
         id: crypto.randomUUID(),
         paymentMethod: method,
-        amount: gross > 0 ? gross.toFixed(2) : "",
+        amount: remaining > 0 ? remaining.toFixed(2) : "",
+        accountId: defaultAccountId,
         registerInCash: preferCash,
       },
     ],

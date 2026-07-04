@@ -55,13 +55,26 @@ export function profitRecognizedOrderWhere(
   };
 }
 
-/** Saídas que não são custo operacional (retiradas, empréstimos, cartão). */
-export function isNonOperationalPayable(description: string) {
+/** Saídas que não são custo operacional (retiradas, empréstimos, aportes, transferências). */
+export function isNonOperationalPayable(
+  description: string,
+  origin?: string | null,
+) {
+  if (
+    origin === 'WITHDRAWAL' ||
+    origin === 'LOAN' ||
+    origin === 'CONTRIBUTION' ||
+    origin === 'TRANSFER'
+  ) {
+    return true;
+  }
   const d = description.toUpperCase();
   return (
     d.includes('RETIRADA') ||
     d.includes('DEVOLU') ||
     d.includes('EMPR') ||
+    d.includes('APORTE') ||
+    d.includes('TRANSFER') ||
     d.includes('CART')
   );
 }

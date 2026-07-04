@@ -1,10 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccountsService } from '../accounts/accounts.service';
+import { LedgerService } from '../ledger/ledger.service';
 
 @Injectable()
 export class CashService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accounts: AccountsService,
+    private readonly ledger: LedgerService,
+  ) {}
 
   async getCurrentSession(organizationId: string) {
     return this.prisma.cashRegisterSession.findFirst({
@@ -21,9 +27,12 @@ export class CashService {
     const open = await this.getCurrentSession(organizationId);
     if (open) throw new BadRequestException('Já existe um caixa aberto');
 
+    const primaryAccount = await this.accounts.ensurePrimaryAccount(organizationId);
+
     return this.prisma.cashRegisterSession.create({
       data: {
         organizationId,
+        accountId: primaryAccount.id,
         openedByUserId: userId,
         openingBalance: new Prisma.Decimal(openingBalance),
         status: 'OPEN',
@@ -31,6 +40,7 @@ export class CashService {
       include: {
         openedBy: { select: { id: true, name: true } },
         movements: true,
+        account: { select: { id: true, name: true } },
       },
     });
   }
@@ -59,21 +69,41 @@ export class CashService {
       amount: number;
       description?: string;
     },
+    userId?: string,
   ) {
     const session = await this.prisma.cashRegisterSession.findFirst({
       where: { id: sessionId, organizationId, status: 'OPEN' },
-      include: { movements: true },
+      include: { movements: true, account: true },
     });
     if (!session) throw new NotFoundException('Caixa não encontrado ou já fechado');
 
-    await this.prisma.cashRegisterMovement.create({
-      data: {
+    const accountId =
+      session.accountId ?? (await this.accounts.ensurePrimaryAccount(organizationId)).id;
+    const amount = this.ledger.roundMoney(data.amount);
+
+    await this.prisma.$transaction(async (tx) => {
+      const cashMovement = await tx.cashRegisterMovement.create({
+        data: {
+          organizationId,
+          sessionId,
+          movementType: data.movementType,
+          amount: new Prisma.Decimal(amount),
+          description: data.description ?? null,
+        },
+      });
+
+      await this.ledger.post(tx, {
         organizationId,
-        sessionId,
-        movementType: data.movementType,
-        amount: new Prisma.Decimal(data.amount),
-        description: data.description ?? null,
-      },
+        accountId,
+        direction: data.movementType === 'SUPPLY' ? 'CREDIT' : 'DEBIT',
+        amount,
+        movementKind:
+          data.movementType === 'SUPPLY' ? 'SUPPLY' : 'WITHDRAWAL_CASH',
+        movementDate: new Date(),
+        description: data.description ?? data.movementType,
+        cashMovementId: cashMovement.id,
+        createdByUserId: userId,
+      });
     });
 
     return this.getCurrentSession(organizationId);

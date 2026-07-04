@@ -501,6 +501,7 @@ export class ServiceOrdersService {
 
     if (dto.status === 'CANCELLED' && current.status !== 'CANCELLED') {
       await this.commissionEngine.cancelForServiceOrder(organizationId, id);
+      await this.releaseReservedStockForOrder(organizationId, id);
     }
 
     if (dto.entryKm !== undefined && dto.entryKm != null) {
@@ -615,6 +616,22 @@ export class ServiceOrdersService {
 
       const snapshotCost = Number(product.averageCost) || Number(product.costPrice) || 0;
       const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
+
+      if (itemType === 'PART' && inQuotePhase) {
+        const available = this.stockMovement.availableStock(
+          product.stock,
+          product.reservedStock,
+        );
+        if (available < qty) {
+          throw new BadRequestException(
+            `Estoque insuficiente. Disponível: ${available}, solicitado: ${qty}`,
+          );
+        }
+        await this.prisma.product.update({
+          where: { id: dto.productId },
+          data: { reservedStock: product.reservedStock + qty },
+        });
+      }
 
       if (itemType === 'PART' && !inQuotePhase) {
         const available = this.stockMovement.availableStock(
@@ -739,6 +756,38 @@ export class ServiceOrdersService {
     const so = (await this.findOne(organizationId, serviceOrderId))!;
     const totalBefore = Number(so.totalAmount);
     const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
+
+    if (
+      inQuotePhase &&
+      item.productId &&
+      item.itemType === 'PART' &&
+      dto.quantity !== undefined &&
+      dto.quantity !== item.quantity
+    ) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+      if (product) {
+        const delta = dto.quantity - item.quantity;
+        if (delta > 0) {
+          const available = this.stockMovement.availableStock(
+            product.stock,
+            product.reservedStock,
+          );
+          if (available < delta) {
+            throw new BadRequestException(
+              `Estoque insuficiente. Disponível: ${available}, solicitado: ${delta}`,
+            );
+          }
+        }
+        await this.prisma.product.update({
+          where: { id: item.productId },
+          data: {
+            reservedStock: Math.max(0, product.reservedStock + delta),
+          },
+        });
+      }
+    }
 
     if (
       !inQuotePhase &&
@@ -867,6 +916,20 @@ export class ServiceOrdersService {
     const totalBefore = Number(so.totalAmount);
     const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
 
+    if (item.productId && item.itemType === 'PART' && inQuotePhase) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+      if (product) {
+        await this.prisma.product.update({
+          where: { id: item.productId },
+          data: {
+            reservedStock: Math.max(0, product.reservedStock - item.quantity),
+          },
+        });
+      }
+    }
+
     if (item.productId && item.itemType === 'PART' && !inQuotePhase) {
       const alreadyDeducted = await this.hasStockDeductionForPart(
         organizationId,
@@ -913,6 +976,40 @@ export class ServiceOrdersService {
       });
     }
     return refreshed;
+  }
+
+  /** Libera reserva de estoque das peças ainda não baixadas fisicamente. */
+  private async releaseReservedStockForOrder(
+    organizationId: string,
+    serviceOrderId: string,
+  ) {
+    const items = await this.prisma.serviceOrderItem.findMany({
+      where: {
+        serviceOrderId,
+        organizationId,
+        itemType: 'PART',
+        productId: { not: null },
+      },
+    });
+    for (const item of items) {
+      if (!item.productId) continue;
+      const deducted = await this.hasStockDeductionForPart(
+        organizationId,
+        serviceOrderId,
+        item.productId,
+      );
+      if (deducted) continue;
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+      if (!product) continue;
+      await this.prisma.product.update({
+        where: { id: item.productId },
+        data: {
+          reservedStock: Math.max(0, product.reservedStock - item.quantity),
+        },
+      });
+    }
   }
 
   private async hasStockDeductionForPart(
@@ -965,9 +1062,10 @@ export class ServiceOrdersService {
       }
 
       const nextStock = product.stock - item.quantity;
+      const nextReserved = Math.max(0, product.reservedStock - item.quantity);
       await this.prisma.product.update({
         where: { id: productId },
-        data: { stock: nextStock },
+        data: { stock: nextStock, reservedStock: nextReserved },
       });
       await this.stockMovement.record(
         organizationId,

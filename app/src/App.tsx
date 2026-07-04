@@ -31,6 +31,12 @@ const PurchasesPage = lazyWithRetry(() => import("./pages/purchases/PurchasesPag
 const SuppliersPage = lazyWithRetry(() => import("./pages/suppliers/SuppliersPage"));
 const SupplierDetailPage = lazyWithRetry(() => import("./pages/suppliers/SupplierDetailPage"));
 const FinancialPage = lazyWithRetry(() => import("./pages/financial/FinancialPage"));
+const FinancialLayout = lazyWithRetry(() => import("./layouts/FinancialLayout"));
+const FinancialAccountsPage = lazyWithRetry(() => import("./pages/financial/FinancialAccountsPage"));
+const FinancialCashFlowPage = lazyWithRetry(() => import("./pages/financial/FinancialCashFlowPage"));
+const FinancialEquityPage = lazyWithRetry(() => import("./pages/financial/FinancialEquityPage"));
+const FinancialLoansPage = lazyWithRetry(() => import("./pages/financial/FinancialLoansPage"));
+const FinancialReconciliationPage = lazyWithRetry(() => import("./pages/financial/FinancialReconciliationPage"));
 const ReportsPage = lazyWithRetry(() => import("./pages/reports/ReportsPage"));
 const TeamLayout = lazyWithRetry(() => import("./layouts/TeamLayout"));
 const EmployeesPage = lazyWithRetry(() => import("./pages/team/EmployeesPage"));
@@ -207,10 +213,60 @@ export default function App() {
             path="financeiro"
             element={
               <Lazy>
-                <FinancialPage />
+                <FinancialLayout />
               </Lazy>
             }
-          />
+          >
+            <Route index element={<Navigate to="lancamentos" replace />} />
+            <Route
+              path="lancamentos"
+              element={
+                <Lazy>
+                  <FinancialPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="contas"
+              element={
+                <Lazy>
+                  <FinancialAccountsPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="fluxo-caixa"
+              element={
+                <Lazy>
+                  <FinancialCashFlowPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="transferencias"
+              element={
+                <Lazy>
+                  <FinancialEquityPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="emprestimos"
+              element={
+                <Lazy>
+                  <FinancialLoansPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="conciliacao"
+              element={
+                <Lazy>
+                  <FinancialReconciliationPage />
+                </Lazy>
+              }
+            />
+          </Route>
           <Route
             path="relatorios"
             element={

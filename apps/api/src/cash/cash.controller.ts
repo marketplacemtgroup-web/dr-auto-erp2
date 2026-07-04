@@ -45,10 +45,15 @@ export class CashController {
   @Post(':sessionId/movement')
   @RequirePermissions('financial.manage')
   movement(
-    @CurrentUser() user: { organizationId: string },
+    @CurrentUser() user: { organizationId: string; userId: string },
     @Param('sessionId') sessionId: string,
     @Body() dto: CashMovementDto,
   ) {
-    return this.cashService.addMovement(user.organizationId, sessionId, dto);
+    return this.cashService.addMovement(
+      user.organizationId,
+      sessionId,
+      dto,
+      user.userId,
+    );
   }
 }

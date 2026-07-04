@@ -41,6 +41,16 @@ export class PurchaseOrderItemDto {
   discount?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  ipi?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  icms?: number;
+
+  @IsOptional()
   @IsBoolean()
   movesStock?: boolean;
 

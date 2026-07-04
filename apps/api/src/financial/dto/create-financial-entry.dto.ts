@@ -105,11 +105,29 @@ export class PayFinancialSplitDto {
   amount!: number;
 
   @IsOptional()
+  @IsString()
+  accountId?: string;
+
+  @IsOptional()
   @IsBoolean()
   registerInCash?: boolean;
 }
 
 export class PayFinancialEntryDto {
+  @IsOptional()
+  @IsString()
+  accountId?: string;
+
+  /** Valor a baixar nesta operação (baixa parcial). Se omitido, quita o saldo restante. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  amountToPay?: number;
+
+  @IsOptional()
+  @IsString()
+  costCenterId?: string;
+
   @IsOptional()
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;

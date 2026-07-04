@@ -9,6 +9,7 @@ import {
   UpdateFinancialEntryDto,
 } from './dto/create-financial-entry.dto';
 import { DeleteFinancialEntryDto } from './dto/delete-financial-entry.dto';
+import { ReverseFinancialEntryDto } from './dto/reverse-financial-entry.dto';
 import {
   CreateFixedExpenseDto,
   UpdateFixedExpenseDto,
@@ -153,6 +154,21 @@ export class FinancialController {
     @Body() dto: PayFinancialEntryDto,
   ) {
     return this.financialService.markPaid(user.organizationId, id, dto, user.userId);
+  }
+
+  @Patch(':id/reverse')
+  @RequirePermissions('financial.manage')
+  reverse(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+    @Body() dto: ReverseFinancialEntryDto,
+  ) {
+    return this.financialService.reverse(
+      user.organizationId,
+      id,
+      dto.reason,
+      user.userId,
+    );
   }
 
   @Delete(':id')
