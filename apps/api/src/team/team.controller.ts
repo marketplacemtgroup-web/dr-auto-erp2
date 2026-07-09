@@ -241,6 +241,12 @@ export class TeamController {
     return this.jobTitles.update(user.organizationId, id, dto);
   }
 
+  @Get('commission-rules/audit')
+  @RequirePermissions('commissions.manage', 'commissions.view', 'team.manage')
+  auditRules(@CurrentUser() user: { organizationId: string }) {
+    return this.commissionRules.audit(user.organizationId);
+  }
+
   @Get('commission-rules')
   @RequirePermissions('commissions.manage', 'commissions.view', 'team.manage')
   listRules(

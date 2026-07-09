@@ -728,6 +728,7 @@ model ServiceOrder {
   diagnosisById        String?              @map("diagnosis_by_id")
   quoteById            String?              @map("quote_by_id")
   executionById        String?              @map("execution_by_id")
+  coExecutionById      String?              @map("co_execution_by_id")
   finalizedById        String?              @map("finalized_by_id")
   number               Int
   status               ServiceOrderStatus   @default(RECEIVED)
@@ -765,6 +766,7 @@ model ServiceOrder {
   diagnosisBy        Employee? @relation("OsDiagnosisBy", fields: [diagnosisById], references: [id], onDelete: SetNull)
   quoteBy            Employee? @relation("OsQuoteBy", fields: [quoteById], references: [id], onDelete: SetNull)
   executionBy        Employee? @relation("OsExecutionBy", fields: [executionById], references: [id], onDelete: SetNull)
+  coExecutionBy      Employee? @relation("OsCoExecutionBy", fields: [coExecutionById], references: [id], onDelete: SetNull)
   finalizedBy        Employee? @relation("OsFinalizedBy", fields: [finalizedById], references: [id], onDelete: SetNull)
   quotes       Quote[]
   generatedCommissions GeneratedCommission[]
@@ -882,6 +884,8 @@ model ServiceOrderItem {
   unitCost           Decimal?             @map("unit_cost") @db.Decimal(12, 2)
   discount           Decimal              @default(0) @db.Decimal(12, 2)
   executorId         String?              @map("executor_id")
+  coExecutorId       String?              @map("co_executor_id")
+  coExecutorSplitPct Int?                 @map("co_executor_split_pct")
   soldById           String?              @map("sold_by_id")
   appliedById        String?              @map("applied_by_id")
   separatedById      String?              @map("separated_by_id")
@@ -908,6 +912,7 @@ model ServiceOrderItem {
   catalogItem  ServiceCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
   outsourcedService OutsourcedService? @relation(fields: [outsourcedServiceId], references: [id], onDelete: SetNull)
   executor     Employee?    @relation("ItemExecutor", fields: [executorId], references: [id], onDelete: SetNull)
+  coExecutor   Employee?    @relation("ItemCoExecutor", fields: [coExecutorId], references: [id], onDelete: SetNull)
   soldBy       Employee?    @relation("ItemSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
   appliedBy    Employee?    @relation("ItemAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
   separatedBy  Employee?    @relation("ItemSeparatedBy", fields: [separatedById], references: [id], onDelete: SetNull)
@@ -1922,8 +1927,10 @@ model Employee {
   osDiagnosisBy        ServiceOrder[] @relation("OsDiagnosisBy")
   osQuoteBy            ServiceOrder[] @relation("OsQuoteBy")
   osExecutionBy        ServiceOrder[] @relation("OsExecutionBy")
+  osCoExecutionBy      ServiceOrder[] @relation("OsCoExecutionBy")
   osFinalizedBy        ServiceOrder[] @relation("OsFinalizedBy")
   executedItems        ServiceOrderItem[] @relation("ItemExecutor")
+  coExecutedItems      ServiceOrderItem[] @relation("ItemCoExecutor")
   soldItems            ServiceOrderItem[] @relation("ItemSoldBy")
   appliedItems         ServiceOrderItem[] @relation("ItemAppliedBy")
   separatedItems       ServiceOrderItem[] @relation("ItemSeparatedBy")

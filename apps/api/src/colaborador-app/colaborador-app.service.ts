@@ -14,6 +14,8 @@ import { EmployeesService } from '../team/employees.service';
 import {
   describeCommissionRule,
   employeeParticipationWhere,
+  employeeShareOfExpectedCommission,
+  itemBelongsToEmployee,
   mapCommissionStatusToApp,
   mapOsStatusToApp,
   monthRangeUtc,
@@ -46,6 +48,53 @@ export class ColaboradorAppService {
       );
     }
     return this.scope.requireActiveEmployee(user.organizationId, employeeId);
+  }
+
+  private previewItemsWhere(organizationId: string, employeeId: string) {
+    return {
+      organizationId,
+      expectedCommission: { gt: 0 },
+      serviceOrder: { deletedAt: null, status: { in: OS_IN_PROGRESS } },
+      OR: [
+        { executorId: employeeId },
+        { coExecutorId: employeeId },
+        { soldById: employeeId },
+        {
+          itemType: 'SERVICE' as const,
+          executorId: null,
+          serviceOrder: { executionById: employeeId },
+        },
+      ],
+    };
+  }
+
+  private async loadPreviewCommissionItems(organizationId: string, employeeId: string) {
+    const items = await this.prisma.serviceOrderItem.findMany({
+      where: this.previewItemsWhere(organizationId, employeeId),
+      include: {
+        serviceOrder: { select: { id: true, number: true, executionById: true } },
+      },
+    });
+    return items.filter((item) =>
+      itemBelongsToEmployee(item, item.serviceOrder, employeeId),
+    );
+  }
+
+  private sumEmployeePreviewCommission(
+    items: Array<{
+      expectedCommission: unknown;
+      executorId: string | null;
+      coExecutorId: string | null;
+      coExecutorSplitPct: number | null;
+      serviceOrder: { executionById: string | null };
+    }>,
+    employeeId: string,
+  ) {
+    return items.reduce(
+      (sum, item) =>
+        sum + employeeShareOfExpectedCommission(item, item.serviceOrder, employeeId),
+      0,
+    );
   }
 
   async getMe(user: AuthUser) {
@@ -132,7 +181,7 @@ export class ColaboradorAppService {
       osOficinaHoje,
       osMinhasExecucao,
       osProduzidasMes,
-      previstaAgg,
+      previewItems,
       pendenteAgg,
       aprovadaAgg,
       pagaMesAgg,
@@ -165,18 +214,7 @@ export class ColaboradorAppService {
           ...participation,
         },
       }),
-      this.prisma.serviceOrderItem.aggregate({
-        where: {
-          organizationId: user.organizationId,
-          executorId: employee.id,
-          expectedCommission: { not: null },
-          serviceOrder: {
-            deletedAt: null,
-            status: { in: OS_IN_PROGRESS },
-          },
-        },
-        _sum: { expectedCommission: true },
-      }),
+      this.loadPreviewCommissionItems(user.organizationId, employee.id),
       this.prisma.generatedCommission.aggregate({
         where: { organizationId: user.organizationId, employeeId: employee.id, status: 'PENDENTE' },
         _sum: { commissionAmount: true },
@@ -214,7 +252,7 @@ export class ColaboradorAppService {
       }),
     ]);
 
-    const comissaoPrevista = Number(previstaAgg._sum.expectedCommission ?? 0);
+    const comissaoPrevista = this.sumEmployeePreviewCommission(previewItems, employee.id);
     const comissaoPendente = Number(pendenteAgg._sum.commissionAmount ?? 0);
     const comissaoAprovada = Number(aprovadaAgg._sum.commissionAmount ?? 0);
     const comissaoPagaMes = Number(pagaMesAgg._sum.commissionAmount ?? 0);
@@ -313,7 +351,20 @@ export class ColaboradorAppService {
         where,
         include: {
           vehicle: { include: { customer: true } },
-          items: { where: { executorId: employee.id } },
+          items: {
+            where: {
+              OR: [
+                { executorId: employee.id },
+                { coExecutorId: employee.id },
+                { soldById: employee.id },
+                {
+                  itemType: 'SERVICE',
+                  executorId: null,
+                  serviceOrder: { executionById: employee.id },
+                },
+              ],
+            },
+          },
         },
         orderBy: { updatedAt: 'desc' },
         skip,
@@ -322,9 +373,17 @@ export class ColaboradorAppService {
     ]);
 
     const data = rows.map((so) => {
-      const myItems = so.items.filter((i) => i.executorId === employee.id);
+      const myItems = so.items.filter((i) =>
+        itemBelongsToEmployee(i, { executionById: so.executionById ?? null }, employee.id),
+      );
       const comissaoPrevista = myItems.reduce(
-        (s, i) => s + Number(i.expectedCommission ?? 0),
+        (s, i) =>
+          s +
+          employeeShareOfExpectedCommission(
+            i,
+            { executionById: so.executionById ?? null },
+            employee.id,
+          ),
         0,
       );
       return {
@@ -368,9 +427,7 @@ export class ColaboradorAppService {
     });
     if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
 
-    const myItems = so.items.filter(
-      (i) => i.executorId === employee.id || i.soldById === employee.id,
-    );
+    const myItems = so.items.filter((i) => itemBelongsToEmployee(i, so, employee.id));
 
     return {
       id: so.id,
@@ -382,13 +439,16 @@ export class ColaboradorAppService {
       km: so.entryKm ?? 0,
       responsavel_checklist: so.checklistById === employee.id,
       responsavel_diagnostico: so.diagnosisById === employee.id,
-      executor_servicos: so.executionById === employee.id || myItems.some((i) => i.executorId === employee.id),
+      executor_servicos:
+        so.executionById === employee.id ||
+        so.coExecutionById === employee.id ||
+        myItems.some((i) => i.itemType === 'SERVICE'),
       servicos: myItems.map((item) => ({
         id: item.id,
         descricao: item.description,
         valor_base: Number(item.unitPrice) * item.quantity - Number(item.discount),
         regra_comissao: item.expectedCommission != null ? 'Conforme regra do funcionário' : '—',
-        comissao_prevista: Number(item.expectedCommission ?? 0),
+        comissao_prevista: employeeShareOfExpectedCommission(item, so, employee.id),
         status_comissao: mapOsStatusToApp(so.status) === 'finalizada' ? 'aprovada' : 'pendente',
       })),
       historico: so.statusHistory.map((h) => ({
@@ -404,17 +464,9 @@ export class ColaboradorAppService {
       ? monthRangeUtc(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1)))
       : monthRangeUtc();
 
-    const [previstaAgg, pendenteAgg, aprovadaAgg, pagaAgg, generated, previewItems] =
+    const [previewItems, pendenteAgg, aprovadaAgg, pagaAgg, generated] =
       await Promise.all([
-        this.prisma.serviceOrderItem.aggregate({
-          where: {
-            organizationId: user.organizationId,
-            executorId: employee.id,
-            expectedCommission: { not: null },
-            serviceOrder: { deletedAt: null, status: { in: OS_IN_PROGRESS } },
-          },
-          _sum: { expectedCommission: true },
-        }),
+        this.loadPreviewCommissionItems(user.organizationId, employee.id),
         this.prisma.generatedCommission.aggregate({
           where: { organizationId: user.organizationId, employeeId: employee.id, status: 'PENDENTE' },
           _sum: { commissionAmount: true },
@@ -446,19 +498,10 @@ export class ColaboradorAppService {
           include: { serviceOrder: { select: { number: true } } },
           orderBy: { generatedAt: 'desc' },
         }),
-        this.prisma.serviceOrderItem.findMany({
-          where: {
-            organizationId: user.organizationId,
-            executorId: employee.id,
-            expectedCommission: { gt: 0 },
-            serviceOrder: { deletedAt: null, status: { in: OS_IN_PROGRESS } },
-          },
-          include: { serviceOrder: { select: { id: true, number: true } } },
-        }),
       ]);
 
     const resumo = {
-      prevista: Number(previstaAgg._sum.expectedCommission ?? 0),
+      prevista: this.sumEmployeePreviewCommission(previewItems, employee.id),
       pendente: Number(pendenteAgg._sum.commissionAmount ?? 0),
       aprovada: Number(aprovadaAgg._sum.commissionAmount ?? 0),
       paga: Number(pagaAgg._sum.commissionAmount ?? 0),
@@ -474,7 +517,11 @@ export class ColaboradorAppService {
       tipo: item.itemType === 'PART' ? 'peca' : 'servico',
       base_valor: Number(item.unitPrice) * item.quantity - Number(item.discount),
       regra: 'Comissão prevista (OS em execução)',
-      valor_comissao: Number(item.expectedCommission ?? 0),
+      valor_comissao: employeeShareOfExpectedCommission(
+        item,
+        item.serviceOrder,
+        employee.id,
+      ),
       status: 'prevista' as const,
       data_geracao: item.updatedAt.toISOString(),
       previsao_pagamento: null,
@@ -497,11 +544,17 @@ export class ColaboradorAppService {
         where: {
           id: itemId,
           organizationId: user.organizationId,
-          executorId: employee.id,
         },
-        include: { serviceOrder: { select: { number: true } } },
+        include: {
+          serviceOrder: { select: { number: true, executionById: true } },
+        },
       });
-      if (!item) throw new NotFoundException('Comissão não encontrada');
+      if (
+        !item ||
+        !itemBelongsToEmployee(item, item.serviceOrder, employee.id)
+      ) {
+        throw new NotFoundException('Comissão não encontrada');
+      }
       return {
         id,
         os_numero: item.serviceOrder
@@ -511,7 +564,11 @@ export class ColaboradorAppService {
         tipo: 'servico',
         base_valor: Number(item.unitPrice) * item.quantity - Number(item.discount),
         regra: 'Comissão prevista (OS em execução)',
-        valor_comissao: Number(item.expectedCommission ?? 0),
+        valor_comissao: employeeShareOfExpectedCommission(
+          item,
+          item.serviceOrder,
+          employee.id,
+        ),
         status: 'prevista',
         data_geracao: item.updatedAt.toISOString(),
         previsao_pagamento: null,
@@ -563,7 +620,7 @@ export class ColaboradorAppService {
         this.prisma.serviceOrderItem.count({
           where: {
             organizationId: user.organizationId,
-            executorId: employee.id,
+            OR: [{ executorId: employee.id }, { coExecutorId: employee.id }],
             createdAt: { gte: wStart, lte: wEnd },
           },
         }),

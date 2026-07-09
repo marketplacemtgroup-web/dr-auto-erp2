@@ -17,6 +17,7 @@ import { CreateServiceOrderItemDto } from './dto/create-service-order-item.dto';
 import { UpdateServiceOrderItemDto } from './dto/update-service-order-item.dto';
 import { UpdateInternalCostDto } from './dto/update-internal-cost.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
+import { PreviewItemCommissionDto } from './dto/preview-item-commission.dto';
 import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
 import { PortalService } from '../portal/portal.service';
 import { ServiceOrdersService } from './service-orders.service';
@@ -102,6 +103,31 @@ export class ServiceOrdersController {
     @Param('id') id: string,
   ) {
     return this.serviceOrdersService.remove(user.organizationId, id, user.userId);
+  }
+
+  @Post(':id/preview-item-commission')
+  @RequirePermissions('service_orders.manage')
+  previewItemCommission(
+    @CurrentUser() user: { organizationId: string },
+    @Param('id') id: string,
+    @Body() dto: PreviewItemCommissionDto,
+  ) {
+    return this.serviceOrdersService.previewItemCommissionForOrder(
+      user.organizationId,
+      id,
+      {
+        itemType: dto.itemType,
+        quantity: dto.quantity ?? 1,
+        unitPrice: dto.unitPrice,
+        discount: dto.discount ?? 0,
+        catalogItemId: dto.catalogItemId ?? null,
+        productId: dto.productId ?? null,
+        executorId: dto.executorId ?? null,
+        coExecutorId: dto.coExecutorId ?? null,
+        coExecutorSplitPct: dto.coExecutorSplitPct ?? null,
+        soldById: dto.soldById ?? null,
+      },
+    );
   }
 
   @Post(':id/items')

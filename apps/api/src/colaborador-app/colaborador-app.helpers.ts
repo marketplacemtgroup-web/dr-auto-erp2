@@ -9,15 +9,91 @@ export const OS_IN_PROGRESS: ServiceOrderStatus[] = [
 
 export const OS_FINISHED: ServiceOrderStatus[] = ['FINISHED', 'DELIVERED'];
 
+export function resolveServiceExecutors(
+  item: {
+    executorId: string | null;
+    coExecutorId?: string | null;
+    coExecutorSplitPct?: number | null;
+  },
+  so: { executionById: string | null },
+) {
+  const primaryId = item.executorId ?? so.executionById;
+  if (!primaryId) return [] as Array<{ employeeId: string; sharePct: number }>;
+
+  const coId = item.coExecutorId ?? null;
+  if (!coId || coId === primaryId) {
+    return [{ employeeId: primaryId, sharePct: 100 }];
+  }
+
+  const splitPct = Math.min(100, Math.max(0, item.coExecutorSplitPct ?? 50));
+  const primaryShare = 100 - splitPct;
+  const shares: Array<{ employeeId: string; sharePct: number }> = [];
+  if (primaryShare > 0) shares.push({ employeeId: primaryId, sharePct: primaryShare });
+  if (splitPct > 0) shares.push({ employeeId: coId, sharePct: splitPct });
+  return shares;
+}
+
+export function itemBelongsToEmployee(
+  item: {
+    itemType: string;
+    executorId: string | null;
+    coExecutorId?: string | null;
+    coExecutorSplitPct?: number | null;
+    soldById?: string | null;
+  },
+  so: { executionById: string | null },
+  employeeId: string,
+): boolean {
+  if (item.itemType === 'PART') return item.soldById === employeeId;
+  if (item.itemType === 'SERVICE') {
+    return resolveServiceExecutors(item, so).some((s) => s.employeeId === employeeId);
+  }
+  return false;
+}
+
+export function employeeShareOfExpectedCommission(
+  item: {
+    expectedCommission?: unknown;
+    executorId: string | null;
+    coExecutorId?: string | null;
+    coExecutorSplitPct?: number | null;
+  },
+  so: { executionById: string | null },
+  employeeId: string,
+): number {
+  if (item.expectedCommission == null) return 0;
+  const shares = resolveServiceExecutors(item, so);
+  const mine = shares.find((s) => s.employeeId === employeeId);
+  if (!mine) return 0;
+  const totalSharePct = shares.reduce((s, x) => s + x.sharePct, 0);
+  if (totalSharePct <= 0) return 0;
+  return (
+    Math.round(
+      (Number(item.expectedCommission) * (mine.sharePct / totalSharePct)) * 100,
+    ) / 100
+  );
+}
+
 export function employeeParticipationWhere(employeeId: string) {
   return {
     OR: [
       { executionById: employeeId },
+      { coExecutionById: employeeId },
       { generalResponsibleId: employeeId },
       { finalizedById: employeeId },
       { checklistById: employeeId },
       { diagnosisById: employeeId },
-      { items: { some: { OR: [{ executorId: employeeId }, { soldById: employeeId }] } } },
+      {
+        items: {
+          some: {
+            OR: [
+              { executorId: employeeId },
+              { coExecutorId: employeeId },
+              { soldById: employeeId },
+            ],
+          },
+        },
+      },
     ],
   };
 }

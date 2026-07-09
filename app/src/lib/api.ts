@@ -897,6 +897,37 @@ export interface CommissionRuleRow {
   product?: { id: string; name: string } | null;
 }
 
+export interface CommissionRulesAudit {
+  ok: boolean;
+  missingLaborRule: Array<{
+    employeeId: string;
+    name: string;
+    issue: string;
+    message: string;
+  }>;
+  riskyTotalOsRules: Array<{
+    employeeId: string;
+    name: string;
+    ruleId: string;
+    issue: string;
+    message: string;
+    percentage: number | null;
+  }>;
+  wrongPercentage: Array<{
+    employeeId: string;
+    name: string;
+    ruleId: string;
+    issue: string;
+    message: string;
+    percentage: number;
+  }>;
+}
+
+export interface ItemCommissionPreview {
+  total: number;
+  breakdown: Array<{ employeeId: string; sharePct: number; amount: number }>;
+}
+
 export interface EmployeeEntryRow {
   id: string;
   employeeId: string;
@@ -966,6 +997,8 @@ export interface ServiceOrderItemRow {
   } | null;
   costHistory?: ServiceOrderItemCostHistoryRow[];
   executor?: EmployeeMini | null;
+  coExecutor?: EmployeeMini | null;
+  coExecutorSplitPct?: number | null;
   soldBy?: EmployeeMini | null;
   appliedBy?: EmployeeMini | null;
   separatedBy?: EmployeeMini | null;
@@ -990,6 +1023,7 @@ export interface ServiceOrderDetail extends ServiceOrderRow {
   diagnosisBy?: EmployeeMini | null;
   quoteBy?: EmployeeMini | null;
   executionBy?: EmployeeMini | null;
+  coExecutionBy?: EmployeeMini | null;
   finalizedBy?: EmployeeMini | null;
   revisionIntervalKm?: number | null;
   revisionIntervalMonths?: number | null;
@@ -1496,6 +1530,7 @@ export const api = {
       diagnosisById: string | null;
       quoteById: string | null;
       executionById: string | null;
+      coExecutionById: string | null;
       finalizedById: string | null;
       revisionIntervalKm: number | null;
       revisionIntervalMonths: number | null;
@@ -1638,6 +1673,8 @@ export const api = {
       outsourcedServiceId?: string;
       discount?: number;
       executorId?: string;
+      coExecutorId?: string;
+      coExecutorSplitPct?: number;
       soldById?: string;
       appliedById?: string;
       separatedById?: string;
@@ -1666,6 +1703,8 @@ export const api = {
       unitCost?: number | null;
       discount?: number;
       executorId?: string | null;
+      coExecutorId?: string | null;
+      coExecutorSplitPct?: number | null;
       soldById?: string | null;
       appliedById?: string | null;
       separatedById?: string | null;
@@ -2739,6 +2778,35 @@ export const api = {
     request<CommissionRuleRow[]>(
       `/team/commission-rules${employeeId ? `?employeeId=${employeeId}` : ""}`,
       { method: "GET" },
+      token,
+    ),
+
+  commissionRulesAudit: (token: string) =>
+    request<CommissionRulesAudit>(
+      "/team/commission-rules/audit",
+      { method: "GET" },
+      token,
+    ),
+
+  previewServiceOrderItemCommission: (
+    token: string,
+    serviceOrderId: string,
+    data: {
+      itemType: ServiceOrderItemType;
+      quantity?: number;
+      unitPrice: number;
+      discount?: number;
+      catalogItemId?: string | null;
+      productId?: string | null;
+      executorId?: string | null;
+      coExecutorId?: string | null;
+      coExecutorSplitPct?: number | null;
+      soldById?: string | null;
+    },
+  ) =>
+    request<ItemCommissionPreview>(
+      `/service-orders/${serviceOrderId}/preview-item-commission`,
+      { method: "POST", body: JSON.stringify(data) },
       token,
     ),
 

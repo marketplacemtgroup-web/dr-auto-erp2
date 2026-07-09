@@ -32,7 +32,7 @@ export default function CommissionRulesPage() {
     employeeId: "",
     ruleType: "PERCENTUAL",
     baseCalculation: "MAO_DE_OBRA",
-    percentage: "20",
+    percentage: "30",
     fixedAmount: "",
     trigger: "OS_FINALIZADA",
     catalogItemId: "",
@@ -46,6 +46,15 @@ export default function CommissionRulesPage() {
   const { data, isLoading, error } = useApiQuery(["commission-rules"], (t) =>
     api.commissionRules(t),
   );
+  const { data: audit } = useApiQuery(["commission-rules-audit"], (t) =>
+    api.commissionRulesAudit(t),
+  );
+
+  const auditIssues = [
+    ...(audit?.missingLaborRule ?? []),
+    ...(audit?.riskyTotalOsRules ?? []),
+    ...(audit?.wrongPercentage ?? []),
+  ];
 
   const save = useMutation({
     mutationFn: () =>
@@ -78,6 +87,23 @@ export default function CommissionRulesPage() {
         actionLabel="Nova regra"
         onAction={() => setDrawerOpen(true)}
       >
+        {audit && !audit.ok && auditIssues.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 space-y-1">
+            <p className="font-medium">Atenção — revisar regras de comissão dos mecânicos</p>
+            {auditIssues.slice(0, 6).map((issue, idx) => (
+              <p key={`${issue.issue}-${idx}`} className="text-xs">
+                {issue.name}: {issue.message}
+              </p>
+            ))}
+            {auditIssues.length > 6 && (
+              <p className="text-xs text-amber-800">+ {auditIssues.length - 6} alerta(s)</p>
+            )}
+            <p className="text-xs pt-1 border-t border-amber-200">
+              Comissão de mecânico deve ser sobre mão de obra executada (MAO_DE_OBRA), não sobre o
+              total da OS.
+            </p>
+          </div>
+        )}
         <DataTable
           loading={isLoading}
           error={error ?? null}

@@ -154,6 +154,9 @@ data class ServiceOrderItemDto(
     val unitPrice: Any,
     val discount: Any? = null,
     val executor: EmployeeMiniDto? = null,
+    val coExecutor: EmployeeMiniDto? = null,
+    val coExecutorSplitPct: Int? = null,
+    val expectedCommission: Any? = null,
     val product: IdNameDto? = null,
     val catalogItem: IdNameDto? = null,
 )
@@ -201,6 +204,8 @@ data class ServiceOrderDetailDto(
     val updatedAt: String? = null,
     val vehicle: VehicleMiniDto,
     val generalResponsible: EmployeeMiniDto? = null,
+    val executionBy: EmployeeMiniDto? = null,
+    val coExecutionBy: EmployeeMiniDto? = null,
     val items: List<ServiceOrderItemDto>? = null,
     val quotes: List<QuoteMiniDto>? = null,
     val checklistItems: List<ChecklistItemDto>? = null,
@@ -238,6 +243,8 @@ data class CreateServiceOrderItemRequest(
     val catalogItemId: String? = null,
     val discount: Double? = null,
     val executorId: String? = null,
+    val coExecutorId: String? = null,
+    val coExecutorSplitPct: Int? = null,
 )
 
 @JsonClass(generateAdapter = true)

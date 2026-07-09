@@ -160,4 +160,78 @@ export class CommissionRulesService {
       userId,
     );
   }
+
+  /** Lista técnicos sem regra MAO_DE_OBRA e regras TOTAL_OS/OS_FINALIZADA em técnicos. */
+  async audit(organizationId: string) {
+    const technicians = await this.prisma.employee.findMany({
+      where: {
+        organizationId,
+        status: 'ACTIVE',
+        OR: [{ isTechnical: true }, { jobTitle: { isTechnical: true } }],
+      },
+      include: {
+        commissionRules: { where: { isActive: true } },
+        jobTitle: { select: { name: true, isTechnical: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const missingLaborRule = technicians
+      .filter(
+        (e) =>
+          !e.commissionRules.some(
+            (r) =>
+              r.baseCalculation === 'MAO_DE_OBRA' ||
+              r.baseCalculation === 'SERVICO_ESPECIFICO',
+          ),
+      )
+      .map((e) => ({
+        employeeId: e.id,
+        name: e.name,
+        issue: 'missing_mao_de_obra' as const,
+        message: 'Sem regra ativa sobre mão de obra (recomendado: 30% em MAO_DE_OBRA)',
+      }));
+
+    const riskyTotalOsRules = technicians.flatMap((e) =>
+      e.commissionRules
+        .filter(
+          (r) =>
+            r.baseCalculation === 'TOTAL_OS' || r.baseCalculation === 'OS_FINALIZADA',
+        )
+        .map((r) => ({
+          employeeId: e.id,
+          name: e.name,
+          ruleId: r.id,
+          issue: 'total_os_on_technician' as const,
+          message: `Regra "${r.baseCalculation}" calcula sobre valor total da OS — inadequado para mecânico`,
+          percentage: r.percentage != null ? Number(r.percentage) : null,
+        })),
+    );
+
+    const wrongPercentage = technicians.flatMap((e) =>
+      e.commissionRules
+        .filter(
+          (r) =>
+            r.baseCalculation === 'MAO_DE_OBRA' &&
+            r.ruleType === 'PERCENTUAL' &&
+            r.percentage != null &&
+            Number(r.percentage) !== 30,
+        )
+        .map((r) => ({
+          employeeId: e.id,
+          name: e.name,
+          ruleId: r.id,
+          issue: 'non_standard_percentage' as const,
+          message: `Regra MAO_DE_OBRA com ${Number(r.percentage)}% (padrão da oficina: 30%)`,
+          percentage: Number(r.percentage),
+        })),
+    );
+
+    return {
+      ok: missingLaborRule.length === 0 && riskyTotalOsRules.length === 0,
+      missingLaborRule,
+      riskyTotalOsRules,
+      wrongPercentage,
+    };
+  }
 }

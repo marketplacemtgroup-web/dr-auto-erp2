@@ -72,6 +72,7 @@ export const soInclude = {
   diagnosisBy: employeeSelect,
   quoteBy: employeeSelect,
   executionBy: employeeSelect,
+  coExecutionBy: employeeSelect,
   finalizedBy: employeeSelect,
   items: {
     include: {
@@ -79,6 +80,7 @@ export const soInclude = {
       catalogItem: true,
       outsourcedService: { select: { id: true, name: true, provider: true } },
       executor: employeeSelect,
+      coExecutor: employeeSelect,
       soldBy: employeeSelect,
       appliedBy: employeeSelect,
       separatedBy: employeeSelect,
@@ -144,15 +146,31 @@ export class ServiceOrdersService {
       catalogItemId?: string | null;
       productId?: string | null;
       executorId?: string | null;
+      coExecutorId?: string | null;
+      coExecutorSplitPct?: number | null;
       soldById?: string | null;
       executionById?: string | null;
     },
   ) {
     if (!isCommissionEligibleItemType(params.itemType)) return null;
-    const employeeId =
-      params.itemType === 'SERVICE'
-        ? params.executorId ?? params.executionById
-        : params.soldById;
+
+    if (params.itemType === 'SERVICE') {
+      const primaryId = params.executorId ?? params.executionById;
+      if (!primaryId) return null;
+      return this.commissionEngine.previewForServiceItem({
+        organizationId,
+        quantity: params.quantity,
+        unitPrice: params.unitPrice,
+        discount: params.discount ?? 0,
+        catalogItemId: params.catalogItemId ?? null,
+        executorId: params.executorId ?? null,
+        coExecutorId: params.coExecutorId ?? null,
+        coExecutorSplitPct: params.coExecutorSplitPct ?? null,
+        executionById: params.executionById ?? null,
+      });
+    }
+
+    const employeeId = params.soldById;
     if (!employeeId) return null;
     return this.commissionEngine.previewForItem(organizationId, employeeId, {
       itemType: params.itemType as ServiceOrderItemType,
@@ -162,6 +180,79 @@ export class ServiceOrdersService {
       catalogItemId: params.catalogItemId,
       productId: params.productId,
     });
+  }
+
+  async previewItemCommissionForOrder(
+    organizationId: string,
+    serviceOrderId: string,
+    dto: {
+      itemType: 'SERVICE' | 'PART' | 'SCANNER' | 'THIRD_PARTY';
+      quantity: number;
+      unitPrice: number;
+      discount?: number;
+      catalogItemId?: string | null;
+      productId?: string | null;
+      executorId?: string | null;
+      coExecutorId?: string | null;
+      coExecutorSplitPct?: number | null;
+      soldById?: string | null;
+    },
+  ) {
+    const so = await this.findOne(organizationId, serviceOrderId);
+    if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
+
+    if (dto.itemType === 'SERVICE') {
+      const shares = this.commissionEngine.resolveServiceExecutors(
+        {
+          executorId: dto.executorId ?? null,
+          coExecutorId: dto.coExecutorId ?? null,
+          coExecutorSplitPct: dto.coExecutorSplitPct ?? null,
+        },
+        { executionById: so.executionById },
+      );
+      const breakdown: Array<{
+        employeeId: string;
+        sharePct: number;
+        amount: number;
+      }> = [];
+      for (const share of shares) {
+        const amount = await this.commissionEngine.previewForItem(
+          organizationId,
+          share.employeeId,
+          {
+            itemType: 'SERVICE',
+            quantity: dto.quantity,
+            unitPrice: dto.unitPrice,
+            discount: dto.discount ?? 0,
+            catalogItemId: dto.catalogItemId ?? null,
+            sharePct: share.sharePct,
+          },
+        );
+        if (amount > 0) {
+          breakdown.push({
+            employeeId: share.employeeId,
+            sharePct: share.sharePct,
+            amount,
+          });
+        }
+      }
+      const total = Math.round(breakdown.reduce((s, b) => s + b.amount, 0) * 100) / 100;
+      return { total, breakdown };
+    }
+
+    const total =
+      (await this.previewItemCommission(organizationId, {
+        ...dto,
+        executionById: so.executionById,
+      })) ?? 0;
+    const employeeId = dto.soldById;
+    return {
+      total,
+      breakdown:
+        employeeId && total > 0
+          ? [{ employeeId, sharePct: 100, amount: total }]
+          : [],
+    };
   }
 
   async create(organizationId: string, dto: CreateServiceOrderDto) {
@@ -400,6 +491,22 @@ export class ServiceOrdersService {
       }
     }
 
+    const nextExecutionById =
+      dto.executionById !== undefined ? dto.executionById || null : current.executionById;
+    const nextCoExecutionById =
+      dto.coExecutionById !== undefined
+        ? dto.coExecutionById || null
+        : current.coExecutionById;
+    if (
+      nextExecutionById &&
+      nextCoExecutionById &&
+      nextExecutionById === nextCoExecutionById
+    ) {
+      throw new BadRequestException(
+        'O mecânico auxiliar não pode ser o mesmo da execução principal',
+      );
+    }
+
     const updated = await this.prisma.serviceOrder.update({
       where: { id },
       data: {
@@ -437,6 +544,9 @@ export class ServiceOrdersService {
         ...(dto.quoteById !== undefined ? { quoteById: dto.quoteById || null } : {}),
         ...(dto.executionById !== undefined
           ? { executionById: dto.executionById || null }
+          : {}),
+        ...(dto.coExecutionById !== undefined
+          ? { coExecutionById: dto.coExecutionById || null }
           : {}),
         ...(dto.finalizedById !== undefined
           ? { finalizedById: dto.finalizedById || null }
@@ -540,6 +650,7 @@ export class ServiceOrdersService {
       dto.diagnosisById !== undefined ||
       dto.quoteById !== undefined ||
       dto.executionById !== undefined ||
+      dto.coExecutionById !== undefined ||
       dto.finalizedById !== undefined;
     if (teamTouched) {
       await this.maybeRegenerateCommissions(organizationId, id, updated.status);
@@ -633,6 +744,15 @@ export class ServiceOrdersService {
 
     const executorId =
       dto.executorId ?? (itemType === 'SERVICE' ? so.executionById : null);
+    const coExecutorId =
+      dto.coExecutorId ?? (itemType === 'SERVICE' ? null : null);
+    const coExecutorSplitPct =
+      coExecutorId != null ? (dto.coExecutorSplitPct ?? 50) : null;
+    if (executorId && coExecutorId && executorId === coExecutorId) {
+      throw new BadRequestException(
+        'O co-executor não pode ser o mesmo que o executor principal',
+      );
+    }
     const expectedCommission = await this.previewItemCommission(organizationId, {
       itemType,
       quantity: qty,
@@ -641,6 +761,8 @@ export class ServiceOrdersService {
       catalogItemId,
       productId: dto.productId ?? null,
       executorId,
+      coExecutorId,
+      coExecutorSplitPct,
       soldById: dto.soldById ?? null,
       executionById: so.executionById,
     });
@@ -804,6 +926,8 @@ export class ServiceOrdersService {
             : null,
         discount: dto.discount ?? 0,
         executorId,
+        coExecutorId: itemType === 'SERVICE' ? coExecutorId : null,
+        coExecutorSplitPct: itemType === 'SERVICE' ? coExecutorSplitPct : null,
         soldById: dto.soldById ?? null,
         appliedById: dto.appliedById ?? null,
         separatedById: dto.separatedById ?? null,
@@ -950,6 +1074,25 @@ export class ServiceOrdersService {
     const nextDiscount = dto.discount !== undefined ? dto.discount : Number(item.discount ?? 0);
     const nextExecutorId =
       dto.executorId !== undefined ? dto.executorId : item.executorId;
+    const nextCoExecutorId =
+      dto.coExecutorId !== undefined ? dto.coExecutorId : item.coExecutorId;
+    const nextCoExecutorSplitPct =
+      dto.coExecutorSplitPct !== undefined
+        ? dto.coExecutorSplitPct
+        : item.coExecutorSplitPct;
+    const effectiveCoExecutorId = nextCoExecutorId || null;
+    const effectiveCoSplit =
+      effectiveCoExecutorId != null ? (nextCoExecutorSplitPct ?? 50) : null;
+    const effectiveExecutorId = nextExecutorId ?? so.executionById;
+    if (
+      effectiveExecutorId &&
+      effectiveCoExecutorId &&
+      effectiveExecutorId === effectiveCoExecutorId
+    ) {
+      throw new BadRequestException(
+        'O co-executor não pode ser o mesmo que o executor principal',
+      );
+    }
     const nextSoldById = dto.soldById !== undefined ? dto.soldById : item.soldById;
     let itemType = dto.itemType ?? item.itemType;
     let nextDescription = dto.description !== undefined ? dto.description.trim() : item.description;
@@ -996,6 +1139,8 @@ export class ServiceOrdersService {
       catalogItemId: item.catalogItemId,
       productId: item.productId,
       executorId: nextExecutorId,
+      coExecutorId: effectiveCoExecutorId,
+      coExecutorSplitPct: effectiveCoSplit,
       soldById: nextSoldById,
       executionById: so.executionById,
     });
@@ -1029,6 +1174,15 @@ export class ServiceOrdersService {
           : {}),
         ...(dto.discount !== undefined ? { discount: dto.discount } : {}),
         ...(dto.executorId !== undefined ? { executorId: dto.executorId } : {}),
+        ...(dto.coExecutorId !== undefined
+          ? {
+              coExecutorId: dto.coExecutorId || null,
+              coExecutorSplitPct: dto.coExecutorId ? (dto.coExecutorSplitPct ?? 50) : null,
+            }
+          : {}),
+        ...(dto.coExecutorSplitPct !== undefined && (nextCoExecutorId || item.coExecutorId)
+          ? { coExecutorSplitPct: dto.coExecutorSplitPct }
+          : {}),
         ...(dto.soldById !== undefined ? { soldById: dto.soldById } : {}),
         ...(dto.appliedById !== undefined ? { appliedById: dto.appliedById } : {}),
         ...(dto.separatedById !== undefined ? { separatedById: dto.separatedById } : {}),
@@ -1055,6 +1209,8 @@ export class ServiceOrdersService {
     }
     const teamItemTouched =
       dto.executorId !== undefined ||
+      dto.coExecutorId !== undefined ||
+      dto.coExecutorSplitPct !== undefined ||
       dto.soldById !== undefined ||
       dto.appliedById !== undefined;
     if (teamItemTouched) {

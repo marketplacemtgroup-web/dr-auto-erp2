@@ -117,6 +117,7 @@ type EquipeFormState = {
   diagnosisById: string;
   quoteById: string;
   executionById: string;
+  coExecutionById: string;
   finalizedById: string;
 };
 
@@ -158,6 +159,7 @@ function buildEquipeForm(os: {
   diagnosisBy?: { id: string } | null;
   quoteBy?: { id: string } | null;
   executionBy?: { id: string } | null;
+  coExecutionBy?: { id: string } | null;
   finalizedBy?: { id: string } | null;
 }): EquipeFormState {
   return {
@@ -166,6 +168,7 @@ function buildEquipeForm(os: {
     diagnosisById: os.diagnosisBy?.id ?? "",
     quoteById: os.quoteBy?.id ?? "",
     executionById: os.executionBy?.id ?? "",
+    coExecutionById: os.coExecutionBy?.id ?? "",
     finalizedById: os.finalizedBy?.id ?? "",
   };
 }
@@ -284,6 +287,8 @@ export default function ServiceOrderDetailPage() {
     catalogItemId: "",
     outsourcedServiceId: "",
     executorId: "",
+    coExecutorId: "",
+    coExecutorSplitPct: "50",
     soldById: "",
     appliedById: "",
   });
@@ -317,6 +322,44 @@ export default function ServiceOrderDetailPage() {
   const activeEmployees = activeEmployeesRes?.data;
   const { data: technicians } = useApiQuery(["employee-technicians"], (t) => api.employeeTechnicians(t));
   const org = useOrganizationBranding();
+
+  const itemCommissionPreviewEnabled =
+    itemDrawer &&
+    itemForm.itemType === "SERVICE" &&
+    !!id &&
+    !!token &&
+    Number(itemForm.unitPrice) > 0;
+
+  const { data: itemCommissionPreview } = useApiQuery(
+    [
+      "item-commission-preview",
+      id ?? "",
+      itemForm.itemType,
+      itemForm.quantity,
+      itemForm.unitPrice,
+      itemForm.executorId,
+      itemForm.coExecutorId,
+      itemForm.coExecutorSplitPct,
+      itemForm.catalogItemId,
+    ],
+    (t) =>
+      api.previewServiceOrderItemCommission(t, id!, {
+        itemType: "SERVICE",
+        quantity: Number(itemForm.quantity) || 1,
+        unitPrice: Number(itemForm.unitPrice),
+        catalogItemId: itemForm.catalogItemId || null,
+        executorId: itemForm.executorId || null,
+        coExecutorId: itemForm.coExecutorId || null,
+        coExecutorSplitPct: itemForm.coExecutorId
+          ? Number(itemForm.coExecutorSplitPct) || 50
+          : null,
+      }),
+    itemCommissionPreviewEnabled,
+  );
+
+  const employeeName = (employeeId: string) =>
+    [...(technicians ?? []), ...(activeEmployees ?? [])].find((e) => e.id === employeeId)?.name ??
+    "Colaborador";
 
   useEffect(() => {
     if (!os) return;
@@ -387,6 +430,7 @@ export default function ServiceOrderDetailPage() {
       diagnosisById: equipeForm.diagnosisById || null,
       quoteById: equipeForm.quoteById || null,
       executionById: equipeForm.executionById || null,
+      coExecutionById: equipeForm.coExecutionById || null,
       finalizedById: equipeForm.finalizedById || null,
     });
   };
@@ -403,6 +447,8 @@ export default function ServiceOrderDetailPage() {
       catalogItemId: "",
       outsourcedServiceId: "",
       executorId: "",
+      coExecutorId: "",
+      coExecutorSplitPct: "50",
       soldById: "",
       appliedById: "",
     });
@@ -425,6 +471,9 @@ export default function ServiceOrderDetailPage() {
       catalogItemId: item.catalogItem?.id ?? "",
       outsourcedServiceId: item.outsourcedService?.id ?? "",
       executorId: item.executor?.id ?? "",
+      coExecutorId: item.coExecutor?.id ?? "",
+      coExecutorSplitPct:
+        item.coExecutorSplitPct != null ? String(item.coExecutorSplitPct) : "50",
       soldById: item.soldBy?.id ?? "",
       appliedById: item.appliedBy?.id ?? "",
     });
@@ -446,6 +495,10 @@ export default function ServiceOrderDetailPage() {
         unitPrice: Number(itemForm.unitPrice),
         ...(unitCostValue !== undefined ? { unitCost: unitCostValue } : {}),
         executorId: itemForm.executorId || null,
+        coExecutorId: itemForm.coExecutorId || null,
+        coExecutorSplitPct: itemForm.coExecutorId
+          ? Number(itemForm.coExecutorSplitPct) || 50
+          : null,
         soldById: itemForm.soldById || null,
         appliedById: itemForm.appliedById || null,
       };
@@ -463,6 +516,10 @@ export default function ServiceOrderDetailPage() {
         outsourcedServiceId:
           itemForm.itemType === "THIRD_PARTY" ? itemForm.outsourcedServiceId || undefined : undefined,
         executorId: itemForm.executorId || undefined,
+        coExecutorId: itemForm.coExecutorId || undefined,
+        coExecutorSplitPct: itemForm.coExecutorId
+          ? Number(itemForm.coExecutorSplitPct) || 50
+          : undefined,
         soldById: itemForm.soldById || undefined,
         appliedById: itemForm.appliedById || undefined,
       });
@@ -836,14 +893,15 @@ export default function ServiceOrderDetailPage() {
           <div className="grid sm:grid-cols-2 gap-4">
             {(
               [
-                ["generalResponsibleId", "Responsável geral"],
-                ["checklistById", "Checklist por"],
-                ["diagnosisById", "Diagnóstico por"],
-                ["quoteById", "Orçamento por"],
-                ["executionById", "Execução por"],
-                ["finalizedById", "Finalização por"],
+                ["generalResponsibleId", "Responsável geral", "all"],
+                ["checklistById", "Checklist por", "all"],
+                ["diagnosisById", "Diagnóstico por", "all"],
+                ["quoteById", "Orçamento por", "all"],
+                ["executionById", "Execução por (1)", "tech"],
+                ["coExecutionById", "Execução por (2)", "tech"],
+                ["finalizedById", "Finalização por", "all"],
               ] as const
-            ).map(([field, label]) => (
+            ).map(([field, label, pool]) => (
               <FormField key={field} label={label}>
                 <select
                   className={selectClass}
@@ -855,7 +913,7 @@ export default function ServiceOrderDetailPage() {
                   }
                 >
                   <option value="">—</option>
-                  {(activeEmployees ?? []).map((emp) => (
+                  {(pool === "tech" ? technicians ?? [] : activeEmployees ?? []).map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.name}
                     </option>
@@ -1294,7 +1352,12 @@ export default function ServiceOrderDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-[#64748B] text-xs">
                       {item.itemType === "SERVICE"
-                        ? item.executor?.name ?? os.executionBy?.name ?? "—"
+                        ? [
+                            item.executor?.name ?? os.executionBy?.name,
+                            item.coExecutor?.name,
+                          ]
+                            .filter(Boolean)
+                            .join(" + ") || "—"
                         : item.itemType === "PART"
                           ? item.soldBy?.name ?? "—"
                           : item.itemType === "THIRD_PARTY"
@@ -1449,7 +1512,12 @@ export default function ServiceOrderDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-[#64748B]">
                       {item.itemType === "SERVICE"
-                        ? item.executor?.name ?? os.executionBy?.name ?? "—"
+                        ? [
+                            item.executor?.name ?? os.executionBy?.name,
+                            item.coExecutor?.name,
+                          ]
+                            .filter(Boolean)
+                            .join(" + ") || "—"
                         : item.itemType === "PART"
                           ? [item.soldBy?.name, item.appliedBy?.name].filter(Boolean).join(" / ") || "—"
                           : item.itemType === "THIRD_PARTY"
@@ -1805,24 +1873,83 @@ export default function ServiceOrderDetailPage() {
           />
         </FormField>
         {itemForm.itemType === "SERVICE" && (
-          <FormField label="Executor do serviço">
-            <select
-              className={selectClass}
-              value={itemForm.executorId}
-              onChange={(e) => setItemForm((f) => ({ ...f, executorId: e.target.value }))}
-            >
-              <option value="">
-                {os.executionBy?.name
-                  ? `Padrão: ${os.executionBy.name}`
-                  : "Selecione o executor"}
-              </option>
-              {(technicians ?? activeEmployees ?? []).map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.name}
+          <>
+            <FormField label="Executor principal">
+              <select
+                className={selectClass}
+                value={itemForm.executorId}
+                onChange={(e) => setItemForm((f) => ({ ...f, executorId: e.target.value }))}
+              >
+                <option value="">
+                  {os.executionBy?.name
+                    ? `Padrão: ${os.executionBy.name}`
+                    : "Selecione o executor"}
                 </option>
-              ))}
-            </select>
-          </FormField>
+                {[os.executionBy, os.coExecutionBy, ...(technicians ?? [])]
+                  .filter(Boolean)
+                  .filter(
+                    (emp, idx, arr) =>
+                      emp && arr.findIndex((x) => x?.id === emp.id) === idx,
+                  )
+                  .map((emp) => (
+                    <option key={emp!.id} value={emp!.id}>
+                      {emp!.name}
+                    </option>
+                  ))}
+              </select>
+            </FormField>
+            <FormField label="Co-executor (opcional)">
+              <select
+                className={selectClass}
+                value={itemForm.coExecutorId}
+                onChange={(e) =>
+                  setItemForm((f) => ({
+                    ...f,
+                    coExecutorId: e.target.value,
+                    coExecutorSplitPct: e.target.value ? f.coExecutorSplitPct || "50" : "50",
+                  }))
+                }
+              >
+                <option value="">— Nenhum —</option>
+                {(technicians ?? []).map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            {itemForm.coExecutorId && (
+              <FormField label="Divisão para co-executor (%)">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  className={inputClass}
+                  value={itemForm.coExecutorSplitPct}
+                  onChange={(e) =>
+                    setItemForm((f) => ({ ...f, coExecutorSplitPct: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-[#94A3B8] mt-1">
+                  Ex.: 50 = metade da comissão da linha para cada mecânico (sobre mão de obra).
+                </p>
+              </FormField>
+            )}
+            {itemCommissionPreview && itemCommissionPreview.total > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
+                <p className="font-medium">Comissão prevista (mão de obra)</p>
+                {itemCommissionPreview.breakdown.map((row) => (
+                  <p key={row.employeeId}>
+                    {employeeName(row.employeeId)} ({row.sharePct}%):{" "}
+                    {formatMoney(row.amount)}
+                  </p>
+                ))}
+                <p className="font-medium pt-1 border-t border-emerald-200">
+                  Total: {formatMoney(itemCommissionPreview.total)}
+                </p>
+              </div>
+            )}
+          </>
         )}
         {itemForm.itemType === "PART" && (
           <>

@@ -70,6 +70,10 @@ export class UpdateServiceOrderDto {
 
   @IsOptional()
   @IsString()
+  coExecutionById?: string | null;
+
+  @IsOptional()
+  @IsString()
   finalizedById?: string | null;
 
   @IsOptional()
