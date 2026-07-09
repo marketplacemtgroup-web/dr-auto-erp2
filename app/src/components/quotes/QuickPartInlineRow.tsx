@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 import { api, type ProductRow } from "../../lib/api";
@@ -32,6 +32,24 @@ type Props = {
   onCancel: () => void;
   saving?: boolean;
 };
+
+function FieldLabel({
+  children,
+  align = "left",
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <span
+      className={`block text-[10px] font-medium text-[#64748B] mb-1 leading-tight ${
+        align === "right" ? "text-right" : ""
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
 
 export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
   const token = useAuthToken();
@@ -91,26 +109,28 @@ export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
         </tr>
       ) : null}
       <tr className="border-t border-[#E2E8F0] bg-[#FFFBEB]/40">
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel>Código</FieldLabel>
           <span className="text-xs text-[#94A3B8]">auto</span>
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel>Descrição da peça</FieldLabel>
           <input
             className={inputClass}
-            placeholder="Descrição da peça"
             value={draft.description}
             onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel>Marca</FieldLabel>
           <input
             className={inputClass}
-            placeholder="Marca"
             value={draft.partBrand}
             onChange={(e) => setDraft((d) => ({ ...d, partBrand: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel align="right">Quantidade</FieldLabel>
           <input
             className={`${inputClass} text-right`}
             type="number"
@@ -119,7 +139,8 @@ export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
             onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel align="right">Custo unitário</FieldLabel>
           <input
             className={`${inputClass} text-right`}
             placeholder="0,00"
@@ -127,7 +148,8 @@ export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
             onChange={(e) => setDraft((d) => ({ ...d, unitCost: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel align="right">Preço de venda</FieldLabel>
           <input
             className={`${inputClass} text-right`}
             placeholder="0,00"
@@ -135,7 +157,8 @@ export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
             onChange={(e) => setDraft((d) => ({ ...d, unitPrice: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel align="right">Desconto</FieldLabel>
           <input
             className={`${inputClass} text-right`}
             placeholder="0"
@@ -143,16 +166,20 @@ export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
             onChange={(e) => setDraft((d) => ({ ...d, discount: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2 text-right text-sm font-medium">{formatMoney(total)}</td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel align="right">Total</FieldLabel>
+          <p className="text-right text-sm font-medium pt-2">{formatMoney(total)}</p>
+        </td>
+        <td className="px-2 py-2 align-top">
+          <FieldLabel>Observações internas</FieldLabel>
           <input
             className={inputClass}
-            placeholder="Obs."
             value={draft.internalNotes}
             onChange={(e) => setDraft((d) => ({ ...d, internalNotes: e.target.value }))}
           />
         </td>
-        <td className="px-2 py-2">
+        <td className="px-2 py-2 align-top">
+          <FieldLabel align="right">&nbsp;</FieldLabel>
           <div className="flex justify-end gap-1">
             <button
               type="button"

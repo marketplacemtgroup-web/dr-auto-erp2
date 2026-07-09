@@ -1,4 +1,5 @@
 import type { PaymentMethod } from "./api";
+import type { FinancialEntryRow } from "./api";
 import { PAYMENT_LABELS } from "./paymentMethods";
 
 export type PaySplitFormRow = {
@@ -138,4 +139,55 @@ export function formatPaymentSplitsLabel(
       .join(" + ");
   }
   return fallback ? PAYMENT_LABELS[fallback] : "";
+}
+
+export function computeEntryNetAmount(
+  entry: Pick<
+    FinancialEntryRow,
+    | "amount"
+    | "type"
+    | "status"
+    | "discountAmount"
+    | "feeAmount"
+    | "interestAmount"
+    | "penaltyAmount"
+    | "amountReceived"
+  >,
+) {
+  const gross = Number(entry.amount);
+  if (entry.status === "PAID" && entry.amountReceived != null) {
+    return Number(entry.amountReceived);
+  }
+  const discount = Number(entry.discountAmount ?? 0);
+  const fee = Number(entry.feeAmount ?? 0);
+  const interest = Number(entry.interestAmount ?? 0);
+  const penalty = Number(entry.penaltyAmount ?? 0);
+  if (entry.type === "PAYABLE") {
+    return roundMoney(gross - discount + interest + penalty);
+  }
+  return roundMoney(gross - discount - fee);
+}
+
+export function entryHasNetAdjustment(
+  entry: Pick<
+    FinancialEntryRow,
+    | "amount"
+    | "status"
+    | "discountAmount"
+    | "feeAmount"
+    | "interestAmount"
+    | "penaltyAmount"
+    | "amountReceived"
+  >,
+) {
+  const gross = Number(entry.amount);
+  const discount = Number(entry.discountAmount ?? 0);
+  const fee = Number(entry.feeAmount ?? 0);
+  const interest = Number(entry.interestAmount ?? 0);
+  const penalty = Number(entry.penaltyAmount ?? 0);
+  if (discount > 0 || fee > 0 || interest > 0 || penalty > 0) return true;
+  if (entry.status === "PAID" && entry.amountReceived != null) {
+    return Math.abs(Number(entry.amountReceived) - gross) > 0.01;
+  }
+  return false;
 }

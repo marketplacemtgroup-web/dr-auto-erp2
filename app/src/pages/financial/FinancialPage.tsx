@@ -32,7 +32,9 @@ import { usePermissions } from "../../hooks/usePermissions";
 import { serviceOrderStatusLabel } from "../../lib/labels";
 import {
   computePayDiscount,
+  computeEntryNetAmount,
   createDefaultPayForm,
+  entryHasNetAdjustment,
   formatPaymentSplitsLabel,
   type PayEntryFormState,
 } from "../../lib/payEntry";
@@ -603,14 +605,15 @@ export default function FinancialPage() {
                     <th className="text-left px-4 py-2">Vinculo</th>
                     <th className="text-left px-4 py-2">Venc.</th>
                     <th className="text-right px-4 py-2">Valor</th>
+                    <th className="text-right px-4 py-2">Valor líquido</th>
                     <th className="text-right px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={5} className="px-4 py-6 text-[#64748B]">Carregando...</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-6 text-[#64748B]">Carregando...</td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-6 text-[#64748B]">Nenhum lancamento.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-6 text-[#64748B]">Nenhum lancamento.</td></tr>
                   ) : (
                     rows.map((r) => (
                       <Fragment key={r.id}>
@@ -642,6 +645,15 @@ export default function FinancialPage() {
                           </td>
                           <td className="px-4 py-3">{formatDate(r.dueDate)}</td>
                           <td className="px-4 py-3 text-right font-medium">{formatCurrency(Number(r.amount))}</td>
+                          <td className="px-4 py-3 text-right">
+                            {entryHasNetAdjustment(r) ? (
+                              <span className="font-medium text-[#0F3D4C]">
+                                {formatCurrency(computeEntryNetAmount(r))}
+                              </span>
+                            ) : (
+                              <span className="text-[#94A3B8]">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right space-x-2">
                             {r.installments && r.installments.length > 0 ? (
                               <button type="button" className="text-[12px] text-[#64748B]" onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
@@ -697,6 +709,15 @@ export default function FinancialPage() {
                             <td />
                             <td className="px-4 py-2 text-[12px]">{formatDate(p.dueDate)}</td>
                             <td className="px-4 py-2 text-right text-[12px]">{formatCurrency(Number(p.amount))}</td>
+                            <td className="px-4 py-2 text-right text-[12px]">
+                              {entryHasNetAdjustment(p) ? (
+                                <span className="font-medium text-[#0F3D4C]">
+                                  {formatCurrency(computeEntryNetAmount(p))}
+                                </span>
+                              ) : (
+                                <span className="text-[#94A3B8]">—</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2 text-right space-x-1">
                               {p.status === "OPEN" || p.status === "PARTIAL" ? (
                                 <FinancialPayButton
