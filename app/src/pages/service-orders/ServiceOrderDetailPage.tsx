@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, Link2, Pencil, Plus, Printer, Trash2, X } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
 import ProductSearchSelect from "../../components/inventory/ProductSearchSelect";
 import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
@@ -36,6 +36,7 @@ import QuotePrintSheet, { buildQuotePrintData } from "../../components/quotes/Qu
 import ServiceOrderPrintSheet from "../../components/service-orders/ServiceOrderPrintSheet";
 import { printDocument } from "../../lib/print";
 import AttachmentGrid from "../../components/attachments/AttachmentGrid";
+import StagedMediaUpload from "../../components/attachments/StagedMediaUpload";
 
 const STATUS_OPTIONS = [
   "RECEIVED",
@@ -258,7 +259,6 @@ export default function ServiceOrderDetailPage() {
   const [tab, setTab] = useState<
     "dados" | "equipe" | "orcamento" | "itens" | "checklist" | "midia" | "timeline"
   >("dados");
-  const [uploading, setUploading] = useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [itemDrawer, setItemDrawer] = useState(false);
   const [editingItem, setEditingItem] = useState<ServiceOrderItemRow | null>(null);
@@ -536,18 +536,10 @@ export default function ServiceOrderDetailPage() {
 
   async function handleUpload(file: File) {
     if (!token || !id) return;
-    setUploading(true);
-    try {
-      await api.uploadServiceOrderAttachment(token, id, file, {
-        visibleToCustomer: true,
-        showOnQuote: true,
-      });
-      queryClient.invalidateQueries({ queryKey: ["service-order", id] });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao enviar arquivo");
-    } finally {
-      setUploading(false);
-    }
+    await api.uploadServiceOrderAttachment(token, id, file, {
+      visibleToCustomer: true,
+      showOnQuote: true,
+    });
   }
 
   async function shareQuoteLink(quoteId: string) {
@@ -1440,30 +1432,19 @@ export default function ServiceOrderDetailPage() {
 
       {tab === "midia" && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-5">
-          <div className="flex justify-between items-center mb-4">
-            <p className="text-sm font-medium text-[#1E293B]">Fotos, vídeos e anexos</p>
-            <label className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm cursor-pointer">
-              <Upload size={16} />
-              {uploading ? "Enviando..." : "Enviar mídia"}
-              <input
-                type="file"
-                accept="image/*,video/*"
-                className="hidden"
-                disabled={uploading}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleUpload(f);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          </div>
+          <p className="text-sm font-medium text-[#1E293B] mb-4">Fotos, vídeos e anexos</p>
+          <StagedMediaUpload
+            onUpload={handleUpload}
+            onComplete={() => queryClient.invalidateQueries({ queryKey: ["service-order", id] })}
+          />
+          <div className="mt-6">
           <AttachmentGrid
             attachments={os.attachments ?? []}
             deletingId={deletingAttachmentId}
             onDelete={(attachmentId) => void handleDeleteAttachment(attachmentId)}
             emptyLabel="Nenhuma mídia ainda. Envie fotos ou vídeos para o cliente ver no portal."
           />
+          </div>
         </div>
       )}
 

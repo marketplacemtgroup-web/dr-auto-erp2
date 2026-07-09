@@ -376,7 +376,7 @@ fun PhotoChecklistScreen(
                                 Spacer(modifier = Modifier.height(20.dp))
 
                                 AppButton(
-                                    text = if (isUploading) "Enviando foto..." else "Salvar item",
+                                    text = if (isUploading) "Enviando..." else "Subir para sistema",
                                     onClick = {
                                         val uri = capturedUri
                                         if (uri != null) {

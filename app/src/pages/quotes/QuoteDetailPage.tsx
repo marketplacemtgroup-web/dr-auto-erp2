@@ -638,7 +638,7 @@ export default function QuoteDetailPage() {
             complaint: quote.serviceOrder.complaint,
             vehicle: quote.serviceOrder.vehicle,
             items,
-            attachments: attachmentPage?.items,
+            attachments: attachmentPage?.data,
           },
           quote,
         )}

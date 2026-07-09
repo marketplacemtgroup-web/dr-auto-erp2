@@ -9,6 +9,7 @@ import com.example.data.service.ApiException
 import com.example.data.service.HttpClient
 import com.example.data.service.SessionManager
 import com.example.util.ChecklistTemplate
+import com.example.util.ImageUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -260,20 +261,21 @@ object WorkshopRepository {
         localUri: Uri,
     ): Boolean = withContext(Dispatchers.IO) {
         apiCall {
-            val file = uriToTempFile(context, localUri)
-                ?: throw IllegalStateException("Não foi possível ler a foto capturada")
+            val file = ImageUtils.uriToWebpFile(context, localUri)
+                ?: throw IllegalStateException("Não foi possível processar a foto")
             if (file.length() == 0L) {
                 file.delete()
                 throw IllegalStateException("A foto está vazia — tente fotografar novamente")
             }
             val category = ApiMappers.checklistCategorySlug(label)
-            val fileName = "checklist-${System.currentTimeMillis()}.jpg"
+            val fileName = "checklist-${System.currentTimeMillis()}.webp"
+            val mimeType = ImageUtils.WEBP_MIME
             try {
-                uploadChecklistPhotoViaApi(orderId, file, fileName, category)
+                uploadChecklistPhotoViaApi(orderId, file, fileName, mimeType, category)
             } catch (apiUploadError: Exception) {
                 // Fallback: upload direto ao Supabase (mesmo fluxo do ERP web)
                 try {
-                    uploadChecklistPhotoDirect(orderId, file, fileName, category)
+                    uploadChecklistPhotoDirect(orderId, file, fileName, mimeType, category)
                 } catch (directError: Exception) {
                     throw IllegalStateException(
                         apiUploadError.message ?: directError.message ?: "Falha ao enviar foto",
@@ -302,9 +304,10 @@ object WorkshopRepository {
         orderId: String,
         file: File,
         fileName: String,
+        mimeType: String,
         category: String,
     ) {
-        val body = file.asRequestBody("image/jpeg".toMediaType())
+        val body = file.asRequestBody(mimeType.toMediaType())
         val part = MultipartBody.Part.createFormData("file", fileName, body)
         api.uploadServiceOrderAttachment(
             serviceOrderId = orderId,
@@ -319,24 +322,25 @@ object WorkshopRepository {
         orderId: String,
         file: File,
         fileName: String,
+        mimeType: String,
         category: String,
     ) {
         val prep = api.prepareUpload(
             orderId,
             PrepareUploadRequest(
                 fileName = fileName,
-                mimeType = "image/jpeg",
+                mimeType = mimeType,
                 category = category,
                 visibleToCustomer = true,
                 showOnQuote = false,
             ),
         )
         val putHeaders = prep.headers?.toMutableMap() ?: mutableMapOf()
-        putHeaders["Content-Type"] = "image/jpeg"
+        putHeaders["Content-Type"] = mimeType
         if (!prep.token.isNullOrBlank()) {
             putHeaders["Authorization"] = "Bearer ${prep.token}"
         }
-        val putBody = file.asRequestBody("image/jpeg".toMediaType())
+        val putBody = file.asRequestBody(mimeType.toMediaType())
         val putRequest = Request.Builder()
             .url(prep.uploadUrl)
             .put(putBody)
@@ -355,23 +359,11 @@ object WorkshopRepository {
             ConfirmUploadRequest(
                 storagePath = prep.storagePath,
                 fileName = fileName,
-                mimeType = "image/jpeg",
+                mimeType = mimeType,
                 category = category,
                 visibleToCustomer = true,
             ),
         )
-    }
-
-    private fun uriToTempFile(context: Context, uri: Uri): File? {
-        return try {
-            val file = File.createTempFile("upload_", ".jpg", context.cacheDir)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
-            }
-            file
-        } catch (_: Exception) {
-            null
-        }
     }
 
     suspend fun completeChecklist(orderId: String): Boolean = apiCall {
