@@ -52,6 +52,7 @@ fun MainAppLayout() {
     val ordersViewModel: OrdersViewModel = viewModel()
     val orderDetailsViewModel: OrderDetailsViewModel = viewModel()
     val checklistViewModel: ChecklistViewModel = viewModel()
+    val workPhotosViewModel: WorkPhotosViewModel = viewModel()
 
     val startDestination = when {
         !sessionChecked -> null
@@ -69,6 +70,7 @@ fun MainAppLayout() {
     val showBottomBar = currentRoute != null &&
         currentRoute != Screen.Login.route &&
         !currentRoute.startsWith("photo_checklist") &&
+        !currentRoute.startsWith("work_photos") &&
         !currentRoute.startsWith("budget") &&
         !currentRoute.startsWith("update_order") &&
         currentRoute != Screen.CreateServiceOrder.route
@@ -202,6 +204,9 @@ fun MainAppLayout() {
                     onNavigateToPhotoChecklist = { id ->
                         navController.navigate(Screen.PhotoChecklist.createRoute(id))
                     },
+                    onNavigateToWorkPhotos = { id ->
+                        navController.navigate(Screen.WorkPhotos.createRoute(id))
+                    },
                     onNavigateToBudget = { id ->
                         navController.navigate(Screen.Budget.createRoute(id))
                     },
@@ -222,9 +227,20 @@ fun MainAppLayout() {
                     viewModel = checklistViewModel,
                     onNavigateBack = { navController.popBackStack() },
                     onChecklistCompleted = {
-                        // After completing the checklist, return to Order Details which will be re-fetched automatically
                         navController.popBackStack()
                     }
+                )
+            }
+
+            composable(
+                route = Screen.WorkPhotos.route,
+                arguments = listOf(navArgument("orderId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+                WorkPhotosScreen(
+                    orderId = orderId,
+                    viewModel = workPhotosViewModel,
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
 

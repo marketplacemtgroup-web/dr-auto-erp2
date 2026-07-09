@@ -28,6 +28,7 @@ import com.example.data.navigation.Screen
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.OrderDetailsViewModel
+import com.example.util.ChecklistLocalStore
 import com.example.util.DocumentPrint
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,7 @@ fun OrderDetailsScreen(
     viewModel: OrderDetailsViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToPhotoChecklist: (String) -> Unit,
+    onNavigateToWorkPhotos: (String) -> Unit,
     onNavigateToBudget: (String) -> Unit,
     onNavigateToUpdateOrder: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -58,7 +60,7 @@ fun OrderDetailsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(orderId) {
-        viewModel.loadOrder(orderId)
+        viewModel.loadOrder(context, orderId)
     }
 
     LaunchedEffect(order) {
@@ -133,12 +135,26 @@ fun OrderDetailsScreen(
 
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Technical checklist button
-                            AppButton(
-                                text = "Checklist Fotográfico",
-                                onClick = { onNavigateToPhotoChecklist(activeOrder.id) },
-                                isSecondary = false
-                            )
+                            val isOrderClosed = ChecklistLocalStore.isOrderClosed(activeOrder.status)
+
+                            if (!isOrderClosed) {
+                                AppButton(
+                                    text = "Checklist Fotográfico",
+                                    onClick = { onNavigateToPhotoChecklist(activeOrder.id) },
+                                    isSecondary = false,
+                                )
+
+                                Button(
+                                    onClick = { onNavigateToWorkPhotos(activeOrder.id) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                                    shape = RoundedCornerShape(8.dp),
+                                ) {
+                                    Icon(Icons.Default.AddAPhoto, contentDescription = null, tint = FrostWhite)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Fotos do Serviço", color = FrostWhite, fontWeight = FontWeight.Bold)
+                                }
+                            }
 
                             // Budget engine button
                             AppButton(

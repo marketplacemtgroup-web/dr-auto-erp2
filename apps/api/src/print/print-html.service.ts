@@ -8,6 +8,8 @@ import {
   formatDate,
   formatDateTime,
   formatMoney,
+  checklistCategorySlug,
+  checklistResultLabel,
   itemTypeLabel,
   lineTypeLabel,
   osStatusLabel,
@@ -37,9 +39,6 @@ export class PrintHtmlService {
     const branding = resolvePrintBranding(org);
     const customer = os.vehicle.customer;
     const vehicle = os.vehicle;
-    const images = (os.attachments ?? []).filter((a) =>
-      (a.mimeType ?? '').startsWith('image/'),
-    );
     const extraTerms = org.termsServiceOrder?.trim();
     const contactLine = [branding.phone, branding.email].filter(Boolean).join(' · ');
     const openedAt = os.enteredAt ?? os.createdAt;
@@ -59,18 +58,57 @@ export class PrintHtmlService {
             })
             .join('');
 
+    const images = (os.attachments ?? []).filter((a) =>
+      (a.mimeType ?? '').startsWith('image/'),
+    );
+    const photoByCategory = new Map<string, (typeof images)[number]>();
+    for (const attachment of images) {
+      if (attachment.category?.startsWith('checklist-')) {
+        photoByCategory.set(attachment.category, attachment);
+      }
+    }
+    const usedAttachmentIds = new Set<string>();
+
+    const checklistPhotoCards = (os.checklistItems ?? [])
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .flatMap((item) => {
+        const slug = checklistCategorySlug(item.label);
+        const photo = photoByCategory.get(slug);
+        if (!photo) return [];
+        usedAttachmentIds.add(photo.id);
+        const resultLabel = checklistResultLabel(item.result);
+        const notes = item.notes?.trim();
+        return [
+          `<div class="photo-card">
+            <p class="photo-label">${escapeHtml(item.label)}${resultLabel ? ` — <span class="photo-result">${escapeHtml(resultLabel)}</span>` : ''}</p>
+            <img src="/api/attachments/${escapeHtml(photo.id)}/file" alt="${escapeHtml(item.label)}" />
+            ${notes ? `<p class="photo-notes">${escapeHtml(notes)}</p>` : ''}
+          </div>`,
+        ];
+      })
+      .join('');
+
+    const mediaPhotoCards = images
+      .filter(
+        (attachment) =>
+          !attachment.category?.startsWith('checklist-') &&
+          !usedAttachmentIds.has(attachment.id),
+      )
+      .map(
+        (attachment) =>
+          `<div class="photo-card">
+            <p class="photo-label">${escapeHtml(attachment.fileName)}</p>
+            <img src="/api/attachments/${escapeHtml(attachment.id)}/file" alt="${escapeHtml(attachment.fileName)}" />
+          </div>`,
+      )
+      .join('');
+
     const photosHtml =
-      images.length > 0
+      checklistPhotoCards || mediaPhotoCards
         ? `<section style="margin-bottom:16px;">
             <p class="section-title">Registro fotografico</p>
-            <div class="photos">
-              ${images
-                .map(
-                  (a) =>
-                    `<div><img src="/api/attachments/${escapeHtml(a.id)}/file" alt="${escapeHtml(a.fileName)}" /></div>`,
-                )
-                .join('')}
-            </div>
+            <div class="photos">${checklistPhotoCards}${mediaPhotoCards}</div>
           </section>`
         : '';
 

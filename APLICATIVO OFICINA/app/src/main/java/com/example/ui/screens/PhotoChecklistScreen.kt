@@ -4,7 +4,6 @@ import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,15 +25,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ChecklistViewModel
 import com.example.util.AppPermissions
+import com.example.util.AuthImageLoader
+import com.example.util.ChecklistLocalStore
 import com.example.util.ChecklistTemplate
 import com.example.util.PhotoCapture
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -48,23 +50,29 @@ fun PhotoChecklistScreen(
     viewModel: ChecklistViewModel,
     onNavigateBack: () -> Unit,
     onChecklistCompleted: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val imageLoader = remember { AuthImageLoader.get(context) }
+
     val photosList by viewModel.photosList.collectAsState()
     val orderNumber by viewModel.orderNumber.collectAsState()
+    val orderStatus by viewModel.orderStatus.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val actionError by viewModel.actionError.collectAsState()
-    val isUploading by viewModel.isUploading.collectAsState()
+    val isSaving by viewModel.isSaving.collectAsState()
+    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
+    val saveMessage by viewModel.saveMessage.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
     var activeCameraItem by remember { mutableStateOf<ChecklistPhoto?>(null) }
-    var observationText by remember { mutableStateOf("") }
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var pendingGalleryOpen by remember { mutableStateOf(false) }
+    var viewerUri by remember { mutableStateOf<String?>(null) }
+    var viewerLabel by remember { mutableStateOf("") }
 
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
     val galleryPermissionName = AppPermissions.galleryPermission()
@@ -73,9 +81,7 @@ fun PhotoChecklistScreen(
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture(),
     ) { success ->
-        if (success) {
-            capturedUri = pendingCameraUri
-        }
+        if (success) capturedUri = pendingCameraUri
         pendingCameraUri = null
     }
 
@@ -111,7 +117,7 @@ fun PhotoChecklistScreen(
     }
 
     LaunchedEffect(orderId) {
-        viewModel.loadChecklist(orderId)
+        viewModel.loadChecklist(context, orderId)
     }
 
     LaunchedEffect(actionError) {
@@ -121,9 +127,40 @@ fun PhotoChecklistScreen(
         }
     }
 
+    LaunchedEffect(saveMessage) {
+        saveMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearSaveMessage()
+        }
+    }
+
+    val isClosed = orderStatus?.let { ChecklistLocalStore.isOrderClosed(it) } == true
+
+    if (isClosed && !isLoading) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Checklist indisponível",
+                    style = MaterialTheme.typography.titleMedium.copy(color = FrostWhite, fontWeight = FontWeight.Bold),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Esta OS já foi entregue ou finalizada.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver),
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                AppButton(text = "Voltar", onClick = onNavigateBack, isSecondary = true)
+            }
+        }
+        return
+    }
+
     val completedCount = photosList.count { ChecklistTemplate.isComplete(it) }
     val totalCount = photosList.size
-    val progressPercent = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0.0f
+    val progressPercent = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0f
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -134,11 +171,11 @@ fun PhotoChecklistScreen(
                     Column {
                         Text(
                             text = "CHECKLIST FOTOGRÁFICO",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite),
                         )
                         Text(
                             text = "OS #${orderNumber.ifBlank { orderId }} • Proteção Jurídica Digital",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver)
+                            style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver),
                         )
                     }
                 },
@@ -147,10 +184,10 @@ fun PhotoChecklistScreen(
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = FrostWhite)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
             )
         },
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
     ) { innerPadding ->
         if (isLoading) {
             LoadingScreen(modifier = Modifier.padding(innerPadding))
@@ -159,34 +196,40 @@ fun PhotoChecklistScreen(
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
-                ErrorState(message = error ?: "Desconhecido", onRetry = { viewModel.loadChecklist(orderId) })
+                ErrorState(message = error ?: "Desconhecido", onRetry = { viewModel.loadChecklist(context, orderId) })
             }
         } else {
             Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Header Status Info (Checklist progress)
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
                         colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                        border = BorderStroke(1.dp, Graphite)
+                        border = BorderStroke(1.dp, Graphite),
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     text = "PROGRESSO DA VISTORIA",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = PremiumGold),
                                 )
                                 Text(
                                     text = "$completedCount de $totalCount Itens",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = FrostWhite),
+                                )
+                            }
+                            if (hasUnsavedChanges) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Alterações locais — toque em Salvar para enviar",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = WarningAmber, fontWeight = FontWeight.Bold),
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
@@ -194,218 +237,289 @@ fun PhotoChecklistScreen(
                                 progress = { progressPercent },
                                 color = CrimsonRed,
                                 trackColor = Graphite,
-                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
+                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                             )
                         }
                     }
 
-                    // Checklist scroll
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 80.dp)
+                        contentPadding = PaddingValues(bottom = 140.dp),
                     ) {
                         items(photosList) { item ->
                             if (item.isTextOnly) {
                                 ChecklistTextItemCard(
                                     item = item,
-                                    onSave = { text ->
-                                        viewModel.saveTextItem(orderId, item.id, text)
+                                    onObservationChange = { text ->
+                                        viewModel.updateDraftObservation(context, item.id, text)
                                     },
                                 )
                             } else {
                                 ChecklistItemCard(
                                     item = item,
-                                    onCameraClick = {
+                                    imageLoader = imageLoader,
+                                    onPhotoClick = {
+                                        if (item.photoUri != null) {
+                                            viewerUri = item.photoUri
+                                            viewerLabel = item.label
+                                        } else {
+                                            activeCameraItem = item
+                                            capturedUri = null
+                                        }
+                                    },
+                                    onRefotoClick = {
                                         activeCameraItem = item
-                                        observationText = item.observation
                                         capturedUri = item.photoUri?.let { Uri.parse(it) }
                                     },
                                     onStatusChange = { newStatus ->
-                                        viewModel.updatePhotoItem(orderId, item.id, newStatus, item.observation, item.photoUri)
+                                        viewModel.updateDraftStatus(context, item.id, newStatus)
                                     },
                                     onObservationChange = { observation ->
-                                        viewModel.updatePhotoItem(orderId, item.id, item.status, observation, item.photoUri)
-                                    }
+                                        viewModel.updateDraftObservation(context, item.id, observation)
+                                    },
                                 )
                             }
                         }
                     }
                 }
 
-                // SUBMIT BOTTOM PANEL
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter),
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                    border = BorderStroke(1.dp, Graphite)
+                    border = BorderStroke(1.dp, Graphite),
                 ) {
-                    Box(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AppButton(
+                            text = if (isSaving) "Salvando..." else "Salvar checklist",
+                            onClick = { viewModel.saveChecklist(context, orderId) },
+                            enabled = hasUnsavedChanges && !isSaving,
+                            isSecondary = false,
+                        )
                         AppButton(
                             text = "Concluir Checklist de Entrada",
-                            onClick = {
-                                viewModel.completeChecklist(orderId, onChecklistCompleted)
-                            },
-                            enabled = completedCount == totalCount,
-                            isSecondary = false
+                            onClick = { viewModel.completeChecklist(context, orderId, onChecklistCompleted) },
+                            enabled = completedCount == totalCount && !isSaving,
+                            isSecondary = true,
                         )
                     }
                 }
 
                 if (activeCameraItem != null) {
                     val targetItem = activeCameraItem!!
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.95f))
-                            .clickable { }
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                    CameraCaptureModal(
+                        orderNumber = orderNumber,
+                        orderId = orderId,
+                        targetLabel = targetItem.label,
+                        capturedUri = capturedUri,
+                        cameraPermissionGranted = cameraPermission.status.isGranted,
+                        cameraPermission = cameraPermission,
+                        onClose = {
+                            activeCameraItem = null
+                            capturedUri = null
+                        },
+                        onOpenCamera = { openCamera() },
+                        onOpenGallery = { openGallery() },
+                        onConfirm = { uri ->
+                            viewModel.setLocalPhoto(context, targetItem.id, uri)
+                            activeCameraItem = null
+                            capturedUri = null
+                        },
+                    )
+                }
+
+                if (viewerUri != null) {
+                    FullscreenPhotoViewer(
+                        imageUri = viewerUri!!,
+                        label = viewerLabel,
+                        imageLoader = imageLoader,
+                        onClose = {
+                            viewerUri = null
+                            viewerLabel = ""
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+private fun CameraCaptureModal(
+    orderNumber: String,
+    orderId: String,
+    targetLabel: String,
+    capturedUri: Uri?,
+    cameraPermissionGranted: Boolean,
+    cameraPermission: com.google.accompanist.permissions.PermissionState,
+    onClose: () -> Unit,
+    onOpenCamera: () -> Unit,
+    onOpenGallery: () -> Unit,
+    onConfirm: (Uri) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.95f))
+            .clickable { }
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            border = BorderStroke(1.dp, Graphite),
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "FOTO — OS #${orderNumber.ifBlank { orderId }}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = PremiumGold),
+                    )
+                    IconButton(onClick = onClose) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = FrostWhite)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = targetLabel.uppercase(),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite),
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (!cameraPermissionGranted) {
+                    PermissionRequestCard(
+                        title = "Permissão da câmera necessária",
+                        description = "Para fotografar o veículo no checklist, permita o acesso à câmera.",
+                        permissionState = cameraPermission,
+                        settingsHint = "Celular → Apps → Oficina do Beto → Permissões → Câmera",
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(Color.Black, RoundedCornerShape(8.dp))
+                        .border(2.dp, CrimsonRed, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (capturedUri != null) {
+                        AsyncImage(
+                            model = capturedUri,
+                            contentDescription = "Foto capturada",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Camera,
+                            contentDescription = "Câmera",
+                            tint = Graphite,
+                            modifier = Modifier.size(64.dp),
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Button(
+                        onClick = onOpenCamera,
+                        enabled = cameraPermissionGranted,
+                        colors = ButtonDefaults.buttonColors(containerColor = CrimsonRed),
+                        modifier = Modifier.weight(1f),
                     ) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                            border = BorderStroke(1.dp, Graphite)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "FOTO — OS #${orderNumber.ifBlank { orderId }}",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = PremiumGold)
-                                    )
-                                    IconButton(onClick = {
-                                        activeCameraItem = null
-                                        capturedUri = null
-                                        observationText = ""
-                                    }) {
-                                        Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = FrostWhite)
-                                    }
-                                }
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = FrostWhite)
+                        Spacer(Modifier.width(6.dp))
+                        Text("CÂMERA", color = FrostWhite, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = onOpenGallery,
+                        colors = ButtonDefaults.buttonColors(containerColor = Graphite),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = LightSilver)
+                        Spacer(Modifier.width(6.dp))
+                        Text("GALERIA", color = FrostWhite, fontWeight = FontWeight.Bold)
+                    }
+                }
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                                Text(
-                                    text = targetItem.label.uppercase(),
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
-                                )
+                AppButton(
+                    text = "Usar esta foto",
+                    onClick = { capturedUri?.let(onConfirm) },
+                    enabled = capturedUri != null,
+                )
+            }
+        }
+    }
+}
 
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                if (!cameraPermission.status.isGranted) {
-                                    PermissionRequestCard(
-                                        title = "Permissão da câmera necessária",
-                                        description = "Para fotografar o veículo no checklist, permita o acesso à câmera. Você também pode alterar isso depois em Perfil → Permissões do aparelho.",
-                                        permissionState = cameraPermission,
-                                        settingsHint = "Celular → Apps → Oficina do Beto → Permissões → Câmera",
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(180.dp)
-                                        .background(Color.Black, RoundedCornerShape(8.dp))
-                                        .border(2.dp, CrimsonRed, RoundedCornerShape(8.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (capturedUri != null) {
-                                        AsyncImage(
-                                            model = capturedUri,
-                                            contentDescription = "Foto capturada",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop,
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Default.Camera,
-                                            contentDescription = "Câmera",
-                                            tint = Graphite,
-                                            modifier = Modifier.size(64.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Button(
-                                        onClick = { openCamera() },
-                                        enabled = cameraPermission.status.isGranted,
-                                        colors = ButtonDefaults.buttonColors(containerColor = CrimsonRed),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = FrostWhite)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("CÂMERA", color = FrostWhite, fontWeight = FontWeight.Bold)
-                                    }
-                                    Button(
-                                        onClick = { openGallery() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Graphite),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = LightSilver)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("GALERIA", color = FrostWhite, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                InputField(
-                                    value = observationText,
-                                    onValueChange = { observationText = it },
-                                    label = "Observação (opcional)"
-                                )
-
-                                Spacer(modifier = Modifier.height(20.dp))
-
-                                AppButton(
-                                    text = if (isUploading) "Enviando..." else "Subir para sistema",
-                                    onClick = {
-                                        val uri = capturedUri
-                                        if (uri != null) {
-                                            viewModel.uploadPhotoAndUpdate(
-                                                context = context,
-                                                orderId = orderId,
-                                                item = targetItem,
-                                                localUri = uri,
-                                                status = PhotoChecklistStatus.OK,
-                                                observation = observationText,
-                                            ) {
-                                                activeCameraItem = null
-                                                capturedUri = null
-                                                observationText = ""
-                                            }
-                                        } else {
-                                            viewModel.updatePhotoItem(
-                                                orderId,
-                                                targetItem.id,
-                                                PhotoChecklistStatus.ATTENTION,
-                                                observationText,
-                                            )
-                                            activeCameraItem = null
-                                        }
-                                    },
-                                    enabled = !isUploading && (capturedUri != null || observationText.isNotBlank())
-                                )
-                            }
-                        }
+@Composable
+private fun FullscreenPhotoViewer(
+    imageUri: String,
+    label: String,
+    imageLoader: coil.ImageLoader,
+    onClose: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+        ) {
+            AsyncImage(
+                model = AuthImageLoader.resolveImageUrl(imageUri) ?: imageUri,
+                contentDescription = label,
+                imageLoader = imageLoader,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(16.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.titleMedium.copy(color = FrostWhite, fontWeight = FontWeight.Bold),
+                    )
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = "Fechar", tint = FrostWhite)
                     }
                 }
             }
@@ -416,10 +530,13 @@ fun PhotoChecklistScreen(
 @Composable
 fun ChecklistTextItemCard(
     item: ChecklistPhoto,
-    onSave: (String) -> Unit,
+    onObservationChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var draft by remember(item.id, item.observation) { mutableStateOf(item.observation) }
+    var draft by remember(item.id) { mutableStateOf(item.observation) }
+    LaunchedEffect(item.observation) {
+        if (item.observation != draft) draft = item.observation
+    }
     val isComplete = draft.isNotBlank()
 
     Card(
@@ -456,26 +573,18 @@ fun ChecklistTextItemCard(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-
             Text(
                 text = ChecklistTemplate.textPlaceholder(item.label),
                 style = MaterialTheme.typography.bodySmall.copy(color = MetallicSilver),
             )
             Spacer(modifier = Modifier.height(6.dp))
-
             InputField(
                 value = draft,
-                onValueChange = { draft = it },
+                onValueChange = {
+                    draft = it
+                    onObservationChange(it)
+                },
                 label = item.label,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            AppButton(
-                text = "Salvar",
-                onClick = { onSave(draft) },
-                enabled = draft.isNotBlank(),
-                isSecondary = true,
             )
         }
     }
@@ -484,46 +593,46 @@ fun ChecklistTextItemCard(
 @Composable
 fun ChecklistItemCard(
     item: ChecklistPhoto,
-    onCameraClick: () -> Unit,
+    imageLoader: coil.ImageLoader,
+    onPhotoClick: () -> Unit,
+    onRefotoClick: () -> Unit,
     onStatusChange: (PhotoChecklistStatus) -> Unit,
     onObservationChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        border = BorderStroke(1.dp, Graphite)
+        border = BorderStroke(1.dp, Graphite),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Card Title Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(if (item.status != PhotoChecklistStatus.PENDING) SuccessGreen else CrimsonRed, CircleShape)
+                            .background(if (item.status != PhotoChecklistStatus.PENDING) SuccessGreen else CrimsonRed, CircleShape),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = item.label,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite)
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = FrostWhite),
                     )
                 }
-
                 if (item.isRequired) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(CrimsonRed.copy(alpha = 0.1f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(
                             text = "OBRIGATÓRIO",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = CrimsonRed, fontSize = 8.sp)
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = CrimsonRed, fontSize = 8.sp),
                         )
                     }
                 }
@@ -531,95 +640,110 @@ fun ChecklistItemCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Action row consisting of Launcher buttons and live preview
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Large triggering camera thumbnail box
                 Box(
-                    modifier = Modifier
-                        .size(90.dp)
-                        .background(Color.Black, RoundedCornerShape(6.dp))
-                        .border(1.dp, Graphite, RoundedCornerShape(6.dp))
-                        .clickable { onCameraClick() },
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier.size(90.dp),
                 ) {
-                    if (item.photoUri != null) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = "Tirada", tint = SuccessGreen)
-                            Text("REFOTO", fontSize = 10.sp, color = MetallicSilver, fontWeight = FontWeight.Bold)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black)
+                            .border(1.dp, Graphite, RoundedCornerShape(6.dp))
+                            .clickable { onPhotoClick() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (item.photoUri != null) {
+                            AsyncImage(
+                                model = AuthImageLoader.resolveImageUrl(item.photoUri) ?: item.photoUri,
+                                contentDescription = item.label,
+                                imageLoader = imageLoader,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Tirar Foto", tint = CrimsonRed)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("FOTOGRAFAR", fontSize = 9.sp, color = MetallicSilver, fontWeight = FontWeight.Bold)
+                            }
                         }
-                    } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Tirar Foto", tint = CrimsonRed)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("FOTOGRAFAR", fontSize = 9.sp, color = MetallicSilver, fontWeight = FontWeight.Bold)
+                    }
+                    if (item.photoUri != null) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(CrimsonRed)
+                                .clickable { onRefotoClick() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = "Refotografar",
+                                tint = FrostWhite,
+                                modifier = Modifier.size(14.dp),
+                            )
                         }
                     }
                 }
 
-                // Interactive Status Buttons requested (OK, Atenção, Danificado, Não se aplica)
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        // OK (Green)
                         StatusSelectionButton(
                             label = "OK",
                             isSelected = item.status == PhotoChecklistStatus.OK,
                             activeColor = SuccessGreen,
                             onClick = { onStatusChange(PhotoChecklistStatus.OK) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
-
-                        // Atenção (Gold/Amarelo)
                         StatusSelectionButton(
                             label = "ATENÇÃO",
                             isSelected = item.status == PhotoChecklistStatus.ATTENTION,
                             activeColor = WarningAmber,
                             onClick = { onStatusChange(PhotoChecklistStatus.ATTENTION) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                     }
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        // Danificado (Vermelho)
                         StatusSelectionButton(
                             label = "DANIFICADO",
                             isSelected = item.status == PhotoChecklistStatus.DAMAGED,
                             activeColor = DangerRed,
                             onClick = { onStatusChange(PhotoChecklistStatus.DAMAGED) },
-                            modifier = Modifier.weight(1.3f)
+                            modifier = Modifier.weight(1.3f),
                         )
-
-                        // N/A (Cinza)
                         StatusSelectionButton(
                             label = "N/A",
                             isSelected = item.status == PhotoChecklistStatus.NONE,
                             activeColor = NeutralGray,
                             onClick = { onStatusChange(PhotoChecklistStatus.NONE) },
-                            modifier = Modifier.weight(0.7f)
+                            modifier = Modifier.weight(0.7f),
                         )
                     }
                 }
             }
 
-            // Annotation note
             if (item.status != PhotoChecklistStatus.PENDING) {
                 Spacer(modifier = Modifier.height(12.dp))
                 InputField(
                     value = item.observation,
                     onValueChange = onObservationChange,
-                    label = "Anotação mecânica"
+                    label = "Anotação mecânica",
                 )
             }
         }
@@ -632,7 +756,7 @@ fun StatusSelectionButton(
     isSelected: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val backgroundColor = if (isSelected) activeColor.copy(alpha = 0.2f) else Graphite
     val borderStrokeColor = if (isSelected) activeColor else Graphite
@@ -645,15 +769,15 @@ fun StatusSelectionButton(
             .border(1.dp, borderStrokeColor, RoundedCornerShape(4.dp))
             .clickable { onClick() }
             .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.Bold,
                 color = contentTextColor,
-                fontSize = 11.sp
-            )
+                fontSize = 11.sp,
+            ),
         )
     }
 }

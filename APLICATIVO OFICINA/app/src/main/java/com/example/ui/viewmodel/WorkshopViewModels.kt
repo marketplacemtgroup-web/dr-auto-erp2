@@ -8,11 +8,16 @@ import com.example.data.model.*
 import com.example.data.repository.WorkshopRepository
 import com.example.data.service.AuthService
 import com.example.data.service.SessionManager
+import com.example.util.ChecklistLocalStore
+import com.example.util.ChecklistTemplate
+import com.example.util.LocalChecklistDraft
+import com.example.util.LocalWorkPhoto
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 class AuthViewModel : ViewModel() {
     private val authService = AuthService()
@@ -199,7 +204,26 @@ class OrderDetailsViewModel : ViewModel() {
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
 
+    fun loadOrder(context: android.content.Context, orderId: String) {
+        _isLoading.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val loaded = repository.getOrderById(orderId)
+                if (ChecklistLocalStore.isOrderClosed(loaded.status)) {
+                    ChecklistLocalStore.clearOrder(context, orderId)
+                }
+                _order.value = loaded
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Falha ao carregar OS"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
     fun loadOrder(orderId: String) {
+        // Mantido para compatibilidade — sem limpeza local
         _isLoading.value = true
         _error.value = null
         viewModelScope.launch {
@@ -294,6 +318,9 @@ class ChecklistViewModel : ViewModel() {
     private val _orderNumber = MutableStateFlow("")
     val orderNumber: StateFlow<String> = _orderNumber.asStateFlow()
 
+    private val _orderStatus = MutableStateFlow<OrderStatus?>(null)
+    val orderStatus: StateFlow<OrderStatus?> = _orderStatus.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -303,20 +330,42 @@ class ChecklistViewModel : ViewModel() {
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
-    private val _isUploading = MutableStateFlow(false)
-    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _hasUnsavedChanges = MutableStateFlow(false)
+    val hasUnsavedChanges: StateFlow<Boolean> = _hasUnsavedChanges.asStateFlow()
+
+    private val _saveMessage = MutableStateFlow<String?>(null)
+    val saveMessage: StateFlow<String?> = _saveMessage.asStateFlow()
 
     val isOfflineMode = repository.isOfflineMode
     val lastApiError = repository.lastApiError
 
-    fun loadChecklist(orderId: String) {
+    private var currentOrderId: String = ""
+    private var localDrafts: MutableMap<String, LocalChecklistDraft> = mutableMapOf()
+
+    fun loadChecklist(context: Context, orderId: String) {
+        currentOrderId = orderId
         _isLoading.value = true
         _error.value = null
         viewModelScope.launch {
             try {
                 val order = repository.getOrderById(orderId)
                 _orderNumber.value = order.displayNumber
-                _photosList.value = repository.getChecklistPhotos(orderId)
+                _orderStatus.value = order.status
+
+                if (ChecklistLocalStore.isOrderClosed(order.status)) {
+                    ChecklistLocalStore.clearOrder(context, orderId)
+                    localDrafts.clear()
+                    _hasUnsavedChanges.value = false
+                } else {
+                    localDrafts = ChecklistLocalStore.loadDrafts(context, orderId).toMutableMap()
+                    _hasUnsavedChanges.value = localDrafts.values.any { it.isDirty }
+                }
+
+                val serverList = repository.getChecklistPhotos(orderId)
+                _photosList.value = mergeWithDrafts(serverList)
             } catch (e: Exception) {
                 _error.value = e.message ?: "Falha ao carregar checklist"
             } finally {
@@ -325,60 +374,108 @@ class ChecklistViewModel : ViewModel() {
         }
     }
 
-    fun updatePhotoItem(
-        orderId: String,
-        photoId: String,
-        status: PhotoChecklistStatus,
-        observation: String,
-        photoUri: String? = null,
-    ) {
-        viewModelScope.launch {
-            try {
-                val success = repository.updateChecklistItem(orderId, photoId, status, observation, photoUri)
-                if (success) loadChecklist(orderId)
-            } catch (e: Exception) {
-                _actionError.value = e.message
-            }
+    private fun mergeWithDrafts(serverList: List<ChecklistPhoto>): List<ChecklistPhoto> =
+        serverList.map { item ->
+            val draft = localDrafts[item.id]
+            if (draft == null) return@map item
+            item.copy(
+                status = draft.status ?: item.status,
+                observation = if (draft.isDirty) draft.observation else item.observation,
+                photoUri = ChecklistLocalStore.displayUri(draft.localPhotoPath, item.photoUri),
+                isUploaded = item.isUploaded && draft.localPhotoPath.isNullOrBlank(),
+            )
         }
+
+    fun updateDraftStatus(context: Context, itemId: String, status: PhotoChecklistStatus) {
+        val current = localDrafts[itemId] ?: LocalChecklistDraft()
+        localDrafts[itemId] = current.copy(status = status, isDirty = true)
+        _photosList.value = _photosList.value.map { item ->
+            if (item.id == itemId) item.copy(status = status) else item
+        }
+        ChecklistLocalStore.saveDrafts(context, currentOrderId, localDrafts)
+        _hasUnsavedChanges.value = true
     }
 
-    fun saveTextItem(orderId: String, itemId: String, text: String) {
-        viewModelScope.launch {
-            try {
-                val success = repository.updateChecklistTextItem(orderId, itemId, text)
-                if (success) loadChecklist(orderId)
-            } catch (e: Exception) {
-                _actionError.value = e.message
-            }
+    fun updateDraftObservation(context: Context, itemId: String, observation: String) {
+        val current = localDrafts[itemId] ?: LocalChecklistDraft()
+        localDrafts[itemId] = current.copy(observation = observation, isDirty = true)
+        _photosList.value = _photosList.value.map { item ->
+            if (item.id == itemId) item.copy(observation = observation) else item
         }
+        ChecklistLocalStore.saveDrafts(context, currentOrderId, localDrafts)
+        _hasUnsavedChanges.value = true
     }
 
-    fun uploadPhotoAndUpdate(
-        context: Context,
-        orderId: String,
-        item: ChecklistPhoto,
-        localUri: Uri,
-        status: PhotoChecklistStatus,
-        observation: String,
-        onDone: () -> Unit,
-    ) {
+    fun setLocalPhoto(context: Context, itemId: String, sourceUri: Uri) {
+        val path = ChecklistLocalStore.saveLocalPhoto(context, currentOrderId, itemId, sourceUri)
+            ?: run {
+                _actionError.value = "Não foi possível salvar a foto localmente"
+                return
+            }
+        val current = localDrafts[itemId] ?: LocalChecklistDraft()
+        localDrafts[itemId] = current.copy(localPhotoPath = path, isDirty = true)
+        val displayUri = ChecklistLocalStore.displayUri(path, null)
+        _photosList.value = _photosList.value.map { item ->
+            if (item.id == itemId) item.copy(photoUri = displayUri, isUploaded = false) else item
+        }
+        ChecklistLocalStore.saveDrafts(context, currentOrderId, localDrafts)
+        _hasUnsavedChanges.value = true
+    }
+
+    fun saveChecklist(context: Context, orderId: String, onDone: () -> Unit = {}) {
+        if (_isSaving.value) return
+        _isSaving.value = true
+        _actionError.value = null
         viewModelScope.launch {
-            _isUploading.value = true
-            _actionError.value = null
             try {
-                repository.uploadChecklistPhoto(context, orderId, item.id, item.label, localUri)
-                repository.updateChecklistItem(orderId, item.id, status, observation)
-                loadChecklist(orderId)
+                val items = _photosList.value
+                for (item in items) {
+                    val draft = localDrafts[item.id]
+                    val localPath = draft?.localPhotoPath
+                    if (draft?.isDirty == true && !localPath.isNullOrBlank() && File(localPath).exists()) {
+                        repository.uploadChecklistPhotoFile(orderId, item.label, File(localPath))
+                    }
+                }
+
+                val updates = items.associate { item ->
+                    val draft = localDrafts[item.id]
+                    item.id to (
+                        (draft?.status ?: item.status) to
+                            (if (draft?.isDirty == true) draft.observation else item.observation)
+                        )
+                }
+                repository.batchUpdateChecklist(orderId, updates)
+
+                localDrafts.keys.toList().forEach { itemId ->
+                    val draft = localDrafts[itemId] ?: return@forEach
+                    localDrafts[itemId] = draft.copy(isDirty = false)
+                }
+                ChecklistLocalStore.saveDrafts(context, orderId, localDrafts)
+                _hasUnsavedChanges.value = false
+
+                val serverList = repository.getChecklistPhotos(orderId)
+                _photosList.value = mergeWithDrafts(serverList)
+                _saveMessage.value = "Checklist salvo com sucesso."
                 onDone()
             } catch (e: Exception) {
-                _actionError.value = e.message ?: "Falha no upload da foto"
+                _actionError.value = e.message ?: "Falha ao salvar checklist"
             } finally {
-                _isUploading.value = false
+                _isSaving.value = false
             }
         }
     }
 
-    fun completeChecklist(orderId: String, onDone: () -> Unit) {
+    fun completeChecklist(context: Context, orderId: String, onDone: () -> Unit) {
+        if (_hasUnsavedChanges.value) {
+            saveChecklist(context, orderId) {
+                finalizeChecklist(orderId, onDone)
+            }
+        } else {
+            finalizeChecklist(orderId, onDone)
+        }
+    }
+
+    private fun finalizeChecklist(orderId: String, onDone: () -> Unit) {
         _isLoading.value = true
         viewModelScope.launch {
             try {
@@ -396,10 +493,161 @@ class ChecklistViewModel : ViewModel() {
         _actionError.value = null
     }
 
+    fun clearSaveMessage() {
+        _saveMessage.value = null
+    }
+
     fun clearLastError() {
         repository.clearLastError()
     }
 }
+
+class WorkPhotosViewModel : ViewModel() {
+    private val repository = WorkshopRepository
+
+    private val _photos = MutableStateFlow<List<WorkPhotoItem>>(emptyList())
+    val photos: StateFlow<List<WorkPhotoItem>> = _photos.asStateFlow()
+
+    private val _orderNumber = MutableStateFlow("")
+    val orderNumber: StateFlow<String> = _orderNumber.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    private val _saveMessage = MutableStateFlow<String?>(null)
+    val saveMessage: StateFlow<String?> = _saveMessage.asStateFlow()
+
+    val pendingCount: Int
+        get() = _photos.value.count { !it.isUploaded }
+
+    private var currentOrderId: String = ""
+    private var localPhotos: MutableList<LocalWorkPhoto> = mutableListOf()
+
+    fun load(context: Context, orderId: String) {
+        currentOrderId = orderId
+        _isLoading.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val order = repository.getOrderById(orderId)
+                _orderNumber.value = order.displayNumber
+
+                if (ChecklistLocalStore.isOrderClosed(order.status)) {
+                    ChecklistLocalStore.clearPendingWorkPhotos(context, orderId)
+                    localPhotos.clear()
+                } else {
+                    localPhotos = ChecklistLocalStore.loadWorkPhotos(context, orderId).toMutableList()
+                }
+
+                val remote = repository.listWorkPhotoAttachments(orderId).map { attachment ->
+                    WorkPhotoItem(
+                        id = attachment.id,
+                        displayUri = attachment.url,
+                        isUploaded = true,
+                        attachmentId = attachment.id,
+                    )
+                }
+
+                val pending = localPhotos.filter { !it.uploaded }.map { local ->
+                    WorkPhotoItem(
+                        id = local.id,
+                        displayUri = ChecklistLocalStore.displayUri(local.localPath, local.remoteUrl),
+                        isUploaded = false,
+                        localPath = local.localPath,
+                    )
+                }
+
+                _photos.value = remote + pending
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Falha ao carregar fotos"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun addLocalPhoto(context: Context, sourceUri: Uri) {
+        val photo = ChecklistLocalStore.saveWorkPhoto(context, currentOrderId, sourceUri)
+            ?: run {
+                _actionError.value = "Não foi possível salvar a foto"
+                return
+            }
+        localPhotos.add(photo)
+        ChecklistLocalStore.saveWorkPhotosMeta(context, currentOrderId, localPhotos)
+        _photos.value = _photos.value + WorkPhotoItem(
+            id = photo.id,
+            displayUri = ChecklistLocalStore.displayUri(photo.localPath, null),
+            isUploaded = false,
+            localPath = photo.localPath,
+        )
+    }
+
+    fun savePhotos(context: Context, onDone: () -> Unit = {}) {
+        if (_isSaving.value) return
+        val pending = localPhotos.filter { !it.uploaded }
+        if (pending.isEmpty()) {
+            _saveMessage.value = "Nenhuma foto pendente para enviar."
+            return
+        }
+        _isSaving.value = true
+        _actionError.value = null
+        viewModelScope.launch {
+            try {
+                val updated = localPhotos.toMutableList()
+                for (photo in pending) {
+                    val file = File(photo.localPath)
+                    if (!file.exists()) continue
+                    val attachment = repository.uploadWorkPhotoFile(currentOrderId, file)
+                    val index = updated.indexOfFirst { it.id == photo.id }
+                    if (index >= 0) {
+                        updated[index] = photo.copy(
+                            uploaded = true,
+                            remoteUrl = attachment.url,
+                            attachmentId = attachment.id,
+                        )
+                    }
+                    file.delete()
+                }
+                localPhotos = updated.filter { !it.uploaded || it.localPath.isNotBlank() }.toMutableList()
+                ChecklistLocalStore.saveWorkPhotosMeta(context, currentOrderId, localPhotos.filter { !it.uploaded })
+                ChecklistLocalStore.clearPendingWorkPhotos(context, currentOrderId)
+                localPhotos.removeAll { it.uploaded }
+                load(context, currentOrderId)
+                _saveMessage.value = "${pending.size} foto(s) enviada(s) com sucesso."
+                onDone()
+            } catch (e: Exception) {
+                _actionError.value = e.message ?: "Falha ao enviar fotos"
+            } finally {
+                _isSaving.value = false
+            }
+        }
+    }
+
+    fun clearActionError() {
+        _actionError.value = null
+    }
+
+    fun clearSaveMessage() {
+        _saveMessage.value = null
+    }
+}
+
+data class WorkPhotoItem(
+    val id: String,
+    val displayUri: String?,
+    val isUploaded: Boolean,
+    val localPath: String? = null,
+    val attachmentId: String? = null,
+)
 
 class BudgetViewModel : ViewModel() {
     private val repository = WorkshopRepository

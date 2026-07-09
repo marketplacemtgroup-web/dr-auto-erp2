@@ -207,14 +207,23 @@ object WorkshopRepository {
         status: PhotoChecklistStatus,
         observation: String,
         photoUri: String? = null,
+    ): Boolean = batchUpdateChecklist(
+        orderId = orderId,
+        updates = mapOf(photoId to (status to observation)),
+    )
+
+    suspend fun batchUpdateChecklist(
+        orderId: String,
+        updates: Map<String, Pair<PhotoChecklistStatus?, String>>,
     ): Boolean = apiCall {
         val current = api.getServiceOrder(orderId)
         val items = current.checklistItems.orEmpty().map { item ->
-            if (item.id == photoId) {
+            val update = updates[item.id]
+            if (update != null) {
                 ChecklistItemUpdateDto(
                     id = item.id,
-                    result = status.apiCode,
-                    notes = observation.ifBlank { null },
+                    result = update.first?.apiCode,
+                    notes = update.second.ifBlank { null },
                 )
             } else {
                 ChecklistItemUpdateDto(
@@ -261,78 +270,119 @@ object WorkshopRepository {
         localUri: Uri,
     ): Boolean = withContext(Dispatchers.IO) {
         apiCall {
-            val file = ImageUtils.uriToWebpFile(context, localUri)
-                ?: throw IllegalStateException("Não foi possível processar a foto")
-            if (file.length() == 0L) {
-                file.delete()
-                throw IllegalStateException("A foto está vazia — tente fotografar novamente")
-            }
+            val file = uriToUploadFile(context, localUri)
             val category = ApiMappers.checklistCategorySlug(label)
             val fileName = "checklist-${System.currentTimeMillis()}.webp"
-            val mimeType = ImageUtils.WEBP_MIME
-            try {
-                uploadChecklistPhotoViaApi(orderId, file, fileName, mimeType, category)
-            } catch (apiUploadError: Exception) {
-                // Fallback: upload direto ao Supabase (mesmo fluxo do ERP web)
-                try {
-                    uploadChecklistPhotoDirect(orderId, file, fileName, mimeType, category)
-                } catch (directError: Exception) {
-                    throw IllegalStateException(
-                        apiUploadError.message ?: directError.message ?: "Falha ao enviar foto",
-                    )
-                }
-            }
-            val current = api.getServiceOrder(orderId)
-            val items = current.checklistItems.orEmpty().map { item ->
-                if (item.id == checklistItemId) {
-                    ChecklistItemUpdateDto(
-                        id = item.id,
-                        result = item.result ?: "OK",
-                        notes = item.notes,
-                    )
-                } else {
-                    ChecklistItemUpdateDto(item.id, item.result, item.notes)
-                }
-            }
-            api.updateChecklist(orderId, UpdateChecklistRequest(items))
+            uploadAttachmentFile(orderId, file, fileName, category, visibleToCustomer = true, showOnQuote = false)
             file.delete()
             true
         }
     }
 
-    private suspend fun uploadChecklistPhotoViaApi(
+    suspend fun uploadChecklistPhotoFile(
+        orderId: String,
+        label: String,
+        file: File,
+    ): Boolean = withContext(Dispatchers.IO) {
+        apiCall {
+            val category = ApiMappers.checklistCategorySlug(label)
+            val fileName = "checklist-${System.currentTimeMillis()}.webp"
+            uploadAttachmentFile(orderId, file, fileName, category, visibleToCustomer = true, showOnQuote = false)
+            true
+        }
+    }
+
+    suspend fun uploadWorkPhotoFile(orderId: String, file: File): AttachmentDto = withContext(Dispatchers.IO) {
+        apiCall {
+            val fileName = "servico-${System.currentTimeMillis()}.webp"
+            uploadAttachmentFile(
+                orderId = orderId,
+                file = file,
+                fileName = fileName,
+                category = "general",
+                visibleToCustomer = true,
+                showOnQuote = true,
+            )
+        }
+    }
+
+    suspend fun listWorkPhotoAttachments(orderId: String): List<AttachmentDto> = apiCall {
+        val dto = api.getServiceOrder(orderId)
+        dto.attachments.orEmpty().filter { attachment ->
+            (attachment.mimeType ?: "").startsWith("image/") &&
+                !(attachment.category ?: "").startsWith("checklist-")
+        }
+    }
+
+    private fun uriToUploadFile(context: Context, localUri: Uri): File {
+        val file = ImageUtils.uriToWebpFile(context, localUri)
+            ?: throw IllegalStateException("Não foi possível processar a foto")
+        if (file.length() == 0L) {
+            file.delete()
+            throw IllegalStateException("A foto está vazia — tente fotografar novamente")
+        }
+        return file
+    }
+
+    private suspend fun uploadAttachmentFile(
+        orderId: String,
+        file: File,
+        fileName: String,
+        category: String,
+        visibleToCustomer: Boolean,
+        showOnQuote: Boolean,
+    ): AttachmentDto {
+        val mimeType = ImageUtils.WEBP_MIME
+        return try {
+            uploadAttachmentViaApi(orderId, file, fileName, mimeType, category, visibleToCustomer, showOnQuote)
+        } catch (apiUploadError: Exception) {
+            try {
+                uploadAttachmentDirect(orderId, file, fileName, mimeType, category, visibleToCustomer, showOnQuote)
+            } catch (directError: Exception) {
+                throw IllegalStateException(
+                    apiUploadError.message ?: directError.message ?: "Falha ao enviar foto",
+                )
+            }
+        }
+    }
+
+    private suspend fun uploadAttachmentViaApi(
         orderId: String,
         file: File,
         fileName: String,
         mimeType: String,
         category: String,
-    ) {
+        visibleToCustomer: Boolean,
+        showOnQuote: Boolean,
+    ): AttachmentDto {
         val body = file.asRequestBody(mimeType.toMediaType())
         val part = MultipartBody.Part.createFormData("file", fileName, body)
-        api.uploadServiceOrderAttachment(
+        return api.uploadServiceOrderAttachment(
             serviceOrderId = orderId,
             file = part,
             category = category,
-            visibleToCustomer = "true",
-            showOnQuote = "false",
+            visibleToCustomer = if (visibleToCustomer) "true" else "false",
+            showOnQuote = if (showOnQuote) "true" else "false",
         )
     }
 
-    private suspend fun uploadChecklistPhotoDirect(
+    private suspend fun uploadAttachmentDirect(
         orderId: String,
         file: File,
         fileName: String,
         mimeType: String,
         category: String,
-    ) {
+        visibleToCustomer: Boolean,
+        showOnQuote: Boolean,
+    ): AttachmentDto {
         val prep = api.prepareUpload(
             orderId,
             PrepareUploadRequest(
                 fileName = fileName,
                 mimeType = mimeType,
                 category = category,
-                visibleToCustomer = true,
-                showOnQuote = false,
+                visibleToCustomer = visibleToCustomer,
+                showOnQuote = showOnQuote,
             ),
         )
         val putHeaders = prep.headers?.toMutableMap() ?: mutableMapOf()
@@ -354,14 +404,14 @@ object WorkshopRepository {
                 if (detail.isNotBlank()) "Falha ao enviar foto: $detail" else "Falha ao enviar foto (HTTP ${putRes.code})",
             )
         }
-        api.confirmUpload(
+        return api.confirmUpload(
             orderId,
             ConfirmUploadRequest(
                 storagePath = prep.storagePath,
                 fileName = fileName,
                 mimeType = mimeType,
                 category = category,
-                visibleToCustomer = true,
+                visibleToCustomer = visibleToCustomer,
             ),
         )
     }
