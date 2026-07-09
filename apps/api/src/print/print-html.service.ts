@@ -10,8 +10,6 @@ import {
   formatMoney,
   checklistCategorySlug,
   checklistResultLabel,
-  itemTypeLabel,
-  lineTypeLabel,
   osStatusLabel,
   printField,
   printLegalTermsHtml,

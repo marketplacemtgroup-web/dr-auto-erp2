@@ -80,11 +80,6 @@ export function checklistResultLabel(result: string | null | undefined): string 
 export function checklistCategorySlug(label: string): string {
   return `checklist-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
 }
-  if (itemType === 'PART') return 'Peca';
-  if (itemType === 'SCANNER') return 'Scanner';
-  if (itemType === 'THIRD_PARTY') return 'Terceirizado';
-  return 'Servico';
-}
 
 type CustomerAddress = {
   street?: string | null;
