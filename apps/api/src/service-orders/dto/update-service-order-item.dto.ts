@@ -24,6 +24,11 @@ export class UpdateServiceOrderItemDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  unitCost?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   discount?: number;
 
   @IsOptional()
@@ -41,4 +46,8 @@ export class UpdateServiceOrderItemDto {
   @IsOptional()
   @IsString()
   separatedById?: string | null;
+
+  @IsOptional()
+  @IsString()
+  outsourcedServiceId?: string | null;
 }

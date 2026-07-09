@@ -80,26 +80,34 @@ export function computePayNetDue(
   return roundMoney(gross - discount - fee);
 }
 
-/** Ajusta valores das formas de pagamento quando desconto/taxa alteram o liquido. */
+/** Ajusta valor da baixa e formas de pagamento quando desconto/taxa alteram o liquido. */
 export function syncPaySplitsToNetDue(
   form: PayEntryFormState,
   netDue: number,
 ): PayEntryFormState {
-  if (form.splits.length === 0) return form;
+  const amountStr = netDue > 0 ? netDue.toFixed(2) : "";
+
+  if (form.splits.length === 0) {
+    return { ...form, amountToPay: amountStr };
+  }
   if (form.splits.length === 1) {
     return {
       ...form,
-      splits: [{ ...form.splits[0], amount: netDue > 0 ? netDue.toFixed(2) : "" }],
+      amountToPay: amountStr,
+      splits: [{ ...form.splits[0], amount: amountStr }],
     };
   }
   const paid = splitSum(form.splits);
   const remaining = roundMoney(netDue - paid);
-  if (Math.abs(remaining) < 0.01) return form;
+  if (Math.abs(remaining) < 0.01) {
+    return { ...form, amountToPay: amountStr };
+  }
   const last = form.splits[form.splits.length - 1];
   const lastAmount = Number(last.amount.replace(",", ".")) || 0;
   const nextLast = roundMoney(Math.max(0, lastAmount + remaining));
   return {
     ...form,
+    amountToPay: amountStr,
     splits: form.splits.map((row, index) =>
       index === form.splits.length - 1
         ? { ...row, amount: nextLast > 0 ? nextLast.toFixed(2) : "" }

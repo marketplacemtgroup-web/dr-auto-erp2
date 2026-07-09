@@ -74,7 +74,8 @@ export default function PayEntryModal({
       return;
     }
     const nextNet = computePayNetDue(gross, next, entryType);
-    onFormChange(syncPaySplitsToNetDue(next, nextNet));
+    const nextRemaining = roundMoney(Math.max(nextNet - alreadyPaid, 0));
+    onFormChange(syncPaySplitsToNetDue(next, nextRemaining));
   }
 
   function updateSplit(id: string, patch: Partial<PayEntryFormState["splits"][0]>) {

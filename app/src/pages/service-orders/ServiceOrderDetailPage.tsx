@@ -14,6 +14,7 @@ import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/shar
 import { api, type QuoteLineRow, type ServiceOrderItemRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import {
+  itemCatalogLabel,
   itemTypeLabel,
   isCommissionEligibleItemType,
   SERVICE_ORDER_ITEM_TYPE_OPTIONS,
@@ -270,6 +271,7 @@ export default function ServiceOrderDetailPage() {
     itemType: "SERVICE" as ServiceOrderItemType,
     quantity: "1",
     unitPrice: "",
+    unitCost: "",
     productId: "",
     catalogItemId: "",
     outsourcedServiceId: "",
@@ -386,6 +388,7 @@ export default function ServiceOrderDetailPage() {
       itemType: "SERVICE",
       quantity: "1",
       unitPrice: "",
+      unitCost: "",
       productId: "",
       catalogItemId: "",
       outsourcedServiceId: "",
@@ -407,9 +410,10 @@ export default function ServiceOrderDetailPage() {
       itemType: item.itemType,
       quantity: String(item.quantity),
       unitPrice: String(item.unitPrice),
+      unitCost: item.unitCost != null ? String(item.unitCost) : "",
       productId: item.product?.id ?? "",
-      catalogItemId: "",
-      outsourcedServiceId: "",
+      catalogItemId: item.catalogItem?.id ?? "",
+      outsourcedServiceId: item.outsourcedService?.id ?? "",
       executorId: item.executor?.id ?? "",
       soldById: item.soldBy?.id ?? "",
       appliedById: item.appliedBy?.id ?? "",
@@ -419,23 +423,35 @@ export default function ServiceOrderDetailPage() {
 
   const saveItem = useMutation({
     mutationFn: () => {
+      const hasCost =
+        itemForm.itemType === "PART" || itemForm.itemType === "THIRD_PARTY";
+      const unitCostValue =
+        hasCost && itemForm.unitCost !== ""
+          ? Number(itemForm.unitCost)
+          : undefined;
       const payload = {
         description: itemForm.description,
         itemType: itemForm.itemType,
         quantity: Number(itemForm.quantity) || 1,
         unitPrice: Number(itemForm.unitPrice),
+        ...(unitCostValue !== undefined ? { unitCost: unitCostValue } : {}),
         executorId: itemForm.executorId || null,
         soldById: itemForm.soldById || null,
         appliedById: itemForm.appliedById || null,
       };
       if (editingItem) {
-        return api.updateServiceOrderItem(token!, id!, editingItem.id, payload);
+        return api.updateServiceOrderItem(token!, id!, editingItem.id, {
+          ...payload,
+          outsourcedServiceId:
+            itemForm.itemType === "THIRD_PARTY" ? itemForm.outsourcedServiceId || null : null,
+        });
       }
       return api.addServiceOrderItem(token!, id!, {
         ...payload,
-        productId: itemForm.productId || undefined,
-        catalogItemId: itemForm.catalogItemId || undefined,
-        outsourcedServiceId: itemForm.outsourcedServiceId || undefined,
+        productId: itemForm.itemType === "PART" ? itemForm.productId || undefined : undefined,
+        catalogItemId: itemForm.itemType === "SERVICE" ? itemForm.catalogItemId || undefined : undefined,
+        outsourcedServiceId:
+          itemForm.itemType === "THIRD_PARTY" ? itemForm.outsourcedServiceId || undefined : undefined,
         executorId: itemForm.executorId || undefined,
         soldById: itemForm.soldById || undefined,
         appliedById: itemForm.appliedById || undefined,
@@ -1170,7 +1186,7 @@ export default function ServiceOrderDetailPage() {
                   <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-left">Executor</th>
                   <th className="px-4 py-2 text-right">Comissão prev.</th>
-                  {canEditQuoteItems && <th className="w-24" />}
+                  {canEditQuoteItems && <th className="w-32" />}
                 </tr>
               </thead>
               <tbody>
@@ -1191,7 +1207,12 @@ export default function ServiceOrderDetailPage() {
                   const editable = canEditQuoteItems && !itemLineApproved(item, itemIndex);
                   return (
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
-                    <td className="px-4 py-3">{item.description}</td>
+                    <td className="px-4 py-3">
+                      <p>{item.description}</p>
+                      {itemCatalogLabel(item) ? (
+                        <p className="text-xs text-[#94A3B8] mt-0.5">{itemCatalogLabel(item)}</p>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-[#64748B]">
                       {itemTypeLabel(item.itemType)}
                     </td>
@@ -1211,7 +1232,9 @@ export default function ServiceOrderDetailPage() {
                         ? item.executor?.name ?? os.executionBy?.name ?? "—"
                         : item.itemType === "PART"
                           ? item.soldBy?.name ?? "—"
-                          : "—"}
+                          : item.itemType === "THIRD_PARTY"
+                            ? item.outsourcedService?.provider ?? "—"
+                            : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-[#64748B]">
                       {isCommissionEligibleItemType(item.itemType) && item.expectedCommission != null
@@ -1224,10 +1247,11 @@ export default function ServiceOrderDetailPage() {
                           <button
                             type="button"
                             onClick={() => openEditItem(item)}
-                            className="p-1.5 text-[#0E7490] hover:bg-[#ECFEFF] rounded"
+                            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[#0E7490] hover:bg-[#ECFEFF] text-xs font-medium"
                             title="Editar"
                           >
-                            <Pencil size={16} />
+                            <Pencil size={14} />
+                            Editar
                           </button>
                           <button
                             type="button"
@@ -1317,12 +1341,13 @@ export default function ServiceOrderDetailPage() {
                 <th className="px-4 py-2 text-left">Executor</th>
                 <th className="px-4 py-2 text-right">Comissão</th>
                 <th className="px-4 py-2 text-left">Aprovação</th>
+                {canEditQuoteItems && <th className="w-32" />}
               </tr>
             </thead>
             <tbody>
               {os.items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-[#94A3B8]">
+                  <td colSpan={canEditQuoteItems ? 9 : 8} className="px-4 py-8 text-center text-[#94A3B8]">
                     Nenhum item. Adicione serviços ou peças na aba Orçamento.
                   </td>
                 </tr>
@@ -1331,9 +1356,15 @@ export default function ServiceOrderDetailPage() {
                 const line = getLineForItem(item, index, activeQuote);
                 const approvalStatus = line?.approved;
                 const quoteStatus = activeQuote?.status;
+                const editable = canEditQuoteItems && !itemLineApproved(item, index);
                 return (
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
-                    <td className="px-4 py-3">{item.description}</td>
+                    <td className="px-4 py-3">
+                      <p>{item.description}</p>
+                      {itemCatalogLabel(item) ? (
+                        <p className="text-xs text-[#94A3B8] mt-0.5">{itemCatalogLabel(item)}</p>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-[#64748B]">
                       {itemTypeLabel(item.itemType)}
                     </td>
@@ -1347,7 +1378,9 @@ export default function ServiceOrderDetailPage() {
                         ? item.executor?.name ?? os.executionBy?.name ?? "—"
                         : item.itemType === "PART"
                           ? [item.soldBy?.name, item.appliedBy?.name].filter(Boolean).join(" / ") || "—"
-                          : "—"}
+                          : item.itemType === "THIRD_PARTY"
+                            ? item.outsourcedService?.provider ?? "—"
+                            : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-[#64748B]">
                       {isCommissionEligibleItemType(item.itemType) && item.expectedCommission != null
@@ -1362,6 +1395,22 @@ export default function ServiceOrderDetailPage() {
                         {lineApprovalLabel(approvalStatus, quoteStatus)}
                       </span>
                     </td>
+                    {editable && (
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditItem(item)}
+                            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[#0E7490] hover:bg-[#ECFEFF] text-xs font-medium"
+                            title="Editar"
+                          >
+                            <Pencil size={14} />
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                    {canEditQuoteItems && !editable && <td className="px-4 py-3" />}
                   </tr>
                 );
               })}
@@ -1531,12 +1580,13 @@ export default function ServiceOrderDetailPage() {
                   productId,
                   description: product ? product.name : f.description,
                   unitPrice: product ? String(product.salePrice) : f.unitPrice,
+                  unitCost: product ? String(product.costPrice) : f.unitCost,
                 }))
               }
             />
           </FormField>
         )}
-        {!editingItem && itemForm.itemType === "THIRD_PARTY" && (
+        {itemForm.itemType === "THIRD_PARTY" && (
           <FormField label="Servico terceirizado (cadastro)">
             <OutsourcedServiceSearchSelect
               value={itemForm.outsourcedServiceId}
@@ -1546,9 +1596,15 @@ export default function ServiceOrderDetailPage() {
                   outsourcedServiceId,
                   description: item ? item.name : f.description,
                   unitPrice: item ? String(item.salePrice) : f.unitPrice,
+                  unitCost: item ? String(item.costPrice) : f.unitCost,
                 }))
               }
             />
+            <p className="text-xs text-[#94A3B8] mt-2">
+              <Link to={routes.terceirizados} className="text-[#0E7490] hover:underline">
+                Cadastrar ou gerenciar terceirizados
+              </Link>
+            </p>
           </FormField>
         )}
         <FormField label="Descricao *">
@@ -1568,7 +1624,22 @@ export default function ServiceOrderDetailPage() {
             onChange={(e) => setItemForm((f) => ({ ...f, quantity: e.target.value }))}
           />
         </FormField>
-        <FormField label="Valor unitario (R$) *">
+        {(itemForm.itemType === "PART" || itemForm.itemType === "THIRD_PARTY") && (
+          <FormField label="Valor de custo (R$)">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className={inputClass}
+              value={itemForm.unitCost}
+              onChange={(e) => setItemForm((f) => ({ ...f, unitCost: e.target.value }))}
+            />
+            <p className="text-xs text-[#94A3B8] mt-1">
+              Custo desta peça nesta OS. Não altera o cadastro do estoque.
+            </p>
+          </FormField>
+        )}
+        <FormField label="Valor de venda (R$) *">
           <input
             type="number"
             step="0.01"

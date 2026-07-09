@@ -932,6 +932,7 @@ export interface ServiceOrderItemRow {
   itemType: "SERVICE" | "PART" | "SCANNER" | "THIRD_PARTY";
   quantity: number;
   unitPrice: string | number;
+  unitCost?: string | number | null;
   discount?: string | number;
   expectedCommission?: string | number | null;
   executor?: EmployeeMini | null;
@@ -940,6 +941,7 @@ export interface ServiceOrderItemRow {
   separatedBy?: EmployeeMini | null;
   catalogItem?: { id: string; name: string } | null;
   product?: { id: string; name: string } | null;
+  outsourcedService?: { id: string; name: string; provider?: string | null } | null;
 }
 
 export interface ServiceOrderDetail extends ServiceOrderRow {
@@ -1600,6 +1602,7 @@ export const api = {
       itemType?: ServiceOrderItemType;
       quantity?: number;
       unitPrice: number;
+      unitCost?: number;
       productId?: string;
       catalogItemId?: string;
       outsourcedServiceId?: string;
@@ -1625,11 +1628,13 @@ export const api = {
       itemType?: ServiceOrderItemType;
       quantity?: number;
       unitPrice?: number;
+      unitCost?: number | null;
       discount?: number;
       executorId?: string | null;
       soldById?: string | null;
       appliedById?: string | null;
       separatedById?: string | null;
+      outsourcedServiceId?: string | null;
     },
   ) =>
     request<ServiceOrderDetail>(

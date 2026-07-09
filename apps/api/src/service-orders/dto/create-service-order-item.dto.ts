@@ -20,6 +20,11 @@ export class CreateServiceOrderItemDto {
   unitPrice!: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  unitCost?: number;
+
+  @IsOptional()
   @IsString()
   productId?: string;
 

@@ -68,6 +68,7 @@ export const soInclude = {
     include: {
       product: true,
       catalogItem: true,
+      outsourcedService: { select: { id: true, name: true, provider: true } },
       executor: employeeSelect,
       soldBy: employeeSelect,
       appliedBy: employeeSelect,
@@ -591,7 +592,10 @@ export class ServiceOrdersService {
       description = description || outsourced.name;
       unitPrice = unitPrice ?? Number(outsourced.salePrice);
       itemType = 'THIRD_PARTY';
-      outsourcedUnitCost = Number(outsourced.costPrice) || 0;
+      outsourcedUnitCost =
+        dto.unitCost != null && dto.unitCost >= 0
+          ? dto.unitCost
+          : Number(outsourced.costPrice) || 0;
     }
 
     const executorId =
@@ -614,7 +618,10 @@ export class ServiceOrdersService {
       });
       if (!product) throw new NotFoundException('Produto não encontrado');
 
-      const snapshotCost = Number(product.averageCost) || Number(product.costPrice) || 0;
+      const snapshotCost =
+        dto.unitCost != null && dto.unitCost >= 0
+          ? dto.unitCost
+          : Number(product.averageCost) || Number(product.costPrice) || 0;
       const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
 
       if (itemType === 'PART' && inQuotePhase) {
@@ -835,17 +842,51 @@ export class ServiceOrdersService {
     }
 
     const nextQty = dto.quantity ?? item.quantity;
-    const nextPrice = dto.unitPrice !== undefined ? dto.unitPrice : Number(item.unitPrice);
     const nextDiscount = dto.discount !== undefined ? dto.discount : Number(item.discount ?? 0);
     const nextExecutorId =
       dto.executorId !== undefined ? dto.executorId : item.executorId;
     const nextSoldById = dto.soldById !== undefined ? dto.soldById : item.soldById;
-    const itemType = dto.itemType ?? item.itemType;
+    let itemType = dto.itemType ?? item.itemType;
+    let nextDescription = dto.description !== undefined ? dto.description.trim() : item.description;
+    let nextUnitPrice = dto.unitPrice !== undefined ? dto.unitPrice : Number(item.unitPrice);
+    let nextOutsourcedServiceId = item.outsourcedServiceId;
+    let nextUnitCost: Prisma.Decimal | null = item.unitCost;
+
+    if (dto.unitCost !== undefined) {
+      nextUnitCost =
+        dto.unitCost != null && dto.unitCost >= 0
+          ? new Prisma.Decimal(dto.unitCost)
+          : null;
+    }
+
+    if (dto.outsourcedServiceId !== undefined) {
+      if (!dto.outsourcedServiceId) {
+        nextOutsourcedServiceId = null;
+        nextUnitCost = null;
+      } else {
+        const outsourced = await this.prisma.outsourcedService.findFirst({
+          where: { id: dto.outsourcedServiceId, organizationId, isActive: true },
+        });
+        if (!outsourced) throw new NotFoundException('Serviço terceirizado não encontrado');
+        nextOutsourcedServiceId = outsourced.id;
+        itemType = 'THIRD_PARTY';
+        if (dto.unitCost === undefined) {
+          nextUnitCost = new Prisma.Decimal(Number(outsourced.costPrice) || 0);
+        }
+        if (dto.description === undefined) nextDescription = outsourced.name;
+        if (dto.unitPrice === undefined) nextUnitPrice = Number(outsourced.salePrice);
+      }
+    }
+
+    if (dto.itemType !== undefined && dto.itemType !== 'THIRD_PARTY' && item.outsourcedServiceId) {
+      nextOutsourcedServiceId = null;
+      nextUnitCost = null;
+    }
 
     const expectedCommission = await this.previewItemCommission(organizationId, {
       itemType,
       quantity: nextQty,
-      unitPrice: nextPrice,
+      unitPrice: nextUnitPrice,
       discount: nextDiscount,
       catalogItemId: item.catalogItemId,
       productId: item.productId,
@@ -854,18 +895,39 @@ export class ServiceOrdersService {
       executionById: so.executionById,
     });
 
+    const outsourcedTouched =
+      dto.outsourcedServiceId !== undefined ||
+      (dto.itemType !== undefined && dto.itemType !== 'THIRD_PARTY' && !!item.outsourcedServiceId);
+
     await this.prisma.serviceOrderItem.update({
       where: { id: itemId },
       data: {
-        ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
-        ...(dto.itemType !== undefined ? { itemType: dto.itemType } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description.trim() }
+          : dto.outsourcedServiceId !== undefined
+            ? { description: nextDescription }
+            : {}),
+        ...(dto.itemType !== undefined || dto.outsourcedServiceId !== undefined
+          ? { itemType }
+          : {}),
         ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
-        ...(dto.unitPrice !== undefined ? { unitPrice: dto.unitPrice } : {}),
+        ...(dto.unitPrice !== undefined
+          ? { unitPrice: dto.unitPrice }
+          : dto.outsourcedServiceId !== undefined
+            ? { unitPrice: nextUnitPrice }
+            : {}),
+        ...(dto.unitCost !== undefined || outsourcedTouched
+          ? {
+              unitCost:
+                nextUnitCost != null && Number(nextUnitCost) > 0 ? nextUnitCost : null,
+            }
+          : {}),
         ...(dto.discount !== undefined ? { discount: dto.discount } : {}),
         ...(dto.executorId !== undefined ? { executorId: dto.executorId } : {}),
         ...(dto.soldById !== undefined ? { soldById: dto.soldById } : {}),
         ...(dto.appliedById !== undefined ? { appliedById: dto.appliedById } : {}),
         ...(dto.separatedById !== undefined ? { separatedById: dto.separatedById } : {}),
+        ...(outsourcedTouched ? { outsourcedServiceId: nextOutsourcedServiceId } : {}),
         expectedCommission,
       },
     });
@@ -1083,7 +1145,8 @@ export class ServiceOrdersService {
       where: { serviceOrderId },
     });
     const total = items.reduce(
-      (sum, i) => sum + Number(i.unitPrice) * i.quantity,
+      (sum, i) =>
+        sum + Math.max(0, Number(i.unitPrice) * i.quantity - Number(i.discount ?? 0)),
       0,
     );
     await this.prisma.serviceOrder.update({

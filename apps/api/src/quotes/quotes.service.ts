@@ -17,7 +17,14 @@ const quoteInclude = {
   serviceOrder: {
     include: {
       vehicle: { include: { customer: true } },
-      items: { orderBy: { createdAt: 'asc' as const } },
+      items: {
+        orderBy: { createdAt: 'asc' as const },
+        include: {
+          product: { select: { id: true, name: true } },
+          catalogItem: { select: { id: true, name: true } },
+          outsourcedService: { select: { id: true, name: true, provider: true } },
+        },
+      },
     },
   },
   lines: { orderBy: { sortOrder: 'asc' as const } },

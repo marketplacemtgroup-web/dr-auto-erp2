@@ -7,12 +7,14 @@ import PrintPortal from "../../components/print/PrintPortal";
 import QuotePrintSheet, { buildQuotePrintData } from "../../components/quotes/QuotePrintSheet";
 import StatusBadge from "../../components/StatusBadge";
 import ProductSearchSelect from "../../components/inventory/ProductSearchSelect";
+import OutsourcedServiceSearchSelect from "../../components/inventory/OutsourcedServiceSearchSelect";
 import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
 import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/share/ShareLinkDialog";
 import { api, type ServiceOrderItemRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import {
+  itemCatalogLabel,
   itemTypeLabel,
   SERVICE_ORDER_ITEM_TYPE_OPTIONS,
   type ServiceOrderItemType,
@@ -39,8 +41,10 @@ export default function QuoteDetailPage() {
     itemType: "SERVICE" as ServiceOrderItemType,
     quantity: "1",
     unitPrice: "",
+    unitCost: "",
     productId: "",
     catalogItemId: "",
+    outsourcedServiceId: "",
   });
   const [paymentAgreement, setPaymentAgreement] = useState("");
   const [freeTextEnabled, setFreeTextEnabled] = useState(false);
@@ -104,8 +108,10 @@ export default function QuoteDetailPage() {
       itemType: "SERVICE",
       quantity: "1",
       unitPrice: "",
+      unitCost: "",
       productId: "",
       catalogItemId: "",
+      outsourcedServiceId: "",
     });
   };
 
@@ -121,27 +127,44 @@ export default function QuoteDetailPage() {
       itemType: item.itemType,
       quantity: String(item.quantity),
       unitPrice: String(item.unitPrice),
+      unitCost: item.unitCost != null ? String(item.unitCost) : "",
       productId: item.product?.id ?? "",
-      catalogItemId: "",
+      catalogItemId: item.catalogItem?.id ?? "",
+      outsourcedServiceId: item.outsourcedService?.id ?? "",
     });
     setItemDrawer(true);
   };
 
   const saveItem = useMutation({
     mutationFn: () => {
+      const hasCost =
+        itemForm.itemType === "PART" || itemForm.itemType === "THIRD_PARTY";
+      const unitCostValue =
+        hasCost && itemForm.unitCost !== ""
+          ? Number(itemForm.unitCost)
+          : undefined;
       const payload = {
         description: itemForm.description,
         itemType: itemForm.itemType,
         quantity: Number(itemForm.quantity) || 1,
         unitPrice: Number(itemForm.unitPrice),
+        ...(unitCostValue !== undefined ? { unitCost: unitCostValue } : {}),
       };
       if (editingItem) {
-        return api.updateServiceOrderItem(token!, serviceOrderId, editingItem.id, payload);
+        return api.updateServiceOrderItem(token!, serviceOrderId, editingItem.id, {
+          ...payload,
+          outsourcedServiceId:
+            itemForm.itemType === "THIRD_PARTY" ? itemForm.outsourcedServiceId || null : null,
+        });
       }
       return api.addServiceOrderItem(token!, serviceOrderId, {
         ...payload,
-        productId: itemForm.productId || undefined,
-        catalogItemId: itemForm.catalogItemId || undefined,
+        productId: itemForm.itemType === "PART" ? itemForm.productId || undefined : undefined,
+        catalogItemId: itemForm.itemType === "SERVICE" ? itemForm.catalogItemId || undefined : undefined,
+        outsourcedServiceId:
+          itemForm.itemType === "THIRD_PARTY"
+            ? itemForm.outsourcedServiceId || undefined
+            : undefined,
       });
     },
     onSuccess: () => {
@@ -461,7 +484,7 @@ export default function QuoteDetailPage() {
               <th className="px-4 py-2 text-right">Qtd</th>
               <th className="px-4 py-2 text-right">Unit.</th>
               <th className="px-4 py-2 text-right">Total</th>
-              {canEdit && <th className="w-24" />}
+              {canEdit && <th className="w-32" />}
             </tr>
           </thead>
           <tbody>
@@ -487,7 +510,12 @@ export default function QuoteDetailPage() {
             )}
             {items.map((item) => (
               <tr key={item.id} className="border-t border-[#F1F5F9]">
-                <td className="px-4 py-3">{item.description}</td>
+                <td className="px-4 py-3">
+                  <p>{item.description}</p>
+                  {itemCatalogLabel(item) ? (
+                    <p className="text-xs text-[#94A3B8] mt-0.5">{itemCatalogLabel(item)}</p>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3 text-[#64748B]">
                   {itemTypeLabel(item.itemType)}
                 </td>
@@ -502,14 +530,17 @@ export default function QuoteDetailPage() {
                       <button
                         type="button"
                         onClick={() => openEditItem(item)}
-                        className="p-1.5 text-[#0E7490] hover:bg-[#ECFEFF] rounded"
+                        className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[#0E7490] hover:bg-[#ECFEFF] text-xs font-medium"
+                        title="Editar"
                       >
-                        <Pencil size={16} />
+                        <Pencil size={14} />
+                        Editar
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeleteItemTarget(item)}
                         className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                        title="Excluir"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -594,9 +625,31 @@ export default function QuoteDetailPage() {
                   productId,
                   description: product ? product.name : f.description,
                   unitPrice: product ? String(product.salePrice) : f.unitPrice,
+                  unitCost: product ? String(product.costPrice) : f.unitCost,
                 }))
               }
             />
+          </FormField>
+        )}
+        {itemForm.itemType === "THIRD_PARTY" && (
+          <FormField label="Serviço terceirizado (cadastro)">
+            <OutsourcedServiceSearchSelect
+              value={itemForm.outsourcedServiceId}
+              onChange={(outsourcedServiceId, item) =>
+                setItemForm((f) => ({
+                  ...f,
+                  outsourcedServiceId,
+                  description: item ? item.name : f.description,
+                  unitPrice: item ? String(item.salePrice) : f.unitPrice,
+                  unitCost: item ? String(item.costPrice) : f.unitCost,
+                }))
+              }
+            />
+            <p className="text-xs text-[#94A3B8] mt-2">
+              <Link to={routes.terceirizados} className="text-[#0E7490] hover:underline">
+                Cadastrar ou gerenciar terceirizados
+              </Link>
+            </p>
           </FormField>
         )}
         <FormField label="Descrição *">
@@ -616,7 +669,22 @@ export default function QuoteDetailPage() {
             onChange={(e) => setItemForm((f) => ({ ...f, quantity: e.target.value }))}
           />
         </FormField>
-        <FormField label="Valor unitário (R$) *">
+        {(itemForm.itemType === "PART" || itemForm.itemType === "THIRD_PARTY") && (
+          <FormField label="Valor de custo (R$)">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className={inputClass}
+              value={itemForm.unitCost}
+              onChange={(e) => setItemForm((f) => ({ ...f, unitCost: e.target.value }))}
+            />
+            <p className="text-xs text-[#94A3B8] mt-1">
+              Custo desta peça neste orçamento. Não altera o cadastro do estoque.
+            </p>
+          </FormField>
+        )}
+        <FormField label="Valor de venda (R$) *">
           <input
             type="number"
             step="0.01"
