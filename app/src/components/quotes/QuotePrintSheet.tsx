@@ -1,9 +1,11 @@
 import type {
+  AttachmentRow,
   OrganizationDetail,
   PrintCustomerSummary,
   QuoteLineRow,
   ServiceOrderItemRow,
 } from "../../lib/api";
+import { attachmentFileUrl } from "../../lib/mediaUrl";
 import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { quoteStatusLabel } from "../../lib/service-order-status";
 import PrintCustomerVehicleCards from "../print/PrintCustomerVehicleCards";
@@ -23,6 +25,7 @@ export type QuotePrintData = {
   freeTextContent?: string | null;
   freeTextAmount?: string | number | null;
   lines?: QuoteLineRow[];
+  attachments?: AttachmentRow[];
   serviceOrder: {
     number: number;
     complaint?: string | null;
@@ -59,6 +62,7 @@ type QuotePrintOsSource = {
   complaint?: string | null;
   vehicle: QuotePrintData["serviceOrder"]["vehicle"];
   items: ServiceOrderItemRow[];
+  attachments?: AttachmentRow[];
 };
 
 export function buildQuotePrintData(
@@ -77,6 +81,7 @@ export function buildQuotePrintData(
     freeTextContent: quote?.freeTextContent ?? null,
     freeTextAmount: quote?.freeTextAmount ?? null,
     lines: quote?.lines,
+    attachments: os.attachments,
     serviceOrder: {
       number: os.number,
       complaint: os.complaint,
@@ -138,8 +143,17 @@ function buildPrintLines(quote: QuotePrintData): PrintLine[] {
 }
 
 /** Folha A4 exibida somente na impressao do orcamento. */
+function quotePrintImages(attachments: AttachmentRow[] | undefined) {
+  return (attachments ?? []).filter(
+    (a) =>
+      a.mimeType.startsWith("image/") &&
+      (a.showOnQuote || a.category.startsWith("checklist-")),
+  );
+}
+
 export default function QuotePrintSheet({ quote, org }: Props) {
   const lines = buildPrintLines(quote);
+  const images = quotePrintImages(quote.attachments);
   const printInfo = resolvePrintBranding(org);
   const extraTerms = (quote.terms?.trim() || org?.termsQuote?.trim()) ?? "";
   const vehicle = quote.serviceOrder.vehicle;
@@ -238,6 +252,23 @@ export default function QuotePrintSheet({ quote, org }: Props) {
           </tfoot>
         </table>
       </section>
+
+      {images.length > 0 && (
+        <section className="mb-4 break-inside-avoid">
+          <p className="text-[10px] font-semibold uppercase text-[#64748B] mb-2">Registro fotografico</p>
+          <div className="grid grid-cols-4 gap-2">
+            {images.map((a) => (
+              <div key={a.id} className="border border-[#E2E8F0] rounded overflow-hidden">
+                <img
+                  src={attachmentFileUrl(a)}
+                  alt={a.fileName}
+                  className="w-full h-24 object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {quote.paymentAgreement?.trim() && (
         <section className="mb-4">

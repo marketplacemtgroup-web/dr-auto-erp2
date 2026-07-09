@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft, Loader2, Printer } from "lucide-react";
 import PortalPhotosTab from "../components/portal/PortalPhotosTab";
 import QuoteDetailContent from "../components/portal/QuoteDetailContent";
+import QuotePrintPhotos from "../components/portal/QuotePrintPhotos";
 import QuoteSheetLayout from "../components/portal/QuoteSheetLayout";
 import { ApiError, api, type PortalQuoteRow } from "../lib/api";
 import { buildApprovePayload } from "../lib/quote-lines";
@@ -170,14 +171,17 @@ export default function PortalQuotePage() {
       {tab === "fotos" ? (
         <PortalPhotosTab photos={photos} />
       ) : (
-        <QuoteDetailContent
-          quote={quote}
-          busy={acting}
-          onApprove={() => void approve()}
-          onReject={() => void reject()}
-          showOsLink
-          onViewOs={() => navigate(routes.serviceOrder(quote.serviceOrder.id))}
-        />
+        <>
+          <QuoteDetailContent
+            quote={quote}
+            busy={acting}
+            onApprove={() => void approve()}
+            onReject={() => void reject()}
+            showOsLink
+            onViewOs={() => navigate(routes.serviceOrder(quote.serviceOrder.id))}
+          />
+          <QuotePrintPhotos photos={photos} />
+        </>
       )}
     </QuoteSheetLayout>
   );

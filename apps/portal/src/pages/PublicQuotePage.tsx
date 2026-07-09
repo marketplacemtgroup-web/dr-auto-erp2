@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { Loader2, Printer } from "lucide-react";
 import QuoteDetailContent from "../components/portal/QuoteDetailContent";
+import QuotePrintPhotos from "../components/portal/QuotePrintPhotos";
 import QuoteSheetLayout from "../components/portal/QuoteSheetLayout";
 import { ApiError, api } from "../lib/api";
 import { buildApprovePayload } from "../lib/quote-lines";
@@ -96,6 +97,13 @@ export default function PublicQuotePage() {
         busy={acting}
         onApprove={() => void approve()}
         onReject={() => void reject()}
+      />
+      <QuotePrintPhotos
+        photos={data.attachments.map((a) => ({
+          url: a.url,
+          label: a.fileName,
+          mimeType: a.mimeType,
+        }))}
       />
     </QuoteSheetLayout>
   );

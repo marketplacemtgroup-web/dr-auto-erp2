@@ -201,6 +201,12 @@ export class PrintHtmlService {
     const branding = resolvePrintBranding(org);
     const os = quote.serviceOrder;
     if (!os) throw new NotFoundException('Ordem de servico do orcamento nao encontrada');
+    const fullOs = await this.serviceOrders.findOne(organizationId, os.id);
+    const images = (fullOs?.attachments ?? []).filter(
+      (a) =>
+        (a.mimeType ?? '').startsWith('image/') &&
+        (a.showOnQuote || (a.category ?? '').startsWith('checklist-')),
+    );
     const customer = os.vehicle.customer;
     const vehicle = os.vehicle;
     const extraTerms = (quote.terms?.trim() || org.termsQuote?.trim()) ?? '';
@@ -253,6 +259,21 @@ export class PrintHtmlService {
               </tr>`,
               )
               .join('');
+
+    const photosHtml =
+      images.length > 0
+        ? `<section style="margin-bottom:16px;">
+            <p class="section-title">Registro fotografico</p>
+            <div class="photos">
+              ${images
+                .map(
+                  (a) =>
+                    `<div><img src="/api/attachments/${escapeHtml(a.id)}/file" alt="${escapeHtml(a.fileName)}" /></div>`,
+                )
+                .join('')}
+            </div>
+          </section>`
+        : '';
 
     const body = `
       <header class="header">
@@ -333,6 +354,8 @@ export class PrintHtmlService {
           </tfoot>
         </table>
       </section>
+
+      ${photosHtml}
 
       ${
         quote.paymentAgreement?.trim()

@@ -54,9 +54,15 @@ export default function QuoteDetailPage() {
     !!id,
   );
 
-  const org = useOrganizationBranding();
-
   const serviceOrderId = quote?.serviceOrder.id ?? "";
+
+  const { data: attachmentPage } = useApiQuery(
+    ["service-order-attachments", serviceOrderId],
+    (t) => api.listServiceOrderAttachments(t, serviceOrderId, { limit: 100 }),
+    !!serviceOrderId,
+  );
+
+  const org = useOrganizationBranding();
 
   useEffect(() => {
     if (quote?.status === "APPROVED" && serviceOrderId) {
@@ -632,6 +638,7 @@ export default function QuoteDetailPage() {
             complaint: quote.serviceOrder.complaint,
             vehicle: quote.serviceOrder.vehicle,
             items,
+            attachments: attachmentPage?.items,
           },
           quote,
         )}
