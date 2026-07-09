@@ -32,25 +32,31 @@ export class QuotesSyncService {
   }
 
   private lineTotal(line: { unitPrice: Prisma.Decimal; quantity: number; discount: Prisma.Decimal }) {
-    return Number(line.unitPrice) * line.quantity - Number(line.discount);
+    return Math.max(0, Number(line.unitPrice) * line.quantity - Number(line.discount));
   }
 
-  private pendingLineChanged(
+  private itemLineTotal(item: {
+    unitPrice: Prisma.Decimal;
+    quantity: number;
+    discount: Prisma.Decimal;
+  }) {
+    return this.lineTotal(item);
+  }
+
+  private lineFieldsMatch(
     existing: {
       description: string;
       quantity: number;
       unitPrice: Prisma.Decimal;
       discount: Prisma.Decimal;
-      approved: boolean | null;
     },
     item: { description: string; quantity: number; unitPrice: Prisma.Decimal; discount: Prisma.Decimal },
   ) {
-    if (existing.approved !== null) return false;
     return (
-      existing.description !== item.description ||
-      existing.quantity !== item.quantity ||
-      Number(existing.unitPrice) !== Number(item.unitPrice) ||
-      Number(existing.discount) !== Number(item.discount)
+      existing.description === item.description &&
+      existing.quantity === item.quantity &&
+      Number(existing.unitPrice) === Number(item.unitPrice) &&
+      Number(existing.discount) === Number(item.discount)
     );
   }
 
@@ -110,6 +116,7 @@ export class QuotesSyncService {
         discount: Prisma.Decimal;
         sortOrder: number;
         serviceOrderItemId: string;
+        approved?: null;
       };
     }> = [];
 
@@ -127,9 +134,15 @@ export class QuotesSyncService {
       };
 
       if (existing) {
-        if (this.pendingLineChanged(existing, item)) {
+        if (!this.lineFieldsMatch(existing, item)) {
           modifiedPendingLines++;
-          linesToUpdate.push({ id: existing.id, data: lineData });
+          linesToUpdate.push({
+            id: existing.id,
+            data: {
+              ...lineData,
+              ...(existing.approved !== null ? { approved: null } : {}),
+            },
+          });
         }
       } else {
         addedPendingLines++;
@@ -291,10 +304,7 @@ export class QuotesSyncService {
     });
     if (!so) return;
 
-    const itemTotal = so.items.reduce(
-      (sum, i) => sum + Number(i.unitPrice) * i.quantity,
-      0,
-    );
+    const itemTotal = so.items.reduce((sum, i) => sum + this.itemLineTotal(i), 0);
     const freeTextQuote = so.quotes.find(
       (q) => q.freeTextEnabled && Number(q.freeTextAmount ?? 0) > 0,
     );

@@ -1,4 +1,5 @@
-import { IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ProductStatus } from '@prisma/client';
 
 export class UpdateProductDto {
   @IsOptional()
@@ -83,4 +84,11 @@ export class UpdateProductDto {
   @IsNumber()
   @Min(0)
   salePrice?: number;
+
+  @IsOptional()
+  @IsIn(['ACTIVE', 'PROVISIONAL'])
+  status?: ProductStatus;
+
+  @IsOptional()
+  needsReview?: boolean;
 }

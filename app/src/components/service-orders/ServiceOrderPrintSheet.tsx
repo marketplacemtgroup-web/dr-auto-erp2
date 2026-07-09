@@ -1,6 +1,7 @@
 import type { OrganizationDetail, ServiceOrderDetail } from "../../lib/api";
-import { attachmentFileUrl } from "../../lib/mediaUrl";
 import { formatDateTime, formatMoney } from "../../lib/format";
+import { attachmentFileUrl } from "../../lib/mediaUrl";
+import { resolveServiceOrderTotal, serviceOrderItemLineTotal } from "../../lib/serviceOrderTotals";
 import { osStatusLabel } from "../../lib/service-order-status";
 import PrintCustomerVehicleCards from "../print/PrintCustomerVehicleCards";
 import PrintLegalTerms from "../print/PrintLegalTerms";
@@ -90,7 +91,7 @@ export default function ServiceOrderPrintSheet({ os, org }: Props) {
                   <td className="py-1.5 px-2 text-center">{item.quantity}</td>
                   <td className="py-1.5 px-2 text-right">{formatMoney(item.unitPrice)}</td>
                   <td className="py-1.5 px-2 text-right font-medium">
-                    {formatMoney(Number(item.unitPrice) * item.quantity)}
+                    {formatMoney(serviceOrderItemLineTotal(item))}
                   </td>
                 </tr>
               ))
@@ -102,7 +103,7 @@ export default function ServiceOrderPrintSheet({ os, org }: Props) {
                 Total
               </td>
               <td className="py-2 px-2 text-right font-bold text-[#0F3D4C]">
-                {formatMoney(os.totalAmount)}
+                {formatMoney(resolveServiceOrderTotal(os.items, os.totalAmount))}
               </td>
             </tr>
           </tfoot>

@@ -20,9 +20,10 @@ const quoteInclude = {
       items: {
         orderBy: { createdAt: 'asc' as const },
         include: {
-          product: { select: { id: true, name: true } },
+          product: { select: { id: true, name: true, sku: true, status: true } },
           catalogItem: { select: { id: true, name: true } },
           outsourcedService: { select: { id: true, name: true, provider: true } },
+          suggestedSupplier: { select: { id: true, legalName: true, tradeName: true } },
         },
       },
     },
@@ -396,9 +397,11 @@ export class QuotesService {
       }),
     ]);
 
-    await this.serviceOrders.deductPartsStockForExecution(
+    await this.serviceOrders.postQuoteApprovalHooks(
       organizationId,
       quote.serviceOrderId,
+      quoteId,
+      userId,
     );
 
     await this.events.emitOffice(organizationId, {

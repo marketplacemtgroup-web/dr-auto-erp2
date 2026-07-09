@@ -11,6 +11,8 @@ import {
 import {
   PROFIT_RECOGNIZED_STATUSES,
   calcItemProfit,
+  calcItemPlannedProfit,
+  calcItemActualProfit,
   isNonOperationalPayable,
   itemPartUnitCost,
   itemRevenue,
@@ -20,6 +22,7 @@ import type { ServiceOrderItemTypeValue } from '../common/item-type.util';
 
 type ProfitTotals = {
   partsProfit: number;
+  partsProfitActual: number;
   servicesProfit: number;
   scannerProfit: number;
   outsourcedProfit: number;
@@ -429,6 +432,8 @@ export class ReportsService {
       scannerProfit: profitMetrics.scannerProfit,
       outsourcedProfit: profitMetrics.outsourcedProfit,
       grossProfit: profitMetrics.grossProfit,
+      grossProfitActual: profitMetrics.grossProfitActual,
+      costVariance: profitMetrics.costVariance,
       totalProfit: profitMetrics.totalProfit,
       operationalProfit: profitMetrics.operationalProfit,
       operationalExpenses: profitMetrics.operationalExpenses,
@@ -1117,6 +1122,8 @@ export class ReportsService {
       scannerProfit,
       outsourcedProfit,
       grossProfit: metrics.grossProfit,
+      grossProfitActual: metrics.grossProfitActual,
+      costVariance: metrics.costVariance,
       totalProfit: metrics.totalProfit,
       operationalProfit: metrics.operationalProfit,
       operationalExpenses: metrics.operationalExpenses,
@@ -1152,6 +1159,13 @@ export class ReportsService {
     const grossProfit = roundMoney(
       partsProfit + servicesProfit + scannerProfit + outsourcedProfit,
     );
+    const grossProfitActual = roundMoney(
+      (profit.partsProfitActual ?? partsProfit) +
+        servicesProfit +
+        scannerProfit +
+        outsourcedProfit,
+    );
+    const costVariance = roundMoney(grossProfitActual - grossProfit);
     const expenses = roundMoney(
       paidPayables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
     );
@@ -1167,6 +1181,8 @@ export class ReportsService {
       scannerProfit,
       outsourcedProfit,
       grossProfit,
+      grossProfitActual,
+      costVariance,
       expenses,
       operationalExpenses,
       nonOperationalExpenses,
@@ -1187,6 +1203,7 @@ export class ReportsService {
     });
 
     let partsProfit = 0;
+    let partsProfitActual = 0;
     let servicesProfit = 0;
     let scannerProfit = 0;
     let outsourcedProfit = 0;
@@ -1199,7 +1216,8 @@ export class ReportsService {
       const itemType = item.itemType as ServiceOrderItemTypeValue;
       if (itemType === 'PART') {
         partsRevenue += revenue;
-        partsProfit += calcItemProfit(item, item.product);
+        partsProfit += calcItemPlannedProfit(item, item.product);
+        partsProfitActual += calcItemActualProfit(item, item.product);
       } else if (itemType === 'SCANNER') {
         scannerRevenue += revenue;
         scannerProfit += calcItemProfit(item, item.product);
@@ -1213,6 +1231,7 @@ export class ReportsService {
     }
     return {
       partsProfit: roundMoney(partsProfit),
+      partsProfitActual: roundMoney(partsProfitActual),
       servicesProfit: roundMoney(servicesProfit),
       scannerProfit: roundMoney(scannerProfit),
       outsourcedProfit: roundMoney(outsourcedProfit),

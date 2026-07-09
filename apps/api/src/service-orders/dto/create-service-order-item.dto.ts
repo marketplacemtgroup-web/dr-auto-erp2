@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min, MaxLength } from 'class-validator';
 import { ServiceOrderItemType } from '@prisma/client';
 
 export class CreateServiceOrderItemDto {
@@ -48,6 +48,29 @@ export class CreateServiceOrderItemDto {
   @IsOptional()
   @IsString()
   soldById?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isQuickPart?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  quickPartCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  partBrand?: string;
+
+  @IsOptional()
+  @IsString()
+  suggestedSupplierId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  internalNotes?: string;
 
   @IsOptional()
   @IsString()

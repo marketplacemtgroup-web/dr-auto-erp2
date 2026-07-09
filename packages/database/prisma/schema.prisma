@@ -476,6 +476,7 @@ model Organization {
   employeeTimeClockEntries EmployeeTimeClockEntry[]
   employeeTimeClockDays EmployeeTimeClockDay[]
   employeeRequests EmployeeRequest[]
+  serviceOrderItemCostHistory ServiceOrderItemCostHistory[]
 
   @@map("organizations")
 }
@@ -523,6 +524,7 @@ model User {
   openedCashSessions CashRegisterSession[] @relation("CashOpenedBy")
   closedCashSessions CashRegisterSession[] @relation("CashClosedBy")
   purchasesCreated PurchaseOrder[] @relation("PurchaseCreatedBy")
+  serviceOrderItemCostHistory ServiceOrderItemCostHistory[]
 
   @@map("users")
 }
@@ -851,6 +853,21 @@ enum ServiceOrderItemType {
   THIRD_PARTY
 }
 
+enum ProductStatus {
+  ACTIVE
+  PROVISIONAL
+}
+
+enum ServiceOrderItemCostField {
+  ACTUAL_UNIT_COST
+  ACTUAL_BRAND
+  ACTUAL_SUPPLIER
+  PURCHASE_ORDER_ITEM
+  PURCHASE_DATE
+  PURCHASE_PAYMENT_METHOD
+  INTERNAL_NOTES
+}
+
 model ServiceOrderItem {
   id             String               @id @default(cuid())
   organizationId String               @map("organization_id")
@@ -869,6 +886,19 @@ model ServiceOrderItem {
   appliedById        String?              @map("applied_by_id")
   separatedById      String?              @map("separated_by_id")
   expectedCommission Decimal?             @map("expected_commission") @db.Decimal(12, 2)
+  isQuickPart        Boolean              @default(false) @map("is_quick_part")
+  quickPartCode      String?              @map("quick_part_code")
+  partBrand          String?              @map("part_brand")
+  suggestedSupplierId String?             @map("suggested_supplier_id")
+  internalNotes      String?              @map("internal_notes")
+  actualUnitCost     Decimal?             @map("actual_unit_cost") @db.Decimal(12, 2)
+  actualBrand        String?              @map("actual_brand")
+  actualSupplierId   String?              @map("actual_supplier_id")
+  purchaseOrderItemId String?             @map("purchase_order_item_id")
+  purchaseDate       DateTime?            @map("purchase_date")
+  purchasePaymentMethod String?           @map("purchase_payment_method")
+  commercialLockedAt DateTime?            @map("commercial_locked_at")
+  stockDeductedAt    DateTime?            @map("stock_deducted_at")
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")
 
@@ -881,11 +911,36 @@ model ServiceOrderItem {
   soldBy       Employee?    @relation("ItemSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
   appliedBy    Employee?    @relation("ItemAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
   separatedBy  Employee?    @relation("ItemSeparatedBy", fields: [separatedById], references: [id], onDelete: SetNull)
+  suggestedSupplier Supplier? @relation("ItemSuggestedSupplier", fields: [suggestedSupplierId], references: [id], onDelete: SetNull)
+  actualSupplier Supplier? @relation("ItemActualSupplier", fields: [actualSupplierId], references: [id], onDelete: SetNull)
+  purchaseOrderItem PurchaseOrderItem? @relation("ItemPurchaseOrderItem", fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
   generatedCommissions GeneratedCommission[]
+  costHistory ServiceOrderItemCostHistory[]
+  linkedPurchaseOrderItems PurchaseOrderItem[] @relation("PurchaseItemServiceOrderItem")
 
   @@index([serviceOrderId])
   @@index([executorId])
+  @@index([organizationId, isQuickPart])
   @@map("service_order_items")
+}
+
+model ServiceOrderItemCostHistory {
+  id                 String                    @id @default(cuid())
+  organizationId     String                    @map("organization_id")
+  serviceOrderItemId String                    @map("service_order_item_id")
+  userId             String?                   @map("user_id")
+  field              ServiceOrderItemCostField
+  oldValue           String?                   @map("old_value")
+  newValue           String?                   @map("new_value")
+  note               String?
+  createdAt          DateTime                  @default(now()) @map("created_at")
+
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serviceOrderItem ServiceOrderItem @relation(fields: [serviceOrderItemId], references: [id], onDelete: Cascade)
+  user             User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([serviceOrderItemId, createdAt])
+  @@map("service_order_item_cost_history")
 }
 
 model Quote {
@@ -1122,6 +1177,10 @@ model Product {
   markup         Decimal? @db.Decimal(5, 2)
   imageUrl       String?  @map("image_url")
   notes          String?
+  status         ProductStatus @default(ACTIVE)
+  needsReview    Boolean       @default(false) @map("needs_review")
+  sourceServiceOrderItemId String? @map("source_service_order_item_id")
+  sourceQuoteId  String?       @map("source_quote_id")
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -1134,6 +1193,8 @@ model Product {
   commissionRules EmployeeCommissionRule[]
 
   @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, needsReview])
   @@map("products")
 }
 
@@ -1292,6 +1353,8 @@ model Supplier {
   financialEntries FinancialEntry[]
   stockMovements   StockMovement[]
   productsLast     Product[]         @relation("ProductLastSupplier")
+  suggestedOrderItems ServiceOrderItem[] @relation("ItemSuggestedSupplier")
+  actualOrderItems    ServiceOrderItem[] @relation("ItemActualSupplier")
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -1360,6 +1423,7 @@ model PurchaseOrderItem {
   movesStock          Boolean  @default(true) @map("moves_stock")
   location            String?
   serviceOrderId      String?  @map("service_order_id")
+  serviceOrderItemId  String?  @map("service_order_item_id")
   quantityReceived    Int      @default(0) @map("quantity_received")
   sortOrder           Int      @default(0) @map("sort_order")
   createdAt           DateTime @default(now()) @map("created_at")
@@ -1369,10 +1433,13 @@ model PurchaseOrderItem {
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   product       Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
   serviceOrder  ServiceOrder? @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  serviceOrderItem ServiceOrderItem? @relation("PurchaseItemServiceOrderItem", fields: [serviceOrderItemId], references: [id], onDelete: SetNull)
   stockMovements StockMovement[]
+  linkedServiceOrderItems ServiceOrderItem[] @relation("ItemPurchaseOrderItem")
 
   @@index([purchaseOrderId])
   @@index([productId])
+  @@index([serviceOrderItemId])
   @@map("purchase_order_items")
 }
 

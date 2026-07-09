@@ -425,6 +425,8 @@ export interface FinancialProfitSummary {
   scannerProfit?: number;
   outsourcedProfit?: number;
   grossProfit: number;
+  grossProfitActual?: number;
+  costVariance?: number;
   totalProfit: number;
   operationalProfit?: number;
   operationalExpenses?: number;
@@ -674,6 +676,8 @@ export interface ReportsFull {
     scannerProfit?: number;
     outsourcedProfit?: number;
     grossProfit: number;
+    grossProfitActual?: number;
+    costVariance?: number;
     totalProfit: number;
     operationalProfit?: number;
     operationalExpenses?: number;
@@ -926,6 +930,16 @@ export interface TeamStats {
   osInProgress: number;
 }
 
+export interface ServiceOrderItemCostHistoryRow {
+  id: string;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  note: string | null;
+  createdAt: string;
+  user?: { id: string; name: string } | null;
+}
+
 export interface ServiceOrderItemRow {
   id: string;
   description: string;
@@ -933,14 +947,30 @@ export interface ServiceOrderItemRow {
   quantity: number;
   unitPrice: string | number;
   unitCost?: string | number | null;
+  actualUnitCost?: string | number | null;
   discount?: string | number;
   expectedCommission?: string | number | null;
+  isQuickPart?: boolean;
+  quickPartCode?: string | null;
+  partBrand?: string | null;
+  internalNotes?: string | null;
+  actualBrand?: string | null;
+  purchaseDate?: string | null;
+  purchasePaymentMethod?: string | null;
+  commercialLockedAt?: string | null;
+  suggestedSupplier?: { id: string; legalName: string; tradeName: string | null } | null;
+  actualSupplier?: { id: string; legalName: string; tradeName: string | null } | null;
+  purchaseOrderItem?: {
+    id: string;
+    purchaseOrder?: { id: string; number: string; invoiceNumber?: string | null };
+  } | null;
+  costHistory?: ServiceOrderItemCostHistoryRow[];
   executor?: EmployeeMini | null;
   soldBy?: EmployeeMini | null;
   appliedBy?: EmployeeMini | null;
   separatedBy?: EmployeeMini | null;
   catalogItem?: { id: string; name: string } | null;
-  product?: { id: string; name: string } | null;
+  product?: { id: string; name: string; sku?: string | null; status?: string } | null;
   outsourcedService?: { id: string; name: string; provider?: string | null } | null;
 }
 
@@ -1611,6 +1641,11 @@ export const api = {
       soldById?: string;
       appliedById?: string;
       separatedById?: string;
+      isQuickPart?: boolean;
+      quickPartCode?: string;
+      partBrand?: string;
+      suggestedSupplierId?: string;
+      internalNotes?: string;
     },
   ) =>
     request<ServiceOrderDetail>(
@@ -1647,6 +1682,27 @@ export const api = {
     request<ServiceOrderDetail>(
       `/service-orders/${serviceOrderId}/items/${itemId}`,
       { method: "DELETE" },
+      token,
+    ),
+
+  updateServiceOrderItemInternalCost: (
+    token: string,
+    serviceOrderId: string,
+    itemId: string,
+    data: {
+      actualUnitCost?: number | null;
+      actualBrand?: string | null;
+      actualSupplierId?: string | null;
+      purchaseOrderItemId?: string | null;
+      purchaseDate?: string | null;
+      purchasePaymentMethod?: string | null;
+      internalNotes?: string | null;
+      note?: string;
+    },
+  ) =>
+    request<ServiceOrderDetail>(
+      `/service-orders/${serviceOrderId}/items/${itemId}/internal-cost`,
+      { method: "PATCH", body: JSON.stringify(data) },
       token,
     ),
 
@@ -1787,6 +1843,13 @@ export const api = {
       token,
     ).then(parsePaginatedList),
 
+  productsPendingReview: (token: string, page?: number, limit?: number) =>
+    request<Paginated<ProductPendingReviewRow>>(
+      `/products/pending-review${buildQuery({ page, limit })}`,
+      { method: "GET" },
+      token,
+    ).then(parsePaginatedList),
+
   createProduct: (
     token: string,
     data: {
@@ -1800,6 +1863,8 @@ export const api = {
       minStock?: number;
       costPrice?: number;
       salePrice?: number;
+      status?: "ACTIVE" | "PROVISIONAL";
+      needsReview?: boolean;
     },
   ) =>
     request<ProductRow>("/products", { method: "POST", body: JSON.stringify(data) }, token),
@@ -1817,6 +1882,8 @@ export const api = {
       minStock: number;
       costPrice: number;
       salePrice: number;
+      status: "ACTIVE" | "PROVISIONAL";
+      needsReview: boolean;
     }>,
   ) =>
     request<ProductRow>(`/products/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
@@ -3063,6 +3130,15 @@ export interface ProductRow {
   minStock: number;
   costPrice: string | number;
   salePrice: string | number;
+  status?: "ACTIVE" | "PROVISIONAL";
+  needsReview?: boolean;
+  sourceServiceOrderItemId?: string | null;
+  sourceQuoteId?: string | null;
+}
+
+export interface ProductPendingReviewRow extends ProductRow {
+  serviceOrderNumber: number | null;
+  customerName: string | null;
 }
 
 export interface ServiceCatalogRow {

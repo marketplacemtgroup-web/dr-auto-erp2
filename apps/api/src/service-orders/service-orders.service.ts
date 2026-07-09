@@ -1,12 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ServiceOrderItemType, ServiceOrderStatus } from '@prisma/client';
+import {
+  Prisma,
+  ServiceOrderItemCostField,
+  ServiceOrderItemType,
+  ServiceOrderStatus,
+} from '@prisma/client';
 import { QuotesSyncService } from '../quotes/quotes-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockMovementService } from '../products/stock-movement.service';
+import { ProductsService } from '../products/products.service';
 import { CAR_CHECKLIST_TEMPLATE, checklistMatchesTemplate } from './checklist-template';
 import { CreateServiceOrderDto } from './dto/create-service-order.dto';
 import { CreateServiceOrderItemDto } from './dto/create-service-order-item.dto';
 import { UpdateServiceOrderItemDto } from './dto/update-service-order-item.dto';
+import { UpdateInternalCostDto } from './dto/update-internal-cost.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
 import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
 import { AuditService } from '../audit/audit.service';
@@ -53,6 +60,8 @@ const STATUS_PT: Record<string, string> = {
 
 const employeeSelect = { select: { id: true, name: true, photoUrl: true } };
 
+const supplierSelect = { select: { id: true, legalName: true, tradeName: true } };
+
 export const soInclude = {
   vehicle: { include: { customer: true } },
   branch: true,
@@ -73,6 +82,18 @@ export const soInclude = {
       soldBy: employeeSelect,
       appliedBy: employeeSelect,
       separatedBy: employeeSelect,
+      suggestedSupplier: supplierSelect,
+      actualSupplier: supplierSelect,
+      purchaseOrderItem: {
+        include: {
+          purchaseOrder: { select: { id: true, number: true, invoiceNumber: true } },
+        },
+      },
+      costHistory: {
+        orderBy: { createdAt: 'desc' as const },
+        take: 30,
+        include: { user: { select: { id: true, name: true } } },
+      },
     },
     orderBy: { createdAt: 'asc' as const },
   },
@@ -94,6 +115,7 @@ export class ServiceOrdersService {
     private readonly prisma: PrismaService,
     private readonly quotesSync: QuotesSyncService,
     private readonly stockMovement: StockMovementService,
+    private readonly products: ProductsService,
     private readonly audit: AuditService,
     private readonly events: EventsService,
     private readonly portalNotify: PortalCustomerNotifyService,
@@ -572,6 +594,17 @@ export class ServiceOrdersService {
     let catalogItemId: string | null = dto.catalogItemId ?? null;
     const outsourcedServiceId: string | null = dto.outsourcedServiceId ?? null;
     let outsourcedUnitCost: number | null = null;
+    const isQuickPart = dto.isQuickPart === true;
+
+    if (isQuickPart) {
+      if (dto.productId) {
+        throw new BadRequestException('Peça rápida não pode estar vinculada a um produto do estoque');
+      }
+      itemType = 'PART';
+      if (!description) {
+        throw new BadRequestException('Informe a descrição da peça rápida');
+      }
+    }
 
     if (dto.catalogItemId) {
       const catalog = await this.prisma.serviceCatalog.findFirst({
@@ -623,8 +656,9 @@ export class ServiceOrdersService {
           ? dto.unitCost
           : Number(product.averageCost) || Number(product.costPrice) || 0;
       const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
+      const skipStock = this.products.shouldSkipStockForProduct(product);
 
-      if (itemType === 'PART' && inQuotePhase) {
+      if (itemType === 'PART' && inQuotePhase && !skipStock) {
         const available = this.stockMovement.availableStock(
           product.stock,
           product.reservedStock,
@@ -640,7 +674,7 @@ export class ServiceOrdersService {
         });
       }
 
-      if (itemType === 'PART' && !inQuotePhase) {
+      if (itemType === 'PART' && !inQuotePhase && !skipStock) {
         const available = this.stockMovement.availableStock(
           product.stock,
           product.reservedStock,
@@ -705,6 +739,54 @@ export class ServiceOrdersService {
       }
     }
 
+    if (isQuickPart) {
+      const quickPartCode =
+        dto.quickPartCode?.trim() ||
+        (await this.products.generateQuickPartCode(organizationId));
+      const snapshotCost =
+        dto.unitCost != null && dto.unitCost >= 0 ? dto.unitCost : 0;
+
+      await this.prisma.serviceOrderItem.create({
+        data: {
+          organizationId,
+          serviceOrderId: so.id,
+          description,
+          itemType: 'PART',
+          quantity: qty,
+          unitPrice,
+          unitCost: snapshotCost > 0 ? new Prisma.Decimal(snapshotCost) : null,
+          discount: dto.discount ?? 0,
+          executorId,
+          soldById: dto.soldById ?? null,
+          appliedById: dto.appliedById ?? null,
+          separatedById: dto.separatedById ?? null,
+          expectedCommission,
+          isQuickPart: true,
+          quickPartCode,
+          partBrand: dto.partBrand?.trim() || null,
+          suggestedSupplierId: dto.suggestedSupplierId ?? null,
+          internalNotes: dto.internalNotes?.trim() || null,
+        },
+      });
+      await this.recalculateTotal(serviceOrderId);
+      await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+      const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
+      const totalAfter = Number(refreshed.totalAmount);
+      if (totalBefore !== totalAfter) {
+        await this.audit.log(organizationId, 'service_order.amount_change', 'service_order', {
+          userId,
+          metadata: {
+            serviceOrderId,
+            number: so.number,
+            from: totalBefore,
+            to: totalAfter,
+            item: description,
+          },
+        });
+      }
+      return refreshed;
+    }
+
     await this.prisma.serviceOrderItem.create({
       data: {
         organizationId,
@@ -760,6 +842,27 @@ export class ServiceOrdersService {
     });
     if (!item) throw new NotFoundException('Item não encontrado');
 
+    const commerciallyLocked = await this.isItemCommerciallyLocked(
+      organizationId,
+      item.id,
+      item.commercialLockedAt,
+    );
+    if (commerciallyLocked) {
+      const commercialTouched =
+        dto.description !== undefined ||
+        dto.quantity !== undefined ||
+        dto.unitPrice !== undefined ||
+        dto.discount !== undefined ||
+        dto.itemType !== undefined ||
+        dto.unitCost !== undefined ||
+        dto.outsourcedServiceId !== undefined;
+      if (commercialTouched) {
+        throw new BadRequestException(
+          'Item com valor aprovado pelo cliente. Use "Ajustar custo interno" para alterar custos operacionais.',
+        );
+      }
+    }
+
     const so = (await this.findOne(organizationId, serviceOrderId))!;
     const totalBefore = Number(so.totalAmount);
     const inQuotePhase = QUOTE_PHASE_STATUSES.includes(so.status as ServiceOrderStatus);
@@ -774,7 +877,7 @@ export class ServiceOrdersService {
       const product = await this.prisma.product.findUnique({
         where: { id: item.productId },
       });
-      if (product) {
+      if (product && !this.products.shouldSkipStockForProduct(product)) {
         const delta = dto.quantity - item.quantity;
         if (delta > 0) {
           const available = this.stockMovement.availableStock(
@@ -806,7 +909,9 @@ export class ServiceOrdersService {
       const product = await this.prisma.product.findUnique({
         where: { id: item.productId },
       });
-      if (product) {
+      if (product && this.products.shouldSkipStockForProduct(product)) {
+        // provisório — sem baixa física automática
+      } else if (product) {
         const delta = dto.quantity - item.quantity;
         if (delta > 0) {
           const available = this.stockMovement.availableStock(
@@ -1101,17 +1206,18 @@ export class ServiceOrdersService {
 
     for (const item of partItems) {
       const productId = item.productId!;
+      const product = await this.prisma.product.findFirst({
+        where: { id: productId, organizationId, ...notDeleted },
+      });
+      if (!product) continue;
+      if (this.products.shouldSkipStockForProduct(product)) continue;
+
       const alreadyDeducted = await this.hasStockDeductionForPart(
         organizationId,
         serviceOrderId,
         productId,
       );
       if (alreadyDeducted) continue;
-
-      const product = await this.prisma.product.findFirst({
-        where: { id: productId, organizationId, ...notDeleted },
-      });
-      if (!product) continue;
 
       const available = this.stockMovement.availableStock(
         product.stock,
@@ -1137,10 +1243,232 @@ export class ServiceOrdersService {
         nextStock,
         { serviceOrderId: so.id, reason: `Saída OS #${so.number} — início da execução` },
       );
+      await this.prisma.serviceOrderItem.update({
+        where: { id: item.id },
+        data: { stockDeductedAt: new Date() },
+      });
     }
   }
 
+  async lockCommercialItems(organizationId: string, quoteId: string) {
+    const approvedLines = await this.prisma.quoteLine.findMany({
+      where: { quoteId, approved: true, serviceOrderItemId: { not: null } },
+    });
+    const now = new Date();
+    for (const line of approvedLines) {
+      if (!line.serviceOrderItemId) continue;
+      await this.prisma.serviceOrderItem.updateMany({
+        where: { id: line.serviceOrderItemId, organizationId },
+        data: { commercialLockedAt: now },
+      });
+    }
+  }
+
+  async postQuoteApprovalHooks(
+    organizationId: string,
+    serviceOrderId: string,
+    quoteId: string,
+    userId?: string,
+  ) {
+    await this.lockCommercialItems(organizationId, quoteId);
+    await this.products.provisionQuickPartsOnApproval(
+      organizationId,
+      serviceOrderId,
+      quoteId,
+    );
+    await this.deductPartsStockForExecution(organizationId, serviceOrderId);
+    if (userId) {
+      await this.audit.log(organizationId, 'quote.post_approval_hooks', 'service_order', {
+        userId,
+        metadata: { serviceOrderId, quoteId },
+      });
+    }
+  }
+
+  private async isItemCommerciallyLocked(
+    organizationId: string,
+    itemId: string,
+    commercialLockedAt: Date | null,
+  ) {
+    if (commercialLockedAt) return true;
+    const approvedLine = await this.prisma.quoteLine.findFirst({
+      where: { organizationId, serviceOrderItemId: itemId, approved: true },
+    });
+    return approvedLine != null;
+  }
+
+  async updateInternalCost(
+    organizationId: string,
+    serviceOrderId: string,
+    itemId: string,
+    dto: UpdateInternalCostDto,
+    userId?: string,
+  ) {
+    const item = await this.prisma.serviceOrderItem.findFirst({
+      where: { id: itemId, serviceOrderId, organizationId },
+    });
+    if (!item) throw new NotFoundException('Item não encontrado');
+    if (item.itemType !== 'PART' && item.itemType !== 'THIRD_PARTY') {
+      throw new BadRequestException('Ajuste de custo interno disponível apenas para peças e terceirizados');
+    }
+
+    const historyRows: Prisma.ServiceOrderItemCostHistoryCreateManyInput[] = [];
+    const note = dto.note?.trim() || null;
+
+    const track = (
+      field: ServiceOrderItemCostField,
+      oldVal: string | null,
+      newVal: string | null,
+    ) => {
+      if (oldVal === newVal) return;
+      historyRows.push({
+        organizationId,
+        serviceOrderItemId: itemId,
+        userId: userId ?? null,
+        field,
+        oldValue: oldVal,
+        newValue: newVal,
+        note,
+      });
+    };
+
+    const oldCost =
+      item.actualUnitCost != null
+        ? String(item.actualUnitCost)
+        : item.unitCost != null
+          ? String(item.unitCost)
+          : null;
+    const newCost =
+      dto.actualUnitCost !== undefined
+        ? dto.actualUnitCost != null
+          ? String(dto.actualUnitCost)
+          : null
+        : oldCost;
+    if (dto.actualUnitCost !== undefined) {
+      track('ACTUAL_UNIT_COST', oldCost, newCost);
+    }
+
+    if (dto.actualBrand !== undefined) {
+      track('ACTUAL_BRAND', item.actualBrand, dto.actualBrand?.trim() || null);
+    }
+    if (dto.actualSupplierId !== undefined) {
+      track(
+        'ACTUAL_SUPPLIER',
+        item.actualSupplierId,
+        dto.actualSupplierId || null,
+      );
+    }
+    if (dto.purchaseOrderItemId !== undefined) {
+      track(
+        'PURCHASE_ORDER_ITEM',
+        item.purchaseOrderItemId,
+        dto.purchaseOrderItemId || null,
+      );
+    }
+    if (dto.purchaseDate !== undefined) {
+      track(
+        'PURCHASE_DATE',
+        item.purchaseDate?.toISOString() ?? null,
+        dto.purchaseDate || null,
+      );
+    }
+    if (dto.purchasePaymentMethod !== undefined) {
+      track(
+        'PURCHASE_PAYMENT_METHOD',
+        item.purchasePaymentMethod,
+        dto.purchasePaymentMethod?.trim() || null,
+      );
+    }
+    if (dto.internalNotes !== undefined) {
+      track(
+        'INTERNAL_NOTES',
+        item.internalNotes,
+        dto.internalNotes?.trim() || null,
+      );
+    }
+
+    await this.prisma.serviceOrderItem.update({
+      where: { id: itemId },
+      data: {
+        ...(dto.actualUnitCost !== undefined
+          ? {
+              actualUnitCost:
+                dto.actualUnitCost != null && dto.actualUnitCost >= 0
+                  ? new Prisma.Decimal(dto.actualUnitCost)
+                  : null,
+            }
+          : {}),
+        ...(dto.actualBrand !== undefined
+          ? { actualBrand: dto.actualBrand?.trim() || null }
+          : {}),
+        ...(dto.actualSupplierId !== undefined
+          ? { actualSupplierId: dto.actualSupplierId || null }
+          : {}),
+        ...(dto.purchaseOrderItemId !== undefined
+          ? { purchaseOrderItemId: dto.purchaseOrderItemId || null }
+          : {}),
+        ...(dto.purchaseDate !== undefined
+          ? {
+              purchaseDate: dto.purchaseDate ? new Date(dto.purchaseDate) : null,
+            }
+          : {}),
+        ...(dto.purchasePaymentMethod !== undefined
+          ? {
+              purchasePaymentMethod: dto.purchasePaymentMethod?.trim() || null,
+            }
+          : {}),
+        ...(dto.internalNotes !== undefined
+          ? { internalNotes: dto.internalNotes?.trim() || null }
+          : {}),
+      },
+    });
+
+    if (historyRows.length) {
+      await this.prisma.serviceOrderItemCostHistory.createMany({ data: historyRows });
+      await this.audit.log(organizationId, 'service_order.item_internal_cost', 'service_order', {
+        userId,
+        metadata: {
+          serviceOrderId,
+          itemId,
+          description: item.description,
+          changes: historyRows.length,
+        },
+      });
+    }
+
+    return this.findOne(organizationId, serviceOrderId);
+  }
+
   private async recalculateTotal(serviceOrderId: string) {
+    const so = await this.prisma.serviceOrder.findUnique({
+      where: { id: serviceOrderId },
+      include: {
+        quotes: {
+          where: { status: 'APPROVED', deletedAt: null },
+          include: { lines: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!so) return;
+
+    const approvedQuote = so.quotes[0];
+    if (approvedQuote?.lines.some((l) => l.approved === true)) {
+      const total = approvedQuote.lines
+        .filter((l) => l.approved === true)
+        .reduce(
+          (sum, l) =>
+            sum + Math.max(0, Number(l.unitPrice) * l.quantity - Number(l.discount ?? 0)),
+          0,
+        );
+      await this.prisma.serviceOrder.update({
+        where: { id: serviceOrderId },
+        data: { totalAmount: new Prisma.Decimal(total) },
+      });
+      return;
+    }
+
     const items = await this.prisma.serviceOrderItem.findMany({
       where: { serviceOrderId },
     });

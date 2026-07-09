@@ -35,9 +35,15 @@ import { useOrganizationBranding } from "../../hooks/useOrganizationBranding";
 import PrintPortal from "../../components/print/PrintPortal";
 import QuotePrintSheet, { buildQuotePrintData } from "../../components/quotes/QuotePrintSheet";
 import ServiceOrderPrintSheet from "../../components/service-orders/ServiceOrderPrintSheet";
-import { printDocument } from "../../lib/print";
+import {
+  resolveServiceOrderTotal,
+  serviceOrderItemLineTotal,
+} from "../../lib/serviceOrderTotals";
 import AttachmentGrid from "../../components/attachments/AttachmentGrid";
 import StagedMediaUpload from "../../components/attachments/StagedMediaUpload";
+import InternalCostDrawer from "../../components/service-orders/InternalCostDrawer";
+import QuickPartInlineRow from "../../components/quotes/QuickPartInlineRow";
+import { printDocument } from "../../lib/print";
 
 const STATUS_OPTIONS = [
   "RECEIVED",
@@ -216,6 +222,8 @@ type OsQuote = {
   amount: string | number;
   createdAt: string;
   paymentAgreement?: string | null;
+  freeTextEnabled?: boolean;
+  freeTextAmount?: string | number | null;
   lines?: QuoteLineRow[];
 };
 
@@ -285,6 +293,8 @@ export default function ServiceOrderDetailPage() {
   const [checklistDraft, setChecklistDraft] = useState<Record<string, ChecklistDraftItem>>({});
   const [quotePaymentAgreement, setQuotePaymentAgreement] = useState("");
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  const [internalCostItem, setInternalCostItem] = useState<ServiceOrderItemRow | null>(null);
+  const [showQuickPartRow, setShowQuickPartRow] = useState(false);
 
   const { data: os, isLoading, error } = useApiQuery(
     ["service-order", id ?? ""],
@@ -461,6 +471,33 @@ export default function ServiceOrderDetailPage() {
       applyServiceOrderUpdate(updatedOs);
       setItemDrawer(false);
       resetItemForm();
+    },
+  });
+
+  const saveQuickPart = useMutation({
+    mutationFn: (draft: {
+      description: string;
+      partBrand: string;
+      quantity: string;
+      unitCost: string;
+      unitPrice: string;
+      discount: string;
+      internalNotes: string;
+    }) =>
+      api.addServiceOrderItem(token!, id!, {
+        description: draft.description.trim(),
+        itemType: "PART",
+        isQuickPart: true,
+        quantity: Number(draft.quantity) || 1,
+        unitPrice: Number(draft.unitPrice) || 0,
+        unitCost: draft.unitCost !== "" ? Number(draft.unitCost) : undefined,
+        discount: Number(draft.discount) || 0,
+        partBrand: draft.partBrand.trim() || undefined,
+        internalNotes: draft.internalNotes.trim() || undefined,
+      }),
+    onSuccess: (updatedOs) => {
+      applyServiceOrderUpdate(updatedOs);
+      setShowQuickPartRow(false);
     },
   });
 
@@ -661,9 +698,15 @@ export default function ServiceOrderDetailPage() {
 
   function itemLineApproved(item: ServiceOrderItemRow, index: number) {
     const line = getLineForItem(item, index, activeQuote);
-    return line?.approved === true;
+    return line?.approved === true || !!item.commercialLockedAt;
   }
-  const quoteTotal = Number(activeQuote?.amount ?? os.totalAmount);
+  const orderTotal = resolveServiceOrderTotal(
+    os.items,
+    os.totalAmount,
+    activeQuote?.freeTextAmount,
+    activeQuote?.freeTextEnabled,
+  );
+  const quoteTotal = orderTotal;
   const canPrintQuote = os.items.length > 0;
   const quotePrintData = buildQuotePrintData(os, activeQuote);
 
@@ -743,7 +786,7 @@ export default function ServiceOrderDetailPage() {
           ) : null}
           <div className="text-right">
             <p className="text-xs text-[#64748B]">Total</p>
-            <p className="text-xl font-bold text-[#0F3D4C]">{formatMoney(os.totalAmount)}</p>
+            <p className="text-xl font-bold text-[#0F3D4C]">{formatMoney(orderTotal)}</p>
           </div>
         </div>
       </div>
@@ -1165,14 +1208,36 @@ export default function ServiceOrderDetailPage() {
             <div className="flex justify-between items-center px-5 py-3 border-b border-[#F1F5F9]">
               <p className="text-sm font-medium text-[#1E293B]">Serviços e peças do orçamento</p>
               {canEditQuoteItems && (
-                <button
-                  type="button"
-                  onClick={openAddItem}
-                  className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm"
-                >
-                  <Plus size={16} />
-                  Adicionar
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetItemForm();
+                      setItemForm((f) => ({ ...f, itemType: "PART" }));
+                      setItemDrawer(true);
+                    }}
+                    className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-[#0F3D4C] text-[#0F3D4C] text-sm"
+                  >
+                    <Plus size={16} />
+                    Buscar produto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openAddItem}
+                    className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-[#E2E8F0] text-[#475569] text-sm"
+                  >
+                    <Plus size={16} />
+                    Serviço / outro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickPartRow(true)}
+                    className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm"
+                  >
+                    <Plus size={16} />
+                    Peça rápida
+                  </button>
+                </div>
               )}
             </div>
             <table className="w-full text-sm">
@@ -1219,7 +1284,7 @@ export default function ServiceOrderDetailPage() {
                     <td className="px-4 py-3 text-right">{item.quantity}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
                     <td className="px-4 py-3 text-right font-medium">
-                      {formatMoney(Number(item.unitPrice) * item.quantity)}
+                      {formatMoney(serviceOrderItemLineTotal(item))}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge variant={lineApprovalVariant(approvalStatus, quoteStatus)} />
@@ -1268,6 +1333,15 @@ export default function ServiceOrderDetailPage() {
                   </tr>
                   );
                 })}
+                {showQuickPartRow && canEditQuoteItems ? (
+                  <QuickPartInlineRow
+                    saving={saveQuickPart.isPending}
+                    onCancel={() => setShowQuickPartRow(false)}
+                    onSave={async (draft) => {
+                      await saveQuickPart.mutateAsync(draft);
+                    }}
+                  />
+                ) : null}
               </tbody>
               {os.items.length > 0 && (
                 <tfoot>
@@ -1371,7 +1445,7 @@ export default function ServiceOrderDetailPage() {
                     <td className="px-4 py-3 text-right">{item.quantity}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
                     <td className="px-4 py-3 text-right font-medium">
-                      {formatMoney(Number(item.unitPrice) * item.quantity)}
+                      {formatMoney(serviceOrderItemLineTotal(item))}
                     </td>
                     <td className="px-4 py-3 text-xs text-[#64748B]">
                       {item.itemType === "SERVICE"
@@ -1418,6 +1492,87 @@ export default function ServiceOrderDetailPage() {
           </table>
         </div>
       )}
+
+      {tab === "itens" && os.items.some((item, idx) => item.itemType === "PART" && itemLineApproved(item, idx)) ? (
+        <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden mt-4">
+          <div className="px-5 py-3 border-b border-[#F1F5F9]">
+            <p className="text-sm font-medium text-[#1E293B]">Custos internos das peças</p>
+            <p className="text-xs text-[#94A3B8] mt-1">
+              Valores comerciais aprovados permanecem bloqueados. Ajuste apenas custo operacional.
+            </p>
+          </div>
+          <div className="divide-y divide-[#F1F5F9]">
+            {os.items.map((item, index) => {
+              if (item.itemType !== "PART" || !itemLineApproved(item, index)) return null;
+              const revenue =
+                Number(item.unitPrice) * item.quantity - Number(item.discount ?? 0);
+              const plannedCost = Number(item.unitCost ?? 0);
+              const actualCost = Number(item.actualUnitCost ?? plannedCost);
+              const plannedProfit = revenue - plannedCost * item.quantity;
+              const actualProfit = revenue - actualCost * item.quantity;
+              return (
+                <div key={item.id} className="px-5 py-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] p-4 space-y-2">
+                    <p className="text-xs font-semibold text-[#64748B] uppercase">Comercial</p>
+                    <p className="font-medium text-[#1E293B]">{item.description}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-[#94A3B8]">Venda</span>
+                        <p>{formatMoney(item.unitPrice)}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#94A3B8]">Total aprovado</span>
+                        <p className="font-medium">{formatMoney(revenue)}</p>
+                      </div>
+                    </div>
+                    <StatusBadge variant="confirmado" />
+                    <span className="ml-2 text-xs text-[#64748B]">Aprovado</span>
+                  </div>
+                  <div className="rounded-lg border border-[#E2E8F0] p-4 space-y-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <p className="text-xs font-semibold text-[#64748B] uppercase">Operacional</p>
+                      <button
+                        type="button"
+                        onClick={() => setInternalCostItem(item)}
+                        className="text-xs font-medium text-[#0E7490] hover:underline"
+                      >
+                        Ajustar custo interno
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-[#94A3B8]">Custo previsto</span>
+                        <p>{formatMoney(plannedCost)}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#94A3B8]">Custo real</span>
+                        <p className="font-medium">{formatMoney(actualCost)}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#94A3B8]">Lucro previsto</span>
+                        <p>{formatMoney(plannedProfit)}</p>
+                      </div>
+                      <div>
+                        <span className="text-[#94A3B8]">Lucro real</span>
+                        <p className="font-medium">{formatMoney(actualProfit)}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-[#94A3B8]">Fornecedor / Marca</span>
+                        <p>
+                          {item.actualSupplier?.tradeName ||
+                            item.actualSupplier?.legalName ||
+                            "—"}{" "}
+                          · {item.actualBrand ?? item.partBrand ?? "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {tab === "checklist" && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
@@ -1710,6 +1865,16 @@ export default function ServiceOrderDetailPage() {
         loading={deleteOs.isPending}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => deleteOs.mutate()}
+      />
+
+      <InternalCostDrawer
+        open={!!internalCostItem}
+        serviceOrderId={id!}
+        item={internalCostItem}
+        onClose={() => setInternalCostItem(null)}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+        }}
       />
     </main>
     <ShareLinkDialog data={shareDialog} onClose={() => setShareDialog(null)} />

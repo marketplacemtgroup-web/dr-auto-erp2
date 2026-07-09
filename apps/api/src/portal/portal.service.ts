@@ -4,6 +4,8 @@ import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AttachmentEntityType, Prisma } from '@prisma/client';
@@ -15,6 +17,7 @@ import { ApproveLinesDto } from '../quotes/dto/approve-lines.dto';
 import { EventsService } from '../events/events.service';
 import { PushService } from '../push/push.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { ServiceOrdersService } from '../service-orders/service-orders.service';
 import {
   CAR_CHECKLIST_TEMPLATE,
   checklistMatchesTemplate,
@@ -67,6 +70,8 @@ export class PortalService {
     private readonly push: PushService,
     private readonly attachments: AttachmentsService,
     private readonly appointments: AppointmentsService,
+    @Inject(forwardRef(() => ServiceOrdersService))
+    private readonly serviceOrders: ServiceOrdersService,
   ) {}
 
   private async maybeSyncQuotesForVehicle(organizationId: string, vehicleId: string) {
@@ -1265,6 +1270,12 @@ export class PortalService {
     if (soFull) {
       await this.notifyQuoteApproved(ctx, updated, soFull, resolvedAmount);
     }
+
+    await this.serviceOrders.postQuoteApprovalHooks(
+      ctx.organizationId,
+      quote.serviceOrderId,
+      quoteId,
+    );
 
     return this.getQuoteForPortal(ctx, quoteId);
   }

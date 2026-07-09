@@ -14,6 +14,7 @@ type ItemLike = {
   quantity: number;
   discount: Prisma.Decimal | number;
   unitCost?: Prisma.Decimal | number | null;
+  actualUnitCost?: Prisma.Decimal | number | null;
 };
 
 type ProductCostLike = {
@@ -30,13 +31,34 @@ export function itemPartUnitCost(item: ItemLike, product?: ProductCostLike) {
   return Number(product?.averageCost) || Number(product?.costPrice ?? 0);
 }
 
+export function itemActualUnitCost(item: ItemLike, product?: ProductCostLike) {
+  if (item.actualUnitCost != null) return Number(item.actualUnitCost);
+  return itemPartUnitCost(item, product);
+}
+
 export function calcItemProfit(item: ItemLike, product?: ProductCostLike) {
+  return calcItemPlannedProfit(item, product);
+}
+
+export function calcItemPlannedProfit(item: ItemLike, product?: ProductCostLike) {
   const revenue = itemRevenue(item);
   if (item.itemType === 'PART') {
     return revenue - itemPartUnitCost(item, product) * item.quantity;
   }
   if (item.itemType === 'THIRD_PARTY' && item.unitCost != null) {
     return revenue - Number(item.unitCost) * item.quantity;
+  }
+  return revenue;
+}
+
+export function calcItemActualProfit(item: ItemLike, product?: ProductCostLike) {
+  const revenue = itemRevenue(item);
+  if (item.itemType === 'PART') {
+    return revenue - itemActualUnitCost(item, product) * item.quantity;
+  }
+  if (item.itemType === 'THIRD_PARTY') {
+    const cost = item.actualUnitCost ?? item.unitCost;
+    if (cost != null) return revenue - Number(cost) * item.quantity;
   }
   return revenue;
 }

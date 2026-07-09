@@ -48,6 +48,16 @@ export class ProductsController {
     );
   }
 
+  @Get('pending-review')
+  @RequirePermissions('inventory.manage', 'dashboard.view')
+  listPendingReview(
+    @CurrentUser() user: { organizationId: string },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.productsService.listPendingReview(user.organizationId, { page, limit });
+  }
+
   @Get('movements')
   @RequirePermissions('inventory.manage', 'dashboard.view')
   listMovements(

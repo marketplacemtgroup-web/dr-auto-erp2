@@ -7,7 +7,7 @@ import KpiStrip from "../../components/modules/KpiStrip";
 import DataTable from "../../components/modules/DataTable";
 import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import ListPagination from "../../components/modules/ListPagination";
-import { api, LIST_PAGE_SIZE, type ProductRow } from "../../lib/api";
+import { api, LIST_PAGE_SIZE, type ProductPendingReviewRow, type ProductRow } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiQuery, useAuthToken } from "../../hooks/useApiQuery";
 
@@ -39,6 +39,7 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [lowOnly, setLowOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<"all" | "pending">("all");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [stockDrawer, setStockDrawer] = useState<ProductRow | null>(null);
   const [stockDelta, setStockDelta] = useState("");
@@ -47,17 +48,21 @@ export default function InventoryPage() {
   const [form, setForm] = useState(emptyForm);
 
   const { data, isLoading, error } = useApiQuery(
-    ["products", search, String(lowOnly), String(page)],
-    (t) => api.products(t, search || undefined, lowOnly, page, LIST_PAGE_SIZE),
+    ["products", search, String(lowOnly), String(page), viewMode],
+    (t) =>
+      viewMode === "pending"
+        ? api.productsPendingReview(t, page, LIST_PAGE_SIZE)
+        : api.products(t, search || undefined, lowOnly, page, LIST_PAGE_SIZE),
   );
 
   const rows = data?.data ?? [];
+  const pendingRows = viewMode === "pending" ? (rows as ProductPendingReviewRow[]) : [];
   const totalListed = data?.pagination.total ?? 0;
   const totalPages = data?.pagination.totalPages ?? 0;
 
   useEffect(() => {
     setPage(1);
-  }, [search, lowOnly]);
+  }, [search, lowOnly, viewMode]);
 
   const { data: movements } = useApiQuery(["stock-movements"], (t) => api.stockMovements(t));
 
@@ -97,6 +102,9 @@ export default function InventoryPage() {
             minStock: Number(form.minStock),
             costPrice: form.costPrice ? Number(form.costPrice) : undefined,
             salePrice: form.salePrice ? Number(form.salePrice) : undefined,
+            ...(editing.needsReview
+              ? { status: "ACTIVE" as const, needsReview: false }
+              : {}),
           })
         : api.createProduct(token!, {
             name: form.name,
@@ -153,17 +161,31 @@ export default function InventoryPage() {
       >
         <ModuleFilters>
           <FilterSelect
-            label="Filtro"
-            value={lowOnly ? "low" : "all"}
+            label="Visualizacao"
+            value={viewMode}
             onChange={(v) => {
-              setLowOnly(v === "low");
+              setViewMode(v as "all" | "pending");
               setPage(1);
             }}
             options={[
               { value: "all", label: "Todos os itens" },
-              { value: "low", label: "Somente baixo estoque" },
+              { value: "pending", label: "Pendentes de revisao" },
             ]}
           />
+          {viewMode === "all" ? (
+            <FilterSelect
+              label="Filtro"
+              value={lowOnly ? "low" : "all"}
+              onChange={(v) => {
+                setLowOnly(v === "low");
+                setPage(1);
+              }}
+              options={[
+                { value: "all", label: "Todos os itens" },
+                { value: "low", label: "Somente baixo estoque" },
+              ]}
+            />
+          ) : null}
         </ModuleFilters>
         <KpiStrip
           items={[
@@ -172,6 +194,40 @@ export default function InventoryPage() {
             { label: "Valor em custo", value: formatMoney(stockValue) },
           ]}
         />
+        {viewMode === "pending" ? (
+          <DataTable
+            columns={[
+              { key: "sku", header: "Codigo", render: (p) => p.sku ?? "—" },
+              { key: "name", header: "Produto", render: (p) => p.name },
+              { key: "brand", header: "Marca", render: (p) => p.brand ?? "—" },
+              {
+                key: "os",
+                header: "OS origem",
+                render: (p) =>
+                  p.serviceOrderNumber != null ? `#${p.serviceOrderNumber}` : "—",
+              },
+              {
+                key: "customer",
+                header: "Cliente",
+                render: (p) => p.customerName ?? "—",
+              },
+              {
+                key: "status",
+                header: "Status",
+                render: () => (
+                  <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                    Provisorio
+                  </span>
+                ),
+              },
+            ]}
+            rows={pendingRows}
+            loading={isLoading}
+            error={error}
+            emptyMessage="Nenhum produto pendente de revisao."
+            onEdit={openEdit}
+          />
+        ) : (
         <DataTable
           columns={[
             { key: "sku", header: "SKU", render: (p) => p.sku ?? "—" },
@@ -225,8 +281,11 @@ export default function InventoryPage() {
             setStockDelta("");
           }}
         />
+        )}
         <p className="text-xs text-[#94A3B8] mt-2">
-          Clique na linha para entrada ou saida rapida de estoque.
+          {viewMode === "pending"
+            ? "Conclua o cadastro para ativar o produto no estoque."
+            : "Clique na linha para entrada ou saida rapida de estoque."}
         </p>
         <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} />
 

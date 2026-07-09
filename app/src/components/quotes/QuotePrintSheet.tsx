@@ -12,6 +12,7 @@ import PrintCustomerVehicleCards from "../print/PrintCustomerVehicleCards";
 import PrintLegalTerms from "../print/PrintLegalTerms";
 import PrintOrgHeader from "../print/PrintOrgHeader";
 import { resolvePrintBranding } from "../../lib/printBranding";
+import { resolveServiceOrderTotal, serviceOrderItemLineTotal } from "../../lib/serviceOrderTotals";
 
 export type QuotePrintData = {
   number?: number | null;
@@ -72,7 +73,12 @@ export function buildQuotePrintData(
   return {
     number: quote?.number ?? null,
     status: quote?.status ?? "PENDING",
-    amount: quote?.amount ?? os.totalAmount,
+    amount: resolveServiceOrderTotal(
+      os.items,
+      os.totalAmount,
+      quote?.freeTextAmount,
+      quote?.freeTextEnabled,
+    ),
     createdAt: quote?.createdAt ?? os.createdAt,
     validUntil: quote?.validUntil ?? null,
     terms: quote?.terms ?? null,
@@ -138,7 +144,7 @@ function buildPrintLines(quote: QuotePrintData): PrintLine[] {
     description: item.description,
     quantity: item.quantity,
     unitPrice: Number(item.unitPrice),
-    total: Number(item.unitPrice) * item.quantity,
+    total: serviceOrderItemLineTotal(item),
   }));
 }
 

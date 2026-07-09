@@ -3,6 +3,7 @@ import { AppointmentsModule } from '../appointments/appointments.module';
 import { AuthModule } from '../auth/auth.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { QuotesModule } from '../quotes/quotes.module';
+import { ServiceOrdersModule } from '../service-orders/service-orders.module';
 import { EventsModule } from '../events/events.module';
 import { PushModule } from '../push/push.module';
 import { PortalController } from './portal.controller';
@@ -15,6 +16,7 @@ import { PortalJwtStrategy } from './portal.strategy';
     AppointmentsModule,
     AttachmentsModule,
     forwardRef(() => QuotesModule),
+    forwardRef(() => ServiceOrdersModule),
     EventsModule,
     PushModule,
   ],

@@ -39,8 +39,150 @@ export class ProductsService {
         notes: dto.notes ?? null,
         costPrice: dto.costPrice ?? 0,
         salePrice: dto.salePrice ?? 0,
+        status: dto.status ?? 'ACTIVE',
+        needsReview: dto.needsReview ?? false,
       },
     });
+  }
+
+  async generateQuickPartCode(organizationId: string): Promise<string> {
+    const [items, products] = await Promise.all([
+      this.prisma.serviceOrderItem.findMany({
+        where: { organizationId, quickPartCode: { startsWith: 'PRV-' } },
+        select: { quickPartCode: true },
+      }),
+      this.prisma.product.findMany({
+        where: { organizationId, sku: { startsWith: 'PRV-' }, ...notDeleted },
+        select: { sku: true },
+      }),
+    ]);
+    let max = 0;
+    for (const raw of [
+      ...items.map((i) => i.quickPartCode),
+      ...products.map((p) => p.sku),
+    ]) {
+      if (!raw) continue;
+      const n = parseInt(raw.replace(/^PRV-/, ''), 10);
+      if (!Number.isNaN(n) && n > max) max = n;
+    }
+    return `PRV-${String(max + 1).padStart(6, '0')}`;
+  }
+
+  async provisionQuickPartsOnApproval(
+    organizationId: string,
+    serviceOrderId: string,
+    quoteId: string,
+  ) {
+    const items = await this.prisma.serviceOrderItem.findMany({
+      where: { organizationId, serviceOrderId, isQuickPart: true, productId: null },
+    });
+
+    for (const item of items) {
+      const code =
+        item.quickPartCode ?? (await this.generateQuickPartCode(organizationId));
+      const existing = await this.prisma.product.findFirst({
+        where: {
+          organizationId,
+          ...notDeleted,
+          OR: [
+            { sku: code },
+            {
+              name: { equals: item.description, mode: 'insensitive' },
+              status: 'PROVISIONAL',
+            },
+          ],
+        },
+      });
+
+      if (existing) {
+        await this.prisma.serviceOrderItem.update({
+          where: { id: item.id },
+          data: { productId: existing.id, quickPartCode: code },
+        });
+        continue;
+      }
+
+      const product = await this.prisma.product.create({
+        data: {
+          organizationId,
+          name: item.description,
+          sku: code,
+          brand: item.partBrand,
+          category: 'Produto Provisório',
+          status: 'PROVISIONAL',
+          needsReview: true,
+          stock: 0,
+          minStock: 0,
+          costPrice: item.unitCost ?? 0,
+          averageCost: item.unitCost ?? 0,
+          salePrice: item.unitPrice,
+          sourceServiceOrderItemId: item.id,
+          sourceQuoteId: quoteId,
+        },
+      });
+
+      await this.prisma.serviceOrderItem.update({
+        where: { id: item.id },
+        data: { productId: product.id, quickPartCode: code },
+      });
+    }
+  }
+
+  shouldSkipStockForProduct(product: {
+    status: string;
+    stock: number;
+    needsReview: boolean;
+  }) {
+    return product.status === 'PROVISIONAL' || (product.stock === 0 && product.needsReview);
+  }
+
+  async listPendingReview(organizationId: string, query: ListQueryInput = {}) {
+    const { page, limit, skip } = parseListQuery(query);
+    const where: Prisma.ProductWhereInput = {
+      organizationId,
+      ...notDeleted,
+      needsReview: true,
+      status: 'PROVISIONAL',
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const enriched = await Promise.all(
+      rows.map(async (product) => {
+        let origin: {
+          serviceOrderNumber: number | null;
+          customerName: string | null;
+        } = { serviceOrderNumber: null, customerName: null };
+
+        if (product.sourceServiceOrderItemId) {
+          const item = await this.prisma.serviceOrderItem.findFirst({
+            where: { id: product.sourceServiceOrderItemId, organizationId },
+            include: {
+              serviceOrder: {
+                include: { vehicle: { include: { customer: true } } },
+              },
+            },
+          });
+          if (item?.serviceOrder) {
+            origin = {
+              serviceOrderNumber: item.serviceOrder.number,
+              customerName: item.serviceOrder.vehicle?.customer?.name ?? null,
+            };
+          }
+        }
+
+        return { ...product, ...origin };
+      }),
+    );
+
+    return paginatedResponse(enriched, total, page, limit);
   }
 
   private productSearchSql(search: string) {
@@ -152,6 +294,8 @@ export class ProductsService {
         ...(dto.minStock !== undefined ? { minStock: dto.minStock } : {}),
         ...(dto.costPrice !== undefined ? { costPrice: dto.costPrice } : {}),
         ...(dto.salePrice !== undefined ? { salePrice: dto.salePrice } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.needsReview !== undefined ? { needsReview: dto.needsReview } : {}),
       },
     });
   }

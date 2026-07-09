@@ -6,6 +6,7 @@ import ConfirmDialog from "../../components/modules/ConfirmDialog";
 import PrintPortal from "../../components/print/PrintPortal";
 import QuotePrintSheet, { buildQuotePrintData } from "../../components/quotes/QuotePrintSheet";
 import StatusBadge from "../../components/StatusBadge";
+import QuickPartInlineRow from "../../components/quotes/QuickPartInlineRow";
 import ProductSearchSelect from "../../components/inventory/ProductSearchSelect";
 import OutsourcedServiceSearchSelect from "../../components/inventory/OutsourcedServiceSearchSelect";
 import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
@@ -51,6 +52,7 @@ export default function QuoteDetailPage() {
   const [freeTextContent, setFreeTextContent] = useState("");
   const [freeTextAmount, setFreeTextAmount] = useState("");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [showQuickPartRow, setShowQuickPartRow] = useState(false);
 
   const { data: quote, isLoading, error } = useApiQuery(
     ["quote", id ?? ""],
@@ -120,6 +122,12 @@ export default function QuoteDetailPage() {
     setItemDrawer(true);
   };
 
+  const openAddProduct = () => {
+    resetItemForm();
+    setItemForm((f) => ({ ...f, itemType: "PART" }));
+    setItemDrawer(true);
+  };
+
   const openEditItem = (item: ServiceOrderItemRow) => {
     setEditingItem(item);
     setItemForm({
@@ -177,6 +185,33 @@ export default function QuoteDetailPage() {
   const removeItem = useMutation({
     mutationFn: (itemId: string) => api.removeServiceOrderItem(token!, serviceOrderId, itemId),
     onSuccess: invalidate,
+  });
+
+  const saveQuickPart = useMutation({
+    mutationFn: (draft: {
+      description: string;
+      partBrand: string;
+      quantity: string;
+      unitCost: string;
+      unitPrice: string;
+      discount: string;
+      internalNotes: string;
+    }) =>
+      api.addServiceOrderItem(token!, serviceOrderId, {
+        description: draft.description.trim(),
+        itemType: "PART",
+        isQuickPart: true,
+        quantity: Number(draft.quantity) || 1,
+        unitPrice: Number(draft.unitPrice) || 0,
+        unitCost: draft.unitCost !== "" ? Number(draft.unitCost) : undefined,
+        discount: Number(draft.discount) || 0,
+        partBrand: draft.partBrand.trim() || undefined,
+        internalNotes: draft.internalNotes.trim() || undefined,
+      }),
+    onSuccess: () => {
+      invalidate();
+      setShowQuickPartRow(false);
+    },
   });
 
   const approveQuote = useMutation({
@@ -466,42 +501,65 @@ export default function QuoteDetailPage() {
         <div className="flex justify-between items-center px-5 py-3 border-b border-[#F1F5F9]">
           <p className="text-sm font-medium text-[#1E293B]">Serviços e peças</p>
           {canEdit && (
-            <button
-              type="button"
-              onClick={openAddItem}
-              className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm"
-            >
-              <Plus size={16} />
-              Adicionar
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={openAddProduct}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-[#0F3D4C] text-[#0F3D4C] text-sm"
+              >
+                <Plus size={16} />
+                Buscar produto
+              </button>
+              <button
+                type="button"
+                onClick={openAddItem}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-[#E2E8F0] text-[#475569] text-sm"
+              >
+                <Plus size={16} />
+                Serviço / outro
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowQuickPartRow(true)}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-[#0F3D4C] text-white text-sm"
+              >
+                <Plus size={16} />
+                Peça rápida
+              </button>
+            </div>
           )}
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="bg-[#F8FAFC] text-xs text-[#64748B] uppercase">
-              <th className="px-4 py-2 text-left">Descrição</th>
-              <th className="px-4 py-2 text-left">Tipo</th>
-              <th className="px-4 py-2 text-right">Qtd</th>
-              <th className="px-4 py-2 text-right">Unit.</th>
-              <th className="px-4 py-2 text-right">Total</th>
-              {canEdit && <th className="w-32" />}
+              <th className="px-2 py-2 text-left">Código</th>
+              <th className="px-2 py-2 text-left">Descrição</th>
+              <th className="px-2 py-2 text-left">Marca</th>
+              <th className="px-2 py-2 text-right">Qtd</th>
+              <th className="px-2 py-2 text-right">Custo prev.</th>
+              <th className="px-2 py-2 text-right">Venda</th>
+              <th className="px-2 py-2 text-right">Desc.</th>
+              <th className="px-2 py-2 text-right">Total</th>
+              <th className="px-2 py-2 text-left">Obs.</th>
+              {canEdit && <th className="w-28" />}
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && !freeTextEnabled && (
+            {items.length === 0 && !freeTextEnabled && !showQuickPartRow && (
               <tr>
                 <td
-                  colSpan={canEdit ? 6 : 5}
+                  colSpan={canEdit ? 10 : 9}
                   className="px-4 py-8 text-center text-[#94A3B8]"
                 >
                   Adicione serviços e peças ou use o orçamento em texto livre acima.
                 </td>
               </tr>
             )}
-            {items.length === 0 && freeTextEnabled && (
+            {items.length === 0 && freeTextEnabled && !showQuickPartRow && (
               <tr>
                 <td
-                  colSpan={canEdit ? 6 : 5}
+                  colSpan={canEdit ? 10 : 9}
                   className="px-4 py-8 text-center text-[#64748B] whitespace-pre-wrap"
                 >
                   {freeTextContent.trim() || "Preencha a descrição do orçamento em texto livre."}
@@ -510,22 +568,35 @@ export default function QuoteDetailPage() {
             )}
             {items.map((item) => (
               <tr key={item.id} className="border-t border-[#F1F5F9]">
-                <td className="px-4 py-3">
+                <td className="px-2 py-3 text-xs text-[#64748B]">
+                  {item.isQuickPart ? item.quickPartCode ?? "PRV" : item.product?.sku ?? "—"}
+                </td>
+                <td className="px-2 py-3">
                   <p>{item.description}</p>
-                  {itemCatalogLabel(item) ? (
-                    <p className="text-xs text-[#94A3B8] mt-0.5">{itemCatalogLabel(item)}</p>
-                  ) : null}
+                  <p className="text-xs text-[#94A3B8] mt-0.5">
+                    {item.isQuickPart ? "Peça rápida" : itemTypeLabel(item.itemType)}
+                    {itemCatalogLabel(item) ? ` · ${itemCatalogLabel(item)}` : ""}
+                  </p>
                 </td>
-                <td className="px-4 py-3 text-[#64748B]">
-                  {itemTypeLabel(item.itemType)}
+                <td className="px-2 py-3 text-[#64748B]">{item.partBrand ?? "—"}</td>
+                <td className="px-2 py-3 text-right">{item.quantity}</td>
+                <td className="px-2 py-3 text-right text-[#64748B]">
+                  {item.unitCost != null ? formatMoney(item.unitCost) : "—"}
                 </td>
-                <td className="px-4 py-3 text-right">{item.quantity}</td>
-                <td className="px-4 py-3 text-right">{formatMoney(item.unitPrice)}</td>
-                <td className="px-4 py-3 text-right font-medium">
-                  {formatMoney(Number(item.unitPrice) * item.quantity)}
+                <td className="px-2 py-3 text-right">{formatMoney(item.unitPrice)}</td>
+                <td className="px-2 py-3 text-right">
+                  {item.discount ? formatMoney(item.discount) : "—"}
+                </td>
+                <td className="px-2 py-3 text-right font-medium">
+                  {formatMoney(
+                    Number(item.unitPrice) * item.quantity - Number(item.discount ?? 0),
+                  )}
+                </td>
+                <td className="px-2 py-3 text-xs text-[#94A3B8] max-w-[120px] truncate">
+                  {item.internalNotes ?? "—"}
                 </td>
                 {canEdit && (
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-3">
                     <div className="flex justify-end gap-1">
                       <button
                         type="button"
@@ -534,7 +605,6 @@ export default function QuoteDetailPage() {
                         title="Editar"
                       >
                         <Pencil size={14} />
-                        Editar
                       </button>
                       <button
                         type="button"
@@ -549,21 +619,31 @@ export default function QuoteDetailPage() {
                 )}
               </tr>
             ))}
+            {showQuickPartRow && canEdit ? (
+              <QuickPartInlineRow
+                saving={saveQuickPart.isPending}
+                onCancel={() => setShowQuickPartRow(false)}
+                onSave={async (draft) => {
+                  await saveQuickPart.mutateAsync(draft);
+                }}
+              />
+            ) : null}
           </tbody>
           {items.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-[#0F3D4C] bg-[#F8FAFC]">
-                <td colSpan={canEdit ? 4 : 4} className="px-4 py-3 text-right font-semibold">
+                <td colSpan={canEdit ? 7 : 7} className="px-4 py-3 text-right font-semibold">
                   Total do orçamento
                 </td>
                 <td className="px-4 py-3 text-right font-bold text-[#0F3D4C]">
                   {formatMoney(quote.amount)}
                 </td>
-                {canEdit && <td />}
+                <td colSpan={canEdit ? 2 : 1} />
               </tr>
             </tfoot>
           )}
         </table>
+        </div>
       </div>
 
       <FormDrawer

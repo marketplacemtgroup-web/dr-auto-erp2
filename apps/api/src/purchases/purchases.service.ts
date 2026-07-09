@@ -129,10 +129,28 @@ export class PurchasesService {
       productId: string | null;
       location: string | null;
       finalUnitCost: Prisma.Decimal;
+      serviceOrderItemId?: string | null;
     },
     supplierId: string | null,
   ): Promise<string | null> {
     if (item.productId) return item.productId;
+
+    if (item.serviceOrderItemId) {
+      const soItem = await tx.serviceOrderItem.findFirst({
+        where: { id: item.serviceOrderItemId, organizationId },
+      });
+      if (soItem?.productId) return soItem.productId;
+      if (soItem?.quickPartCode) {
+        const byCode = await tx.product.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            sku: soItem.quickPartCode,
+          },
+        });
+        if (byCode) return byCode.id;
+      }
+    }
 
     const name = item.description.trim();
     if (!name) return null;
@@ -156,9 +174,66 @@ export class PurchasesService {
         costPrice: new Prisma.Decimal(cost),
         averageCost: new Prisma.Decimal(cost),
         lastSupplierId: supplierId,
+        ...(item.serviceOrderItemId
+          ? {
+              status: 'PROVISIONAL',
+              needsReview: true,
+              category: 'Produto Provisório',
+              sourceServiceOrderItemId: item.serviceOrderItemId,
+            }
+          : {}),
       },
     });
     return created.id;
+  }
+
+  private async applyInternalCostFromPurchase(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    item: {
+      id: string;
+      serviceOrderItemId: string | null;
+      finalUnitCost: Prisma.Decimal;
+      description: string;
+    },
+    po: { supplierId: string | null; receivedDate: Date | null },
+    userId?: string,
+  ) {
+    if (!item.serviceOrderItemId) return;
+    const soItem = await tx.serviceOrderItem.findFirst({
+      where: { id: item.serviceOrderItemId, organizationId },
+    });
+    if (!soItem) return;
+
+    const unitCost = Number(item.finalUnitCost);
+    const oldCost =
+      soItem.actualUnitCost != null
+        ? String(soItem.actualUnitCost)
+        : soItem.unitCost != null
+          ? String(soItem.unitCost)
+          : null;
+
+    await tx.serviceOrderItem.update({
+      where: { id: soItem.id },
+      data: {
+        actualUnitCost: new Prisma.Decimal(unitCost),
+        actualSupplierId: po.supplierId,
+        purchaseOrderItemId: item.id,
+        purchaseDate: po.receivedDate ?? new Date(),
+      },
+    });
+
+    await tx.serviceOrderItemCostHistory.create({
+      data: {
+        organizationId,
+        serviceOrderItemId: soItem.id,
+        userId: userId ?? null,
+        field: 'ACTUAL_UNIT_COST',
+        oldValue: oldCost,
+        newValue: String(unitCost),
+        note: `Atualizado automaticamente na recepção da compra — ${item.description}`,
+      },
+    });
   }
 
   async list(
@@ -498,6 +573,19 @@ export class PurchasesService {
           where: { id: item.id },
           data: { quantityReceived: { increment: qty } },
         });
+
+        if (item.serviceOrderItemId) {
+          await this.applyInternalCostFromPurchase(
+            tx,
+            organizationId,
+            item,
+            {
+              supplierId: po.supplierId,
+              receivedDate: po.receivedDate ?? new Date(),
+            },
+            userId,
+          );
+        }
       }
     });
 
