@@ -241,6 +241,9 @@ export class QuotesSyncService {
       return pendingQuote.id;
     }
 
+    const fromStatus = so.status;
+    const toStatus: ServiceOrderStatus = 'AWAITING_APPROVAL';
+
     await this.prisma.$transaction([
       this.prisma.quote.update({
         where: { id: quoteId },
@@ -250,14 +253,18 @@ export class QuotesSyncService {
         where: { quoteId, approved: null },
         data: { approved: true },
       }),
+      this.prisma.serviceOrder.update({
+        where: { id: so.id },
+        data: { status: toStatus },
+      }),
       this.prisma.serviceOrderStatusHistory.create({
         data: {
           organizationId,
           serviceOrderId: so.id,
-          fromStatus: so.status,
-          toStatus: so.status,
+          fromStatus,
+          toStatus,
           userId: userId ?? null,
-          notes: 'Complemento de orçamento solicitado',
+          notes: 'Complemento de orçamento solicitado — OS voltou para aguardando aprovação',
         },
       }),
     ]);

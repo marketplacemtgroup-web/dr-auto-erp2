@@ -11,6 +11,12 @@ export class UpdateInternalCostDto {
   @MaxLength(200)
   actualBrand?: string | null;
 
+  /** Peça efetivamente comprada (operacional). Não altera a descrição comercial aprovada. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  actualDescription?: string | null;
+
   @IsOptional()
   @IsString()
   actualSupplierId?: string | null;

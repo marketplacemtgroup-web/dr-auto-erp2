@@ -566,7 +566,9 @@ export default function ServiceOrderDetailPage() {
     onSuccess: () => {
       openAddItem();
       void queryClient.refetchQueries({ queryKey: ["service-order", id] });
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      void queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      void queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
     },
     onError: (err) => {
       setSupplementUnlocked(false);
@@ -1566,7 +1568,9 @@ export default function ServiceOrderDetailPage() {
           <div className="px-5 py-3 border-b border-[#F1F5F9]">
             <p className="text-sm font-medium text-[#1E293B]">Custos internos das peças</p>
             <p className="text-xs text-[#94A3B8] mt-1">
-              Valores comerciais aprovados permanecem bloqueados. Ajuste apenas custo operacional.
+              Valores comerciais aprovados permanecem bloqueados. Em peça rápida, use
+              &quot;Atualizar peça comprada&quot; para trocar marca/modelo e custo — o estoque
+              provisório acompanha.
             </p>
           </div>
           <div className="divide-y divide-[#F1F5F9]">
@@ -1604,9 +1608,20 @@ export default function ServiceOrderDetailPage() {
                         onClick={() => setInternalCostItem(item)}
                         className="text-xs font-medium text-[#0E7490] hover:underline"
                       >
-                        Ajustar custo interno
+                        {item.isQuickPart || item.product?.status === "PROVISIONAL"
+                          ? "Atualizar peça comprada"
+                          : "Ajustar custo interno"}
                       </button>
                     </div>
+                    {item.actualDescription ||
+                    (item.isQuickPart && item.product?.name && item.product.name !== item.description) ? (
+                      <div className="text-sm">
+                        <span className="text-[#94A3B8]">Peça comprada</span>
+                        <p className="font-medium text-[#1E293B]">
+                          {item.actualDescription ?? item.product?.name}
+                        </p>
+                      </div>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <span className="text-[#94A3B8]">Custo previsto</span>
@@ -2000,7 +2015,9 @@ export default function ServiceOrderDetailPage() {
         item={internalCostItem}
         onClose={() => setInternalCostItem(null)}
         onSaved={() => {
-          queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+          void queryClient.invalidateQueries({ queryKey: ["service-order", id] });
+          void queryClient.invalidateQueries({ queryKey: ["products"] });
+          void queryClient.invalidateQueries({ queryKey: ["inventory"] });
         }}
       />
     </main>

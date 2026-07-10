@@ -1462,6 +1462,7 @@ export class ServiceOrdersService {
   ) {
     const item = await this.prisma.serviceOrderItem.findFirst({
       where: { id: itemId, serviceOrderId, organizationId },
+      include: { product: true },
     });
     if (!item) throw new NotFoundException('Item não encontrado');
     if (item.itemType !== 'PART' && item.itemType !== 'THIRD_PARTY') {
@@ -1506,6 +1507,13 @@ export class ServiceOrdersService {
 
     if (dto.actualBrand !== undefined) {
       track('ACTUAL_BRAND', item.actualBrand, dto.actualBrand?.trim() || null);
+    }
+    if (dto.actualDescription !== undefined) {
+      track(
+        'ACTUAL_DESCRIPTION',
+        item.actualDescription,
+        dto.actualDescription?.trim() || null,
+      );
     }
     if (dto.actualSupplierId !== undefined) {
       track(
@@ -1557,6 +1565,9 @@ export class ServiceOrdersService {
         ...(dto.actualBrand !== undefined
           ? { actualBrand: dto.actualBrand?.trim() || null }
           : {}),
+        ...(dto.actualDescription !== undefined
+          ? { actualDescription: dto.actualDescription?.trim() || null }
+          : {}),
         ...(dto.actualSupplierId !== undefined
           ? { actualSupplierId: dto.actualSupplierId || null }
           : {}),
@@ -1579,17 +1590,51 @@ export class ServiceOrdersService {
       },
     });
 
+    const shouldSyncStock =
+      !!item.productId &&
+      (item.isQuickPart ||
+        item.product?.status === 'PROVISIONAL' ||
+        item.product?.needsReview === true);
+
+    if (shouldSyncStock && item.productId) {
+      const syncName =
+        dto.actualDescription !== undefined
+          ? dto.actualDescription?.trim() || null
+          : item.actualDescription;
+      const syncBrand =
+        dto.actualBrand !== undefined
+          ? dto.actualBrand?.trim() || null
+          : item.actualBrand ?? item.partBrand;
+      const syncCost =
+        dto.actualUnitCost !== undefined
+          ? dto.actualUnitCost
+          : item.actualUnitCost != null
+            ? Number(item.actualUnitCost)
+            : null;
+
+      await this.products.syncProvisionalFromPurchasedPart(organizationId, item.productId, {
+        name: syncName,
+        brand: syncBrand,
+        costPrice: syncCost,
+      });
+    }
+
     if (historyRows.length) {
-      await this.prisma.serviceOrderItemCostHistory.createMany({ data: historyRows });
       await this.audit.log(organizationId, 'service_order.item_internal_cost', 'service_order', {
         userId,
         metadata: {
           serviceOrderId,
           itemId,
           description: item.description,
+          actualDescription:
+            dto.actualDescription !== undefined
+              ? dto.actualDescription?.trim() || null
+              : item.actualDescription,
+          stockSynced: shouldSyncStock,
           changes: historyRows.length,
         },
       });
+      await this.prisma.serviceOrderItemCostHistory.createMany({ data: historyRows });
     }
 
     return this.findOne(organizationId, serviceOrderId);

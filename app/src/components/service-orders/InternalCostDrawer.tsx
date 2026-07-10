@@ -19,12 +19,21 @@ type Props = {
 const COST_FIELD_LABELS: Record<string, string> = {
   ACTUAL_UNIT_COST: "Custo real",
   ACTUAL_BRAND: "Marca comprada",
+  ACTUAL_DESCRIPTION: "Peça comprada",
   ACTUAL_SUPPLIER: "Fornecedor",
   PURCHASE_ORDER_ITEM: "Compra vinculada",
   PURCHASE_DATE: "Data da compra",
   PURCHASE_PAYMENT_METHOD: "Forma de pagamento",
   INTERNAL_NOTES: "Observação",
 };
+
+function isPurchasedPartFlow(item: ServiceOrderItemRow) {
+  return (
+    !!item.isQuickPart ||
+    item.product?.status === "PROVISIONAL" ||
+    !!item.quickPartCode
+  );
+}
 
 export default function InternalCostDrawer({
   open,
@@ -36,6 +45,7 @@ export default function InternalCostDrawer({
   const token = useAuthToken();
   const [actualUnitCost, setActualUnitCost] = useState("");
   const [actualBrand, setActualBrand] = useState("");
+  const [actualDescription, setActualDescription] = useState("");
   const [actualSupplierId, setActualSupplierId] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [purchasePaymentMethod, setPurchasePaymentMethod] = useState("");
@@ -65,6 +75,7 @@ export default function InternalCostDrawer({
           : "",
     );
     setActualBrand(item.actualBrand ?? item.partBrand ?? "");
+    setActualDescription(item.actualDescription ?? item.product?.name ?? item.description ?? "");
     setActualSupplierId(item.actualSupplier?.id ?? "");
     setPurchaseDate(item.purchaseDate ? item.purchaseDate.slice(0, 10) : "");
     setPurchasePaymentMethod(item.purchasePaymentMethod ?? "");
@@ -89,6 +100,7 @@ export default function InternalCostDrawer({
 
   if (!open || !item) return null;
 
+  const purchasedPart = isPurchasedPartFlow(item);
   const plannedCost = Number(item.unitCost ?? 0);
   const revenue =
     Number(item.unitPrice) * item.quantity - Number(item.discount ?? 0);
@@ -105,6 +117,9 @@ export default function InternalCostDrawer({
       await api.updateServiceOrderItemInternalCost(token, serviceOrderId, item.id, {
         actualUnitCost: actualUnitCost !== "" ? Number(actualUnitCost) : null,
         actualBrand: actualBrand.trim() || null,
+        ...(purchasedPart
+          ? { actualDescription: actualDescription.trim() || null }
+          : {}),
         actualSupplierId: actualSupplierId || null,
         purchaseDate: purchaseDate || null,
         purchasePaymentMethod: purchasePaymentMethod.trim() || null,
@@ -131,8 +146,13 @@ export default function InternalCostDrawer({
       <aside className="relative w-full max-w-lg bg-white h-full shadow-xl flex flex-col">
         <div className="flex items-start justify-between px-5 py-4 border-b border-[#E2E8F0]">
           <div>
-            <h2 className="text-lg font-semibold text-[#0F3D4C]">Ajustar custo interno</h2>
+            <h2 className="text-lg font-semibold text-[#0F3D4C]">
+              {purchasedPart ? "Atualizar peça comprada" : "Ajustar custo interno"}
+            </h2>
             <p className="text-sm text-[#64748B] mt-0.5">{item.description}</p>
+            {item.quickPartCode ? (
+              <p className="text-xs text-[#94A3B8] mt-1">{item.quickPartCode}</p>
+            ) : null}
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-[#F1F5F9]">
             <X size={20} />
@@ -143,6 +163,10 @@ export default function InternalCostDrawer({
           <div className="rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] p-4 space-y-2">
             <p className="text-xs font-semibold text-[#64748B] uppercase">Comercial (bloqueado)</p>
             <div className="flex justify-between text-sm">
+              <span className="text-[#64748B]">Descrição no orçamento</span>
+              <span className="font-medium text-right max-w-[55%]">{item.description}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-[#64748B]">Preço aprovado ao cliente</span>
               <span className="font-medium">{formatMoney(item.unitPrice)}</span>
             </div>
@@ -151,6 +175,24 @@ export default function InternalCostDrawer({
               <span className="font-medium">{formatMoney(revenue)}</span>
             </div>
           </div>
+
+          {purchasedPart ? (
+            <p className="text-xs text-[#64748B] leading-relaxed">
+              Troque marca, modelo ou custo da peça que realmente entrou. O valor aprovado pelo
+              cliente permanece. O produto provisório no estoque é atualizado junto.
+            </p>
+          ) : null}
+
+          {purchasedPart ? (
+            <FormField label="Peça efetivamente comprada">
+              <input
+                className={inputClass}
+                value={actualDescription}
+                onChange={(e) => setActualDescription(e.target.value)}
+                placeholder="Ex.: pastilha freio dianteira marca Z"
+              />
+            </FormField>
+          ) : null}
 
           <FormField label="Custo previsto (readonly)">
             <input className={inputClass} value={formatMoney(plannedCost)} disabled readOnly />
@@ -222,7 +264,7 @@ export default function InternalCostDrawer({
               className={inputClass}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Ex.: peça original indisponível, comprada marca alternativa"
+              placeholder="Ex.: peça original com defeito, trocada por marca Z"
             />
           </FormField>
 
@@ -281,7 +323,7 @@ export default function InternalCostDrawer({
             onClick={handleSubmit}
             className="h-10 px-5 rounded-lg bg-[#0F3D4C] text-white text-sm font-medium disabled:opacity-50"
           >
-            {saving ? "Salvando..." : "Salvar ajuste"}
+            {saving ? "Salvando..." : purchasedPart ? "Salvar peça comprada" : "Salvar ajuste"}
           </button>
         </div>
       </aside>

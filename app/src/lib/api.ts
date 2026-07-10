@@ -986,6 +986,7 @@ export interface ServiceOrderItemRow {
   partBrand?: string | null;
   internalNotes?: string | null;
   actualBrand?: string | null;
+  actualDescription?: string | null;
   purchaseDate?: string | null;
   purchasePaymentMethod?: string | null;
   commercialLockedAt?: string | null;
@@ -1731,6 +1732,7 @@ export const api = {
     data: {
       actualUnitCost?: number | null;
       actualBrand?: string | null;
+      actualDescription?: string | null;
       actualSupplierId?: string | null;
       purchaseOrderItemId?: string | null;
       purchaseDate?: string | null;

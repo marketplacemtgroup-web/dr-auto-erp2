@@ -60,7 +60,7 @@ stateDiagram-v2
   PENDING --> APPROVED: recusa pendentes remove itens
 ```
 
-A OS permanece `IN_PROGRESS` durante o complemento (oficina continua o serviço; só aguarda ok dos itens novos).
+A OS volta para `AWAITING_APPROVAL` durante o complemento (aparece em Orçamentos → Aguardando aprovação e sai da lista de OS em andamento). Ao aprovar, retorna para `IN_PROGRESS`.
 
 ---
 
@@ -89,7 +89,7 @@ Regras:
 - Quote atual = `APPROVED`
 - OS em status permitido: `IN_PROGRESS`, `APPROVED`, `AWAITING_PART` (não `FINISHED`/`DELIVERED`/`CANCELLED`)
 - Ação: `quote.status = PENDING` (linhas antigas mantêm `approved: true`)
-- **Não** alterar OS para `AWAITING_APPROVAL` — manter `IN_PROGRESS`
+- OS → `AWAITING_APPROVAL` (sai da lista de OS em andamento; volta para Orçamentos → Aguardando aprovação)
 - Registrar em `serviceOrderStatusHistory` nota: "Complemento de orçamento solicitado"
 
 **Gatilho automático:** em [`service-orders.service.ts`](../../apps/api/src/service-orders/service-orders.service.ts) `addItem` / `updateItem` / `removeItem`, se a OS tiver quote `APPROVED` e não houver `PENDING`, chamar `reopenForSupplement` antes do sync.
@@ -214,7 +214,7 @@ Opcional (fase 2): campo `QuoteLine.addedAt` ou flag `isSupplement` para auditor
 
 - Não criar segunda OS para o mesmo veículo (objetivo explícito)
 - Não alterar fluxo financeiro/comissões além do `totalAmount` já existente
-- Não mudar enum `ServiceOrderStatus` (usar `IN_PROGRESS` + quote PENDING)
+- Não mudar enum `ServiceOrderStatus` (complemento usa `AWAITING_APPROVAL` + quote `PENDING`)
 
 ---
 

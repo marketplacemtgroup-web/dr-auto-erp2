@@ -128,6 +128,50 @@ export class ProductsService {
     }
   }
 
+  /**
+   * Atualiza o produto provisório vinculado à peça rápida quando a oficina
+   * troca marca/modelo/custo após a aprovação (sem mexer no comercial).
+   */
+  async syncProvisionalFromPurchasedPart(
+    organizationId: string,
+    productId: string,
+    data: {
+      name?: string | null;
+      brand?: string | null;
+      costPrice?: number | null;
+    },
+  ) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, organizationId, ...notDeleted },
+    });
+    if (!product) return null;
+    if (product.status !== 'PROVISIONAL' && !product.needsReview) return product;
+
+    const nextName = data.name?.trim();
+    const nextBrand = data.brand !== undefined ? data.brand?.trim() || null : undefined;
+    const nextCost =
+      data.costPrice !== undefined && data.costPrice != null && data.costPrice >= 0
+        ? data.costPrice
+        : undefined;
+
+    return this.prisma.product.update({
+      where: { id: product.id },
+      data: {
+        ...(nextName ? { name: nextName } : {}),
+        ...(nextBrand !== undefined ? { brand: nextBrand } : {}),
+        ...(nextCost !== undefined
+          ? {
+              costPrice: nextCost,
+              averageCost: nextCost,
+              lastPurchaseCost: nextCost,
+            }
+          : {}),
+        needsReview: true,
+        status: 'PROVISIONAL',
+      },
+    });
+  }
+
   shouldSkipStockForProduct(product: {
     status: string;
     stock: number;

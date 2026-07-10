@@ -31,11 +31,11 @@ const CREATE_STATUS = [
   "DELIVERED",
 ] as const;
 
+/** Em andamento na oficina — orçamentos pendentes ficam em Orçamentos (Aguardando aprovação). */
 const OPEN_STATUSES = [
   "RECEIVED",
   "DIAGNOSIS",
   "AWAITING_QUOTE",
-  "AWAITING_APPROVAL",
   "APPROVED",
   "IN_PROGRESS",
   "AWAITING_PART",

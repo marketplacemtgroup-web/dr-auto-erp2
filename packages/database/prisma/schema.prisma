@@ -863,6 +863,7 @@ enum ProductStatus {
 enum ServiceOrderItemCostField {
   ACTUAL_UNIT_COST
   ACTUAL_BRAND
+  ACTUAL_DESCRIPTION
   ACTUAL_SUPPLIER
   PURCHASE_ORDER_ITEM
   PURCHASE_DATE
@@ -897,6 +898,7 @@ model ServiceOrderItem {
   internalNotes      String?              @map("internal_notes")
   actualUnitCost     Decimal?             @map("actual_unit_cost") @db.Decimal(12, 2)
   actualBrand        String?              @map("actual_brand")
+  actualDescription  String?              @map("actual_description")
   actualSupplierId   String?              @map("actual_supplier_id")
   purchaseOrderItemId String?             @map("purchase_order_item_id")
   purchaseDate       DateTime?            @map("purchase_date")
