@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AppointmentStatus } from '@prisma/client';
+import { nextDocumentNumber } from '../common/document-number.util';
 import { notDeleted } from '../common/soft-delete';
 import { PrismaService } from '../prisma/prisma.service';
 import { CAR_CHECKLIST_TEMPLATE } from '../service-orders/checklist-template';
@@ -187,12 +188,7 @@ export class AppointmentsService {
       throw new BadRequestException('Este agendamento já possui OS vinculada');
     }
 
-    const last = await this.prisma.serviceOrder.findFirst({
-      where: { organizationId },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    const number = (last?.number ?? 1000) + 1;
+    const number = await nextDocumentNumber(this.prisma, organizationId);
 
     const branch = await this.prisma.branch.findFirst({
       where: { organizationId, isMain: true },

@@ -8,6 +8,7 @@ import { ApproveLinesDto } from './dto/approve-lines.dto';
 import { QuotesSyncService } from './quotes-sync.service';
 import { EventsService } from '../events/events.service';
 import { PortalCustomerNotifyService } from '../events/portal-customer-notify.service';
+import { nextDocumentNumber, quoteNumberMatchingOs } from '../common/document-number.util';
 import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { CAR_CHECKLIST_TEMPLATE } from '../service-orders/checklist-template';
@@ -42,24 +43,6 @@ export class QuotesService {
     @Inject(forwardRef(() => ServiceOrdersService))
     private readonly serviceOrders: ServiceOrdersService,
   ) {}
-
-  private async nextServiceOrderNumber(organizationId: string) {
-    const last = await this.prisma.serviceOrder.findFirst({
-      where: { organizationId },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    return (last?.number ?? 1000) + 1;
-  }
-
-  private async nextQuoteNumber(organizationId: string) {
-    const last = await this.prisma.quote.findFirst({
-      where: { organizationId, number: { not: null } },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    return (last?.number ?? 1000) + 1;
-  }
 
   private async findPendingQuoteForVehicle(organizationId: string, vehicleId: string) {
     return this.prisma.quote.findFirst({
@@ -97,8 +80,8 @@ export class QuotesService {
       where: { organizationId, isMain: true },
     });
 
-    const osNumber = await this.nextServiceOrderNumber(organizationId);
-    const quoteNumber = await this.nextQuoteNumber(organizationId);
+    // Mesmo número para OS e orçamento; permanece estável em alterações/complementos.
+    const documentNumber = await nextDocumentNumber(this.prisma, organizationId);
     const amount = opts.amount ?? 0;
 
   // Sem $transaction interativo — compatível com Supabase pooler (PgBouncer).
@@ -107,7 +90,7 @@ export class QuotesService {
         organizationId,
         vehicleId,
         branchId: branch?.id,
-        number: osNumber,
+        number: documentNumber,
         status: ServiceOrderStatus.AWAITING_APPROVAL,
         enteredAt: new Date(),
         complaint: opts.complaint?.trim() || null,
@@ -136,7 +119,7 @@ export class QuotesService {
         data: {
           organizationId,
           serviceOrderId: so.id,
-          number: quoteNumber,
+          number: documentNumber,
           amount: new Prisma.Decimal(amount),
           status: status as never,
         },
@@ -176,7 +159,8 @@ export class QuotesService {
     const status = dto.status ?? 'PENDING';
     const amount = dto.amount ?? Number(so.totalAmount);
 
-    const quoteNumber = await this.nextQuoteNumber(organizationId);
+    // Orçamento herda o número da OS para sempre baterem.
+    const quoteNumber = await quoteNumberMatchingOs(this.prisma, organizationId, so.number);
     const quote = await this.prisma.quote.create({
       data: {
         organizationId,

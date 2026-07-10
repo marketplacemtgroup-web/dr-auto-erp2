@@ -17,6 +17,7 @@ import { UpdateInternalCostDto } from './dto/update-internal-cost.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
 import { UpdateServiceOrderDto } from './dto/update-service-order.dto';
 import { AuditService } from '../audit/audit.service';
+import { nextDocumentNumber } from '../common/document-number.util';
 import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { isCommissionEligibleItemType } from '../common/item-type.util';
@@ -261,12 +262,7 @@ export class ServiceOrdersService {
     });
     if (!vehicle) throw new NotFoundException('Veículo não encontrado');
 
-    const last = await this.prisma.serviceOrder.findFirst({
-      where: { organizationId },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    const number = (last?.number ?? 1000) + 1;
+    const number = await nextDocumentNumber(this.prisma, organizationId);
 
     let branchId = dto.branchId;
     if (!branchId) {
@@ -972,17 +968,51 @@ export class ServiceOrdersService {
       item.commercialLockedAt,
     );
     if (commerciallyLocked) {
-      const commercialTouched =
-        dto.description !== undefined ||
-        dto.quantity !== undefined ||
-        dto.unitPrice !== undefined ||
-        dto.discount !== undefined ||
-        dto.itemType !== undefined ||
-        dto.unitCost !== undefined ||
-        dto.outsourcedServiceId !== undefined;
-      if (commercialTouched) {
+      const sameNum = (a: number, b: number) => Math.abs(a - b) < 0.0001;
+      const descChanging =
+        dto.description !== undefined && dto.description.trim() !== item.description;
+      const qtyChanging =
+        dto.quantity !== undefined && dto.quantity !== item.quantity;
+      const priceChanging =
+        dto.unitPrice !== undefined && !sameNum(Number(dto.unitPrice), Number(item.unitPrice));
+      const discountChanging =
+        dto.discount !== undefined &&
+        !sameNum(Number(dto.discount), Number(item.discount ?? 0));
+      const typeChanging =
+        dto.itemType !== undefined && dto.itemType !== item.itemType;
+      const outsourcedChanging =
+        dto.outsourcedServiceId !== undefined &&
+        (dto.outsourcedServiceId || null) !== (item.outsourcedServiceId || null);
+      const costChanging =
+        dto.unitCost !== undefined &&
+        (dto.unitCost == null
+          ? item.unitCost != null
+          : item.unitCost == null || !sameNum(Number(dto.unitCost), Number(item.unitCost)));
+
+      if (
+        descChanging ||
+        qtyChanging ||
+        priceChanging ||
+        discountChanging ||
+        typeChanging ||
+        outsourcedChanging
+      ) {
         throw new BadRequestException(
-          'Item com valor aprovado pelo cliente. Use "Ajustar custo interno" para alterar custos operacionais.',
+          'Item com valor aprovado pelo cliente. Use "Atualizar peça comprada" / "Ajustar custo interno" para alterar custos operacionais.',
+        );
+      }
+
+      // Custo-only em item travado: grava como custo real (não mexe no comercial).
+      if (costChanging) {
+        return this.updateInternalCost(
+          organizationId,
+          serviceOrderId,
+          itemId,
+          {
+            actualUnitCost: dto.unitCost ?? null,
+            note: 'Custo atualizado pela edição do item (comercial travado)',
+          },
+          userId,
         );
       }
     }
@@ -1110,7 +1140,10 @@ export class ServiceOrdersService {
     if (dto.outsourcedServiceId !== undefined) {
       if (!dto.outsourcedServiceId) {
         nextOutsourcedServiceId = null;
-        nextUnitCost = null;
+        // Só zera custo ao desvincular terceirizado — não ao receber null genérico de peça/serviço.
+        if (item.outsourcedServiceId && dto.unitCost === undefined) {
+          nextUnitCost = null;
+        }
       } else {
         const outsourced = await this.prisma.outsourcedService.findFirst({
           where: { id: dto.outsourcedServiceId, organizationId, isActive: true },
@@ -1128,7 +1161,9 @@ export class ServiceOrdersService {
 
     if (dto.itemType !== undefined && dto.itemType !== 'THIRD_PARTY' && item.outsourcedServiceId) {
       nextOutsourcedServiceId = null;
-      nextUnitCost = null;
+      if (dto.unitCost === undefined) {
+        nextUnitCost = null;
+      }
     }
 
     const expectedCommission = await this.previewItemCommission(organizationId, {
@@ -1146,8 +1181,11 @@ export class ServiceOrdersService {
     });
 
     const outsourcedTouched =
-      dto.outsourcedServiceId !== undefined ||
-      (dto.itemType !== undefined && dto.itemType !== 'THIRD_PARTY' && !!item.outsourcedServiceId);
+      (dto.outsourcedServiceId !== undefined &&
+        (dto.outsourcedServiceId || null) !== (item.outsourcedServiceId || null)) ||
+      (dto.itemType !== undefined &&
+        dto.itemType !== 'THIRD_PARTY' &&
+        !!item.outsourcedServiceId);
 
     await this.prisma.serviceOrderItem.update({
       where: { id: itemId },

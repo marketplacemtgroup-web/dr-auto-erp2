@@ -505,8 +505,9 @@ export default function ServiceOrderDetailPage() {
       if (editingItem) {
         return api.updateServiceOrderItem(token!, id!, editingItem.id, {
           ...payload,
-          outsourcedServiceId:
-            itemForm.itemType === "THIRD_PARTY" ? itemForm.outsourcedServiceId || null : null,
+          ...(itemForm.itemType === "THIRD_PARTY"
+            ? { outsourcedServiceId: itemForm.outsourcedServiceId || null }
+            : {}),
         });
       }
       return api.addServiceOrderItem(token!, id!, {
@@ -1772,6 +1773,7 @@ export default function ServiceOrderDetailPage() {
         }}
         loading={saveItem.isPending}
         submitLabel={editingItem ? "Salvar" : "Adicionar"}
+        error={saveItem.error instanceof Error ? saveItem.error.message : null}
       >
         {!editingItem && (
           <FormField label="Tipo">

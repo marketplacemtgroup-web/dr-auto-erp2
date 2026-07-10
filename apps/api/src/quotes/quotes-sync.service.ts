@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, QuoteLineType, ServiceOrderStatus } from '@prisma/client';
+import { quoteNumberMatchingOs } from '../common/document-number.util';
 import { mapServiceOrderItemToQuoteLineType } from '../common/item-type.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { PortalCustomerNotifyService, type QuoteNotifyKind } from '../events/portal-customer-notify.service';
@@ -17,15 +18,6 @@ export class QuotesSyncService {
     private readonly prisma: PrismaService,
     private readonly portalNotify: PortalCustomerNotifyService,
   ) {}
-
-  private async nextQuoteNumber(organizationId: string) {
-    const last = await this.prisma.quote.findFirst({
-      where: { organizationId, number: { not: null } },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    return (last?.number ?? 1000) + 1;
-  }
 
   private mapItemType(itemType: string): QuoteLineType {
     return mapServiceOrderItemToQuoteLineType(itemType);
@@ -336,7 +328,13 @@ export class QuotesSyncService {
     }
 
     if (draft) {
-      const quoteNumber = draft.number ?? (await this.nextQuoteNumber(organizationId));
+      // Mantém número existente; se ainda não tinha, alinha com a OS.
+      const quoteNumber = await quoteNumberMatchingOs(
+        this.prisma,
+        organizationId,
+        so.number,
+        draft.number,
+      );
       await this.prisma.$transaction([
         this.prisma.quote.update({
           where: { id: draft.id },
@@ -365,7 +363,8 @@ export class QuotesSyncService {
       return approved.id;
     }
 
-    const quoteNumber = await this.nextQuoteNumber(organizationId);
+    // Novo orçamento na OS existente: mesmo número da OS.
+    const quoteNumber = await quoteNumberMatchingOs(this.prisma, organizationId, so.number);
     const nextStatus =
       so.status === 'RECEIVED' ||
       so.status === 'DIAGNOSIS' ||

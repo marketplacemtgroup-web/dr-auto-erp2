@@ -11,6 +11,7 @@ import ProductSearchSelect from "../../components/inventory/ProductSearchSelect"
 import OutsourcedServiceSearchSelect from "../../components/inventory/OutsourcedServiceSearchSelect";
 import ServiceCatalogSearchSelect from "../../components/inventory/ServiceCatalogSearchSelect";
 import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
+import InternalCostDrawer from "../../components/service-orders/InternalCostDrawer";
 import ShareLinkDialog, { type ShareLinkDialogData } from "../../components/share/ShareLinkDialog";
 import { api, type ServiceOrderItemRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
@@ -37,6 +38,7 @@ export default function QuoteDetailPage() {
   const [deleteQuoteOpen, setDeleteQuoteOpen] = useState(false);
   const [deleteItemTarget, setDeleteItemTarget] = useState<ServiceOrderItemRow | null>(null);
   const [editingItem, setEditingItem] = useState<ServiceOrderItemRow | null>(null);
+  const [internalCostItem, setInternalCostItem] = useState<ServiceOrderItemRow | null>(null);
   const [itemForm, setItemForm] = useState({
     description: "",
     itemType: "SERVICE" as ServiceOrderItemType,
@@ -161,8 +163,9 @@ export default function QuoteDetailPage() {
       if (editingItem) {
         return api.updateServiceOrderItem(token!, serviceOrderId, editingItem.id, {
           ...payload,
-          outsourcedServiceId:
-            itemForm.itemType === "THIRD_PARTY" ? itemForm.outsourcedServiceId || null : null,
+          ...(itemForm.itemType === "THIRD_PARTY"
+            ? { outsourcedServiceId: itemForm.outsourcedServiceId || null }
+            : {}),
         });
       }
       return api.addServiceOrderItem(token!, serviceOrderId, {
@@ -315,6 +318,12 @@ export default function QuoteDetailPage() {
   const vehicle = quote.serviceOrder.vehicle;
   const vehicleLabel = [vehicle.brand, vehicle.model].filter(Boolean).join(" ");
 
+  function isItemCommerciallyLocked(item: ServiceOrderItemRow) {
+    if (item.commercialLockedAt) return true;
+    const line = quote.lines?.find((l) => l.serviceOrderItemId === item.id);
+    return line?.approved === true;
+  }
+
   return (
     <>
     <main className="px-6 pb-8 print:hidden">
@@ -416,7 +425,8 @@ export default function QuoteDetailPage() {
 
       <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-3 mb-5 text-sm text-[#92400E]">
         O cliente aprova pelo app ou portal. Ao aprovar, o orçamento sai desta tela e a ordem de
-        serviço é liberada automaticamente.
+        serviço é liberada automaticamente. Itens já aprovados ficam travados — para custo de peça,
+        use &quot;Ajustar custo&quot;.
       </div>
 
       {saveMessage && (
@@ -566,7 +576,12 @@ export default function QuoteDetailPage() {
                 </td>
               </tr>
             )}
-            {items.map((item) => (
+            {items.map((item) => {
+              const locked = isItemCommerciallyLocked(item);
+              const canEditRow = canEdit && !locked;
+              const canAdjustCost =
+                locked && (item.itemType === "PART" || item.itemType === "THIRD_PARTY");
+              return (
               <tr key={item.id} className="border-t border-[#F1F5F9]">
                 <td className="px-2 py-3 text-xs text-[#64748B]">
                   {item.isQuickPart ? item.quickPartCode ?? "PRV" : item.product?.sku ?? "—"}
@@ -576,6 +591,7 @@ export default function QuoteDetailPage() {
                   <p className="text-xs text-[#94A3B8] mt-0.5">
                     {item.isQuickPart ? "Peça rápida" : itemTypeLabel(item.itemType)}
                     {itemCatalogLabel(item) ? ` · ${itemCatalogLabel(item)}` : ""}
+                    {locked ? " · Aprovado (travado)" : ""}
                   </p>
                 </td>
                 <td className="px-2 py-3 text-[#64748B]">{item.partBrand ?? "—"}</td>
@@ -598,27 +614,43 @@ export default function QuoteDetailPage() {
                 {canEdit && (
                   <td className="px-2 py-3">
                     <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => openEditItem(item)}
-                        className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[#0E7490] hover:bg-[#ECFEFF] text-xs font-medium"
-                        title="Editar"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteItemTarget(item)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                        title="Excluir"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {canEditRow ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditItem(item)}
+                            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[#0E7490] hover:bg-[#ECFEFF] text-xs font-medium"
+                            title="Editar"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteItemTarget(item)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                            title="Excluir"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      ) : canAdjustCost ? (
+                        <button
+                          type="button"
+                          onClick={() => setInternalCostItem(item)}
+                          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[#0E7490] hover:bg-[#ECFEFF] text-xs font-medium"
+                          title="Ajustar custo interno"
+                        >
+                          Ajustar custo
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-[#94A3B8] px-1">Travado</span>
+                      )}
                     </div>
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
             {showQuickPartRow && canEdit ? (
               <QuickPartInlineRow
                 saving={saveQuickPart.isPending}
@@ -659,6 +691,7 @@ export default function QuoteDetailPage() {
         }}
         loading={saveItem.isPending}
         submitLabel={editingItem ? "Salvar" : "Adicionar"}
+        error={saveItem.error instanceof Error ? saveItem.error.message : null}
       >
         {!editingItem && (
           <FormField label="Tipo">
@@ -794,6 +827,15 @@ export default function QuoteDetailPage() {
       />
     </PrintPortal>
     <ShareLinkDialog data={shareDialog} onClose={() => setShareDialog(null)} />
+    <InternalCostDrawer
+      open={!!internalCostItem}
+      serviceOrderId={serviceOrderId}
+      item={internalCostItem}
+      onClose={() => setInternalCostItem(null)}
+      onSaved={() => {
+        invalidate();
+      }}
+    />
     <ConfirmDialog
       open={deleteQuoteOpen}
       title="Excluir orçamento"
