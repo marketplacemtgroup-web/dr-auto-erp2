@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Check, Search, X } from "lucide-react";
 import { api, type ProductRow } from "../../lib/api";
 import { formatMoney } from "../../lib/format";
 import { inputClass } from "../modules/FormDrawer";
@@ -15,6 +15,7 @@ export type QuickPartDraft = {
   unitPrice: string;
   discount: string;
   internalNotes: string;
+  productId?: string;
 };
 
 const emptyDraft = (): QuickPartDraft => ({
@@ -25,6 +26,7 @@ const emptyDraft = (): QuickPartDraft => ({
   unitPrice: "",
   discount: "0",
   internalNotes: "",
+  productId: undefined,
 });
 
 type Props = {
@@ -53,35 +55,40 @@ function FieldLabel({
 
 export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
   const token = useAuthToken();
+  const searchRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<QuickPartDraft>(emptyDraft);
   const [debouncedDesc, setDebouncedDesc] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedDesc(draft.description.trim()), 300);
+    const t = window.setTimeout(() => setDebouncedDesc(draft.description.trim()), 250);
     return () => window.clearTimeout(t);
   }, [draft.description]);
 
-  const { data: similar } = useQuery({
+  useEffect(() => {
+    if (!searchOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!searchRef.current?.contains(event.target as Node)) {
+        setSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [searchOpen]);
+
+  const { data: similar, isFetching: searching } = useQuery({
     queryKey: ["quick-part-similar", debouncedDesc, token],
     queryFn: async () => {
-      const body = await api.products(token!, debouncedDesc, false, 1, 5);
+      const body = await api.products(token!, debouncedDesc, false, 1, 8);
       const rows = Array.isArray(body) ? body : body.data;
       return rows as ProductRow[];
     },
-    enabled: !!token && debouncedDesc.length >= 3,
+    enabled: !!token && debouncedDesc.length >= 2 && !draft.productId,
     staleTime: QUERY_STALE_TIME_MS,
     gcTime: QUERY_GC_TIME_MS,
   });
 
-  const suggestion = useMemo(() => {
-    if (!similar?.length || !debouncedDesc) return null;
-    const lower = debouncedDesc.toLowerCase();
-    return similar.find(
-      (p) =>
-        p.name.toLowerCase().includes(lower) ||
-        lower.includes(p.name.toLowerCase().slice(0, Math.max(3, p.name.length - 2))),
-    );
-  }, [similar, debouncedDesc]);
+  const results = similar ?? [];
 
   const total = useMemo(() => {
     const qty = Number(draft.quantity) || 0;
@@ -90,36 +97,119 @@ export function QuickPartInlineRow({ onSave, onCancel, saving }: Props) {
     return Math.max(0, qty * price - disc);
   }, [draft]);
 
+  const selectProduct = (product: ProductRow) => {
+    setDraft((d) => ({
+      ...d,
+      productId: product.id,
+      description: product.name,
+      partBrand: product.brand ?? d.partBrand,
+      unitCost: String(product.costPrice ?? ""),
+      unitPrice: String(product.salePrice ?? ""),
+    }));
+    setSearchOpen(false);
+  };
+
+  const clearProductLink = () => {
+    setDraft((d) => ({ ...d, productId: undefined }));
+  };
+
   const handleSave = async () => {
     if (!draft.description.trim()) return;
-    await onSave(draft);
+    await onSave({
+      ...draft,
+      description: draft.description.trim(),
+      productId: draft.productId || undefined,
+    });
     setDraft(emptyDraft());
   };
 
   return (
     <>
-      {suggestion ? (
-        <tr>
-          <td colSpan={11} className="px-4 py-2 bg-amber-50 border-t border-amber-100">
-            <p className="text-xs text-amber-800">
-              Já existe no estoque: <strong>{suggestion.name}</strong>
-              {suggestion.sku ? ` (${suggestion.sku})` : ""} — considere usar &quot;Buscar produto&quot;.
-            </p>
-          </td>
-        </tr>
-      ) : null}
       <tr className="border-t border-[#E2E8F0] bg-[#FFFBEB]/40">
         <td className="px-2 py-2 align-top">
           <FieldLabel>Código</FieldLabel>
-          <span className="text-xs text-[#94A3B8]">auto</span>
+          <span className="text-xs text-[#94A3B8]">
+            {draft.productId ? "estoque" : "auto"}
+          </span>
         </td>
         <td className="px-2 py-2 align-top">
-          <FieldLabel>Descrição da peça</FieldLabel>
-          <input
-            className={inputClass}
-            value={draft.description}
-            onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-          />
+          <FieldLabel>Peça (busca ou digite o nome)</FieldLabel>
+          {draft.productId ? (
+            <div className="rounded-lg border border-[#0E7490]/30 bg-[#ECFEFF] px-2 py-1.5 flex items-start justify-between gap-1">
+              <p className="text-sm font-medium text-[#0F3D4C] truncate">{draft.description}</p>
+              <button
+                type="button"
+                onClick={clearProductLink}
+                className="p-0.5 text-[#64748B] hover:text-[#0F3D4C] shrink-0"
+                title="Usar nome digitado (sem vincular)"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div ref={searchRef} className="relative">
+              <Search
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none"
+              />
+              <input
+                className={`${inputClass} pl-8`}
+                value={draft.description}
+                placeholder="Buscar no estoque ou digitar nome novo..."
+                onChange={(e) => {
+                  setDraft((d) => ({ ...d, description: e.target.value, productId: undefined }));
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                autoComplete="off"
+              />
+              {searchOpen && debouncedDesc.length >= 2 ? (
+                <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-[#E2E8F0] bg-white shadow-lg overflow-hidden">
+                  {searching ? (
+                    <p className="px-3 py-2 text-xs text-[#94A3B8]">Buscando...</p>
+                  ) : results.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-[#64748B]">
+                      Não encontrado. Ao salvar, usa o nome digitado e cria no estoque na aprovação.
+                    </p>
+                  ) : (
+                    <ul className="max-h-44 overflow-y-auto py-1">
+                      {results.map((product) => {
+                        const avail = product.stock - (product.reservedStock ?? 0);
+                        return (
+                          <li key={product.id}>
+                            <button
+                              type="button"
+                              onClick={() => selectProduct(product)}
+                              className="w-full text-left px-3 py-2 hover:bg-[#F0F9FF]"
+                            >
+                              <p className="text-sm font-medium text-[#1E293B] truncate">
+                                {product.name}
+                              </p>
+                              <p className="text-[11px] text-[#64748B]">
+                                Disp.: {avail}
+                                {product.sku ? ` · ${product.sku}` : ""}
+                                {" · "}
+                                {formatMoney(product.salePrice)}
+                              </p>
+                            </button>
+                          </li>
+                        );
+                      })}
+                      <li className="border-t border-[#F1F5F9]">
+                        <button
+                          type="button"
+                          onClick={() => setSearchOpen(false)}
+                          className="w-full text-left px-3 py-2 text-xs text-[#0E7490] hover:bg-[#F0F9FF]"
+                        >
+                          Usar nome digitado: &quot;{draft.description.trim()}&quot;
+                        </button>
+                      </li>
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
         </td>
         <td className="px-2 py-2 align-top">
           <FieldLabel>Marca</FieldLabel>

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import {
   Prisma,
   ServiceOrderItemCostField,
@@ -41,8 +41,6 @@ const CLOSED_OS_STATUSES: ServiceOrderStatus[] = [
   'DELIVERED',
   'AWAITING_PAYMENT',
 ];
-
-const EXECUTION_STATUSES: ServiceOrderStatus[] = ['IN_PROGRESS', 'APPROVED', 'AWAITING_PART'];
 
 const STATUS_PT: Record<string, string> = {
   RECEIVED: 'Recebido',
@@ -122,6 +120,7 @@ export class ServiceOrdersService {
     private readonly audit: AuditService,
     private readonly events: EventsService,
     private readonly portalNotify: PortalCustomerNotifyService,
+    @Inject(forwardRef(() => FinancialService))
     private readonly financial: FinancialService,
     private readonly commissionEngine: CommissionEngineService,
     private readonly appointments: AppointmentsService,
@@ -389,13 +388,7 @@ export class ServiceOrdersService {
     if (!current) throw new NotFoundException('Ordem de serviço não encontrada');
 
     if (dto.status !== undefined && dto.status !== current.status) {
-      const enteringExecution =
-        EXECUTION_STATUSES.includes(dto.status as ServiceOrderStatus) &&
-        QUOTE_PHASE_STATUSES.includes(current.status as ServiceOrderStatus);
-      if (enteringExecution) {
-        await this.deductPartsStockForExecution(organizationId, id);
-      }
-
+      // Baixa física de peças: somente no pagamento do recebimento (não ao entrar em execução).
       await this.prisma.serviceOrderStatusHistory.create({
         data: {
           organizationId,
@@ -705,7 +698,11 @@ export class ServiceOrdersService {
 
     if (isQuickPart) {
       if (dto.productId) {
-        throw new BadRequestException('Peça rápida não pode estar vinculada a um produto do estoque');
+        // Peça rápida pode vincular a produto existente (busca) ou ficar só com o nome digitado.
+        const product = await this.prisma.product.findFirst({
+          where: { id: dto.productId, organizationId, ...notDeleted },
+        });
+        if (!product) throw new NotFoundException('Produto não encontrado');
       }
       itemType = 'PART';
       if (!description) {
@@ -792,6 +789,7 @@ export class ServiceOrdersService {
         });
       }
 
+      // Fora da fase de orçamento: apenas reserva. Baixa física no pagamento do recebimento.
       if (itemType === 'PART' && !inQuotePhase && !skipStock) {
         const available = this.stockMovement.availableStock(
           product.stock,
@@ -802,19 +800,10 @@ export class ServiceOrdersService {
             `Estoque insuficiente. Disponível: ${available}, solicitado: ${qty}`,
           );
         }
-        const nextStock = product.stock - qty;
         await this.prisma.product.update({
           where: { id: dto.productId },
-          data: { stock: nextStock },
+          data: { reservedStock: product.reservedStock + qty },
         });
-        await this.stockMovement.record(
-          organizationId,
-          dto.productId,
-          'OUT_OS',
-          qty,
-          nextStock,
-          { serviceOrderId: so.id, reason: `Saída OS #${so.number}` },
-        );
       }
 
       if (itemType === 'PART') {
@@ -868,6 +857,7 @@ export class ServiceOrdersService {
         data: {
           organizationId,
           serviceOrderId: so.id,
+          productId: dto.productId ?? null,
           description,
           itemType: 'PART',
           quantity: qty,
@@ -1063,9 +1053,7 @@ export class ServiceOrdersService {
       const product = await this.prisma.product.findUnique({
         where: { id: item.productId },
       });
-      if (product && this.products.shouldSkipStockForProduct(product)) {
-        // provisório — sem baixa física automática
-      } else if (product) {
+      if (product && !this.products.shouldSkipStockForProduct(product)) {
         const delta = dto.quantity - item.quantity;
         if (delta > 0) {
           const available = this.stockMovement.availableStock(
@@ -1078,25 +1066,13 @@ export class ServiceOrdersService {
             );
           }
         }
-        const nextStock = product.stock - delta;
+        // Ajuste só na reserva — baixa física no pagamento do recebimento.
         await this.prisma.product.update({
           where: { id: item.productId },
-          data: { stock: nextStock },
-        });
-        await this.stockMovement.record(
-          organizationId,
-          item.productId,
-          delta > 0 ? 'OUT_OS' : 'RETURN',
-          Math.abs(delta),
-          nextStock,
-          {
-            serviceOrderId,
-            reason:
-              delta > 0
-                ? `Ajuste OS #${so.number} — aumento de quantidade`
-                : `Ajuste OS #${so.number} — redução de quantidade`,
+          data: {
+            reservedStock: Math.max(0, product.reservedStock + delta),
           },
-        );
+        });
       }
     }
 
@@ -1390,6 +1366,7 @@ export class ServiceOrdersService {
   }
 
   /** Baixa estoque das peças da OS ao entrar em execução (após fase de orçamento). */
+  /** Baixa estoque das peças da OS no pagamento do recebimento. */
   async deductPartsStockForExecution(organizationId: string, serviceOrderId: string) {
     const so = await this.findOne(organizationId, serviceOrderId);
     if (!so) throw new NotFoundException('Ordem de serviço não encontrada');
@@ -1404,26 +1381,20 @@ export class ServiceOrdersService {
         where: { id: productId, organizationId, ...notDeleted },
       });
       if (!product) continue;
-      if (this.products.shouldSkipStockForProduct(product)) continue;
 
-      const alreadyDeducted = await this.hasStockDeductionForPart(
-        organizationId,
-        serviceOrderId,
-        productId,
-      );
+      const alreadyDeducted =
+        item.stockDeductedAt != null ||
+        (await this.hasStockDeductionForPart(organizationId, serviceOrderId, productId));
       if (alreadyDeducted) continue;
 
-      const available = this.stockMovement.availableStock(
-        product.stock,
-        product.reservedStock,
-      );
-      if (available < item.quantity) {
+      // Estoque físico precisa cobrir a quantidade; reserva é liberada na baixa.
+      if (product.stock < item.quantity) {
         throw new BadRequestException(
-          `Estoque insuficiente para "${item.description}". Disponível: ${available}, necessário: ${item.quantity}`,
+          `Estoque insuficiente para "${item.description}". Em estoque: ${product.stock}, necessário: ${item.quantity}`,
         );
       }
 
-      const nextStock = product.stock - item.quantity;
+      const nextStock = Math.max(0, product.stock - item.quantity);
       const nextReserved = Math.max(0, product.reservedStock - item.quantity);
       await this.prisma.product.update({
         where: { id: productId },
@@ -1435,7 +1406,10 @@ export class ServiceOrdersService {
         'OUT_OS',
         item.quantity,
         nextStock,
-        { serviceOrderId: so.id, reason: `Saída OS #${so.number} — início da execução` },
+        {
+          serviceOrderId: so.id,
+          reason: `Saída OS #${so.number} — pagamento do recebimento`,
+        },
       );
       await this.prisma.serviceOrderItem.update({
         where: { id: item.id },
@@ -1470,7 +1444,7 @@ export class ServiceOrdersService {
       serviceOrderId,
       quoteId,
     );
-    await this.deductPartsStockForExecution(organizationId, serviceOrderId);
+    // Baixa de estoque só no pagamento do recebimento (não na aprovação).
     if (userId) {
       await this.audit.log(organizationId, 'quote.post_approval_hooks', 'service_order', {
         userId,

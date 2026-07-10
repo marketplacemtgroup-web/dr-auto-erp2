@@ -199,6 +199,7 @@ export default function QuoteDetailPage() {
       unitPrice: string;
       discount: string;
       internalNotes: string;
+      productId?: string;
     }) =>
       api.addServiceOrderItem(token!, serviceOrderId, {
         description: draft.description.trim(),
@@ -210,6 +211,7 @@ export default function QuoteDetailPage() {
         discount: Number(draft.discount) || 0,
         partBrand: draft.partBrand.trim() || undefined,
         internalNotes: draft.internalNotes.trim() || undefined,
+        productId: draft.productId || undefined,
       }),
     onSuccess: () => {
       invalidate();

@@ -541,6 +541,7 @@ export default function ServiceOrderDetailPage() {
       unitPrice: string;
       discount: string;
       internalNotes: string;
+      productId?: string;
     }) =>
       api.addServiceOrderItem(token!, id!, {
         description: draft.description.trim(),
@@ -552,6 +553,7 @@ export default function ServiceOrderDetailPage() {
         discount: Number(draft.discount) || 0,
         partBrand: draft.partBrand.trim() || undefined,
         internalNotes: draft.internalNotes.trim() || undefined,
+        productId: draft.productId || undefined,
       }),
     onSuccess: (updatedOs) => {
       applyServiceOrderUpdate(updatedOs);

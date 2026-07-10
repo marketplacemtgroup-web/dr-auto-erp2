@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional, forwardRef } from '@nestjs/common';
 import { PaymentMethod, Prisma, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentsService } from '../appointments/appointments.service';
@@ -23,6 +23,7 @@ import {
 } from '../reports/reports-date.util';
 import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
+import { ServiceOrdersService } from '../service-orders/service-orders.service';
 
 const entryInclude = {
   customer: { select: { id: true, name: true } },
@@ -46,6 +47,8 @@ export class FinancialService {
     private readonly commissionEngine: CommissionEngineService,
     private readonly ledger: LedgerService,
     private readonly accounts: AccountsService,
+    @Inject(forwardRef(() => ServiceOrdersService))
+    private readonly serviceOrders: ServiceOrdersService,
     @Optional() private readonly dashboardCache?: DashboardCacheService,
   ) {}
 
@@ -894,6 +897,29 @@ export class FinancialService {
         splits,
       },
     });
+
+    if (
+      entry.type === 'RECEIVABLE' &&
+      entry.serviceOrderId &&
+      isFullyPaid
+    ) {
+      try {
+        await this.serviceOrders.deductPartsStockForExecution(
+          organizationId,
+          entry.serviceOrderId,
+        );
+      } catch (err) {
+        // Não bloqueia a baixa financeira se o estoque falhar — registra e segue.
+        await this.audit.log(organizationId, 'financial.pay_stock_deduct_failed', 'financial_entry', {
+          userId,
+          metadata: {
+            entryId: id,
+            serviceOrderId: entry.serviceOrderId,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        });
+      }
+    }
 
     await this.invalidateDashboardCache(organizationId, paidAt);
 

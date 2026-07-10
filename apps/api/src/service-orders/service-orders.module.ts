@@ -16,7 +16,7 @@ import { ServiceOrdersService } from './service-orders.service';
     forwardRef(() => QuotesModule),
     ProductsModule,
     forwardRef(() => PortalModule),
-    FinancialModule,
+    forwardRef(() => FinancialModule),
     forwardRef(() => TeamModule),
   ],
   controllers: [ServiceOrdersController],

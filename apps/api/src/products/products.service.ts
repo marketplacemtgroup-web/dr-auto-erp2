@@ -74,56 +74,111 @@ export class ProductsService {
     quoteId: string,
   ) {
     const items = await this.prisma.serviceOrderItem.findMany({
-      where: { organizationId, serviceOrderId, isQuickPart: true, productId: null },
+      where: { organizationId, serviceOrderId, isQuickPart: true },
     });
 
     for (const item of items) {
+      const qty = Math.max(1, item.quantity);
       const code =
         item.quickPartCode ?? (await this.generateQuickPartCode(organizationId));
-      const existing = await this.prisma.product.findFirst({
-        where: {
-          organizationId,
-          ...notDeleted,
-          OR: [
-            { sku: code },
-            {
-              name: { equals: item.description, mode: 'insensitive' },
-              status: 'PROVISIONAL',
-            },
-          ],
-        },
-      });
 
-      if (existing) {
-        await this.prisma.serviceOrderItem.update({
-          where: { id: item.id },
-          data: { productId: existing.id, quickPartCode: code },
+      let product =
+        item.productId
+          ? await this.prisma.product.findFirst({
+              where: { id: item.productId, organizationId, ...notDeleted },
+            })
+          : null;
+
+      if (!product) {
+        product = await this.prisma.product.findFirst({
+          where: {
+            organizationId,
+            ...notDeleted,
+            OR: [
+              { sku: code },
+              { name: { equals: item.description, mode: 'insensitive' } },
+            ],
+          },
+          orderBy: { createdAt: 'desc' },
         });
-        continue;
       }
 
-      const product = await this.prisma.product.create({
-        data: {
+      if (!product) {
+        product = await this.prisma.product.create({
+          data: {
+            organizationId,
+            name: item.description,
+            sku: code,
+            brand: item.partBrand,
+            category: 'Produto Provisório',
+            status: 'PROVISIONAL',
+            needsReview: true,
+            stock: qty,
+            minStock: 0,
+            costPrice: item.unitCost ?? 0,
+            averageCost: item.unitCost ?? 0,
+            salePrice: item.unitPrice,
+            sourceServiceOrderItemId: item.id,
+            sourceQuoteId: quoteId,
+          },
+        });
+
+        await this.stockMovement.record(
           organizationId,
-          name: item.description,
-          sku: code,
-          brand: item.partBrand,
-          category: 'Produto Provisório',
-          status: 'PROVISIONAL',
-          needsReview: true,
-          stock: 0,
-          minStock: 0,
-          costPrice: item.unitCost ?? 0,
-          averageCost: item.unitCost ?? 0,
-          salePrice: item.unitPrice,
-          sourceServiceOrderItemId: item.id,
-          sourceQuoteId: quoteId,
-        },
-      });
+          product.id,
+          'IN',
+          qty,
+          qty,
+          {
+            serviceOrderId,
+            reason: `Peça rápida aprovada — entrada de ${qty} un.`,
+          },
+        );
+      } else if (product.status === 'PROVISIONAL' || product.needsReview) {
+        const alreadyIn = await this.prisma.stockMovement.findFirst({
+          where: {
+            organizationId,
+            productId: product.id,
+            serviceOrderId,
+            movementType: 'IN',
+            reason: { contains: 'Peça rápida aprovada' },
+          },
+        });
+        if (!alreadyIn) {
+          const nextStock = product.stock + qty;
+          product = await this.prisma.product.update({
+            where: { id: product.id },
+            data: {
+              stock: nextStock,
+              ...(item.unitCost != null && Number(item.unitCost) > 0
+                ? {
+                    costPrice: item.unitCost,
+                    averageCost: item.unitCost,
+                    lastPurchaseCost: item.unitCost,
+                  }
+                : {}),
+            },
+          });
+          await this.stockMovement.record(
+            organizationId,
+            product.id,
+            'IN',
+            qty,
+            nextStock,
+            {
+              serviceOrderId,
+              reason: `Peça rápida aprovada — entrada de ${qty} un.`,
+            },
+          );
+        }
+      }
 
       await this.prisma.serviceOrderItem.update({
         where: { id: item.id },
-        data: { productId: product.id, quickPartCode: code },
+        data: {
+          productId: product.id,
+          quickPartCode: item.quickPartCode ?? code,
+        },
       });
     }
   }
