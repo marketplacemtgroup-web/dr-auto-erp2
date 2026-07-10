@@ -315,12 +315,13 @@ export default function QuoteDetailPage() {
   }
 
   const items = quote.serviceOrder.items ?? [];
+  const quoteLines = quote.lines ?? [];
   const vehicle = quote.serviceOrder.vehicle;
   const vehicleLabel = [vehicle.brand, vehicle.model].filter(Boolean).join(" ");
 
   function isItemCommerciallyLocked(item: ServiceOrderItemRow) {
     if (item.commercialLockedAt) return true;
-    const line = quote.lines?.find((l) => l.serviceOrderItemId === item.id);
+    const line = quoteLines.find((l) => l.serviceOrderItemId === item.id);
     return line?.approved === true;
   }
 
