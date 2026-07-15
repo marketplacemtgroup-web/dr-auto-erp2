@@ -131,6 +131,7 @@ export class FinancialService {
         status: paid ? 'PAID' : 'OPEN',
         paidAt,
         amountReceived: paid ? amount : null,
+        amountPaid: paid ? amount : new Prisma.Decimal(0),
         customerId: dto.customerId ?? null,
         serviceOrderId: dto.serviceOrderId ?? null,
         quoteId: dto.quoteId ?? null,
@@ -175,10 +176,12 @@ export class FinancialService {
       data.status = 'PAID';
       data.paidAt = paidSource ? this.resolveEntryDate(paidSource) : entry.paidAt;
       data.amountReceived = nextAmount;
+      data.amountPaid = nextAmount;
     } else {
       data.status = 'OPEN';
       data.paidAt = null;
       data.amountReceived = null;
+      data.amountPaid = new Prisma.Decimal(0);
     }
 
     const updated = await this.prisma.financialEntry.update({
@@ -946,7 +949,11 @@ export class FinancialService {
       throw new BadRequestException('Somente lançamentos pagos ou parciais podem ser estornados');
     }
 
-    const amountToReverse = this.roundMoney(Number(entry.amountPaid ?? entry.amountReceived ?? entry.amount));
+    // amountPaid defaulta 0 no schema — ?? não cai no amountReceived (0 é válido).
+    const paidFlag = Number(entry.amountPaid);
+    const amountToReverse = this.roundMoney(
+      paidFlag > 0 ? paidFlag : Number(entry.amountReceived ?? entry.amount),
+    );
     if (amountToReverse <= 0) {
       throw new BadRequestException('Nenhum valor pago para estornar');
     }

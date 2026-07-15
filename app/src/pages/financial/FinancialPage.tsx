@@ -339,6 +339,9 @@ export default function FinancialPage() {
         void api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => null);
       }
     },
+    onError: (err) => {
+      alert(err instanceof Error ? err.message : "Não foi possível estornar o lançamento");
+    },
   });
 
   const totals = useMemo(() => {
