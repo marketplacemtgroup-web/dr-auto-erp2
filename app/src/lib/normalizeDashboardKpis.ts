@@ -34,5 +34,9 @@ export function normalizeDashboardKpis(
     grossProfit: num(raw.grossProfit),
     expenses: num(raw.expenses),
     totalProfit: num(raw.totalProfit),
+    cashProfit: num(raw.cashProfit),
+    operationalProfit: num(raw.operationalProfit),
+    orderGross: num(raw.orderGross),
+    orderRevenue: num(raw.orderRevenue),
   };
 }

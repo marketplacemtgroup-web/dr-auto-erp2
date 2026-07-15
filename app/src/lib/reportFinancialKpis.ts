@@ -12,11 +12,13 @@ export function buildReportFinancialKpiItems(
   const { isLoading = false, compare = null } = opts;
   const expenses = financial.expenses ?? financial.expense ?? 0;
   const totalProfit = financial.totalProfit ?? 0;
+  const orderGross = financial.orderGross ?? financial.revenue;
+  const cashProfit = financial.cashProfit ?? financial.result ?? 0;
 
   return [
     {
-      label: "Faturamento",
-      value: isLoading ? "—" : formatMoney(financial.revenue),
+      label: "Faturamento bruto",
+      value: isLoading ? "—" : formatMoney(orderGross),
       change: compare?.revenueChange,
       tone: "success",
       large: true,
@@ -40,6 +42,11 @@ export function buildReportFinancialKpiItems(
       change: compare?.profitChange,
       tone: totalProfit >= 0 ? "success" : "danger",
       large: true,
+    },
+    {
+      label: "Saldo C/C",
+      value: isLoading ? "—" : formatMoney(cashProfit),
+      tone: cashProfit >= 0 ? "success" : "danger",
     },
   ];
 }

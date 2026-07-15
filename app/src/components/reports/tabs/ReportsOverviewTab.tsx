@@ -1,4 +1,4 @@
-import { formatMoney, formatNegativeMoney } from "../../../lib/format";
+import { formatMoney } from "../../../lib/format";
 import { PAYMENT_LABELS } from "../../../lib/paymentMethods";
 import ReportSection from "../ReportSection";
 import ReportGoalCard from "../ReportGoalCard";
@@ -22,8 +22,6 @@ export default function ReportsOverviewTab({
   paymentChart,
   funnel,
   filteredReceipts,
-  expenses,
-  grossProfit,
 }: ReportTabProps) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
@@ -57,7 +55,7 @@ export default function ReportsOverviewTab({
       </ReportSection>
       <ReportSection
         title="Lucro do periodo"
-        subtitle="Pecas + servicos − despesas pagas"
+        subtitle="Bruto − custo peças − terceirizado − taxas/descontos (sem despesas de conta)"
         className="xl:col-span-12"
         period={period}
         token={token}
@@ -65,12 +63,16 @@ export default function ReportsOverviewTab({
         <div className="flex flex-col gap-4">
           <div className="h-[220px] sm:h-[240px] w-full min-h-[200px]">
             <ReportWaterfallChart
-              revenue={grossProfit}
-              expense={expenses}
+              revenue={report.financial.orderGross ?? report.financial.revenue}
+              expense={Math.max(
+                0,
+                (report.financial.orderGross ?? report.financial.revenue) -
+                  report.financial.totalProfit,
+              )}
               result={report.financial.totalProfit}
               labels={{
-                revenue: "Lucro bruto",
-                expense: "Despesas",
+                revenue: "Faturamento bruto",
+                expense: "Custos / taxas / desc.",
                 result: "Lucro total",
               }}
             />
@@ -94,14 +96,19 @@ export default function ReportsOverviewTab({
                 value: formatMoney(report.financial.outsourcedProfit ?? 0),
               },
               {
-                label: "Despesas pagas",
-                value: formatNegativeMoney(expenses),
-                tone: "expense",
-              },
-              {
                 label: "Lucro total",
                 value: formatMoney(report.financial.totalProfit),
                 tone: report.financial.totalProfit >= 0 ? "success" : "danger",
+              },
+              {
+                label: "Saldo C/C",
+                value: formatMoney(
+                  report.financial.cashProfit ?? report.financial.result ?? 0,
+                ),
+                tone:
+                  (report.financial.cashProfit ?? report.financial.result ?? 0) >= 0
+                    ? "success"
+                    : "danger",
               },
             ]}
           />

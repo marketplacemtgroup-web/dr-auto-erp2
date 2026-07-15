@@ -80,20 +80,23 @@ export default function VehiclesPage() {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const vehiclePayload = () => ({
-    customerId: form.customerId,
-    plate: normalizePlate(form.plate),
-    brand: form.brand || undefined,
-    model: form.model || undefined,
-    year: parseOptionalYear(form.year),
-    color: form.color || undefined,
-    vehicleKind: form.vehicleKind,
-    chassis: form.chassis || undefined,
-    renavam: form.renavam || undefined,
-    fuelType: form.fuelType || undefined,
-    currentKm: parseOptionalKm(form.currentKm),
-    notes: form.notes || undefined,
-  });
+  const vehiclePayload = () => {
+    const base = {
+      plate: normalizePlate(form.plate),
+      brand: form.brand || undefined,
+      model: form.model || undefined,
+      year: parseOptionalYear(form.year),
+      color: form.color || undefined,
+      vehicleKind: form.vehicleKind,
+      chassis: form.chassis || undefined,
+      renavam: form.renavam || undefined,
+      fuelType: form.fuelType || undefined,
+      currentKm: parseOptionalKm(form.currentKm),
+      notes: form.notes || undefined,
+    };
+    if (editing) return base;
+    return { ...base, customerId: form.customerId };
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -147,7 +150,7 @@ export default function VehiclesPage() {
       setSaveError(validationError);
       return;
     }
-    if (customersError) {
+    if (!editing && customersError) {
       setSaveError("Não foi possível carregar a lista de clientes. Atualize a página.");
       return;
     }
@@ -214,37 +217,56 @@ export default function VehiclesPage() {
         submitLabel={editing ? "Salvar e abrir ficha" : "Cadastrar e abrir ficha"}
       >
         <FormField label="Cliente *">
-          <input
-            className={inputClass}
-            value={customerSearch}
-            onChange={(e) => setCustomerSearch(e.target.value)}
-            placeholder="Buscar cliente por nome..."
-            disabled={!drawerOpen}
-          />
-          <select
-            className={`${selectClass} mt-2`}
-            value={form.customerId}
-            onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
-            required
-            disabled={customersLoading || !!customersError}
-          >
-            <option value="">
-              {customersLoading
-                ? "Carregando clientes..."
-                : customersError
-                  ? "Erro ao carregar clientes"
-                  : "Selecione..."}
-            </option>
-            {customers?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {customersError && (
-            <p className="text-xs text-red-600 mt-1">
-              Sem permissão ou falha ao listar clientes. Peça acesso ou recarregue a página.
-            </p>
+          {editing ? (
+            <>
+              <input
+                className={inputClass}
+                value={
+                  customers.find((c) => c.id === form.customerId)?.name ||
+                  editing.customer.name
+                }
+                readOnly
+                disabled
+              />
+              <p className="text-xs text-[#64748B] mt-1">
+                Para trocar o titular, use Transferir titularidade na ficha do veículo.
+              </p>
+            </>
+          ) : (
+            <>
+              <input
+                className={inputClass}
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                placeholder="Buscar cliente por nome..."
+                disabled={!drawerOpen}
+              />
+              <select
+                className={`${selectClass} mt-2`}
+                value={form.customerId}
+                onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
+                required
+                disabled={customersLoading || !!customersError}
+              >
+                <option value="">
+                  {customersLoading
+                    ? "Carregando clientes..."
+                    : customersError
+                      ? "Erro ao carregar clientes"
+                      : "Selecione..."}
+                </option>
+                {customers?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {customersError && (
+                <p className="text-xs text-red-600 mt-1">
+                  Sem permissão ou falha ao listar clientes. Peça acesso ou recarregue a página.
+                </p>
+              )}
+            </>
           )}
         </FormField>
         <div className="grid grid-cols-2 gap-3">

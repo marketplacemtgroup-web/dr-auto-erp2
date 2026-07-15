@@ -11,7 +11,6 @@ import {
 import {
   PROFIT_RECOGNIZED_STATUSES,
   calcItemProfit,
-  calcItemPlannedProfit,
   calcItemActualProfit,
   isNonOperationalPayable,
   itemPartUnitCost,
@@ -30,6 +29,11 @@ type ProfitTotals = {
   servicesRevenue: number;
   scannerRevenue: number;
   outsourcedRevenue: number;
+  orderGross: number;
+  orderRevenue: number;
+  lineDiscounts: number;
+  partsCost: number;
+  outsourcedCost: number;
 };
 
 @Injectable()
@@ -142,12 +146,15 @@ export class ReportsService {
     const pct = (cur: number, prev: number) =>
       prev === 0 ? (cur > 0 ? 100 : 0) : roundMoney(((cur - prev) / prev) * 100);
 
+    const currentGross = currentFinancial.orderGross ?? currentFinancial.revenue;
+    const previousGross = prevFin.orderGross ?? prevFin.revenue;
+
     return {
-      revenueChange: pct(currentFinancial.revenue, prevFin.revenue),
+      revenueChange: pct(currentGross, previousGross),
       profitChange: pct(currentFinancial.totalProfit, prevFin.totalProfit),
       averageTicketChange: pct(currentOperations.averageTicket, prevOps.averageTicket),
       deliveredOrdersChange: pct(currentOperations.deliveredCount, prevOps.deliveredCount),
-      previousRevenue: prevFin.revenue,
+      previousRevenue: previousGross,
       previousProfit: prevFin.totalProfit,
     };
   }
@@ -263,6 +270,7 @@ export class ReportsService {
           status: 'PAID',
           type: 'RECEIVABLE',
           paidAt: { gte: period.from, lte: period.to },
+          parentEntryId: null,
         },
         _sum: { discountAmount: true },
       }),
@@ -270,7 +278,9 @@ export class ReportsService {
         where: {
           organizationId,
           status: 'PAID',
+          type: 'RECEIVABLE',
           paidAt: { gte: period.from, lte: period.to },
+          parentEntryId: null,
         },
         _sum: {
           interestAmount: true,
@@ -298,10 +308,13 @@ export class ReportsService {
       dreByMonth.set(key, row);
     }
 
+    const discountsGiven = roundMoney(Number(discountsAgg._sum.discountAmount ?? 0));
+    const cardFees = roundMoney(Number(interestFeesAgg._sum.feeAmount ?? 0));
     const profitMetrics = this.composeProfitMetrics(
       profit,
       paidPayableDetails,
       roundMoney(revenue),
+      { discounts: discountsGiven, fees: cardFees },
     );
 
     const paymentMethodMap = new Map<string, { amount: number; count: number }>();
@@ -427,6 +440,11 @@ export class ReportsService {
       expense: roundMoney(expense),
       expenses: profitMetrics.expenses,
       result: roundMoney(revenue - expense),
+      orderGross: profit.orderGross,
+      orderRevenue: profit.orderRevenue,
+      partsCost: profit.partsCost,
+      outsourcedCost: profit.outsourcedCost,
+      lineDiscounts: profit.lineDiscounts,
       partsProfit: profitMetrics.partsProfit,
       servicesProfit: profitMetrics.servicesProfit,
       scannerProfit: profitMetrics.scannerProfit,
@@ -435,6 +453,7 @@ export class ReportsService {
       grossProfitActual: profitMetrics.grossProfitActual,
       costVariance: profitMetrics.costVariance,
       totalProfit: profitMetrics.totalProfit,
+      cashProfit: profitMetrics.cashProfit,
       operationalProfit: profitMetrics.operationalProfit,
       operationalExpenses: profitMetrics.operationalExpenses,
       nonOperationalExpenses: profitMetrics.nonOperationalExpenses,
@@ -442,12 +461,12 @@ export class ReportsService {
       servicesRevenue: profit.servicesRevenue,
       scannerRevenue: profit.scannerRevenue,
       outsourcedRevenue: profit.outsourcedRevenue,
-      discountsGiven: roundMoney(Number(discountsAgg._sum.discountAmount ?? 0)),
+      discountsGiven,
       interestPaid: roundMoney(
         Number(interestFeesAgg._sum.interestAmount ?? 0) +
           Number(interestFeesAgg._sum.penaltyAmount ?? 0),
       ),
-      cardFees: roundMoney(Number(interestFeesAgg._sum.feeAmount ?? 0)),
+      cardFees,
       openReceivables: {
         count: openReceivablesAgg._count._all,
         amount: Number(openReceivablesAgg._sum.amount ?? 0),
@@ -1079,7 +1098,7 @@ export class ReportsService {
   }
 
   async profitForPeriod(organizationId: string, period: DateRange) {
-    const [profit, paidReceivables, paidPayables] = await Promise.all([
+    const [profit, paidReceivables, paidPayables, discountFeeAgg] = await Promise.all([
       this.calcProfit(organizationId, period),
       this.prisma.financialEntry.findMany({
         where: {
@@ -1101,6 +1120,16 @@ export class ReportsService {
         },
         select: { amountReceived: true, amount: true, description: true, origin: true },
       }),
+      this.prisma.financialEntry.aggregate({
+        where: {
+          organizationId,
+          status: 'PAID',
+          type: 'RECEIVABLE',
+          paidAt: { gte: period.from, lte: period.to },
+          parentEntryId: null,
+        },
+        _sum: { discountAmount: true, feeAmount: true },
+      }),
     ]);
 
     const partsProfit = profit.partsProfit;
@@ -1110,12 +1139,24 @@ export class ReportsService {
     const revenue = roundMoney(
       paidReceivables.reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
     );
-    const metrics = this.composeProfitMetrics(profit, paidPayables, revenue);
+    const discountsGiven = roundMoney(Number(discountFeeAgg._sum.discountAmount ?? 0));
+    const cardFees = roundMoney(Number(discountFeeAgg._sum.feeAmount ?? 0));
+    const metrics = this.composeProfitMetrics(profit, paidPayables, revenue, {
+      discounts: discountsGiven,
+      fees: cardFees,
+    });
 
     return {
       from: this.toLocalIsoDate(period.from),
       to: this.toLocalIsoDate(period.to),
       revenue,
+      orderGross: profit.orderGross,
+      orderRevenue: profit.orderRevenue,
+      partsCost: profit.partsCost,
+      outsourcedCost: profit.outsourcedCost,
+      lineDiscounts: profit.lineDiscounts,
+      discountsGiven,
+      cardFees,
       expenses: metrics.expenses,
       partsProfit,
       servicesProfit,
@@ -1125,6 +1166,7 @@ export class ReportsService {
       grossProfitActual: metrics.grossProfitActual,
       costVariance: metrics.costVariance,
       totalProfit: metrics.totalProfit,
+      cashProfit: metrics.cashProfit,
       operationalProfit: metrics.operationalProfit,
       operationalExpenses: metrics.operationalExpenses,
       nonOperationalExpenses: metrics.nonOperationalExpenses,
@@ -1151,6 +1193,7 @@ export class ReportsService {
       amountReceived?: { toString(): string } | number | null;
     }>,
     revenue = 0,
+    extras: { discounts?: number; fees?: number } = {},
   ) {
     const partsProfit = profit.partsProfit;
     const servicesProfit = profit.servicesProfit;
@@ -1175,6 +1218,20 @@ export class ReportsService {
         .reduce((sum, entry) => sum + this.paidEntryAmount(entry), 0),
     );
     const nonOperationalExpenses = roundMoney(expenses - operationalExpenses);
+    const discountsGiven = extras.discounts ?? 0;
+    const fees = extras.fees ?? 0;
+    // Lucro (cliente): bruto − custo peças − terceirizado − descontos de linha − descontos/taxas na baixa.
+    // NÃO desconta despesas de conta (luz, aluguel, etc.).
+    const totalProfit = roundMoney(
+      profit.orderGross -
+        profit.partsCost -
+        profit.outsourcedCost -
+        profit.lineDiscounts -
+        discountsGiven -
+        fees,
+    );
+    // Saldo C/C: faturamento líquido (amountReceived) − despesas pagas pela conta.
+    const cashProfit = roundMoney(revenue - expenses);
     return {
       partsProfit,
       servicesProfit,
@@ -1186,10 +1243,9 @@ export class ReportsService {
       expenses,
       operationalExpenses,
       nonOperationalExpenses,
-      // Lucro total = caixa (faturamento − despesas pagas no período).
-      totalProfit: roundMoney(revenue - expenses),
-      // Lucro operacional = margem das OS − despesas operacionais (sem retiradas/empréstimos/cartão).
-      operationalProfit: roundMoney(grossProfit - operationalExpenses),
+      totalProfit,
+      cashProfit,
+      operationalProfit: totalProfit,
     };
   }
 
@@ -1211,19 +1267,30 @@ export class ReportsService {
     let servicesRevenue = 0;
     let scannerRevenue = 0;
     let outsourcedRevenue = 0;
+    let orderGross = 0;
+    let lineDiscounts = 0;
+    let partsCost = 0;
+    let outsourcedCost = 0;
     for (const item of items) {
       const revenue = itemRevenue(item);
       const itemType = item.itemType as ServiceOrderItemTypeValue;
+      orderGross += Number(item.unitPrice) * item.quantity;
+      lineDiscounts += Number(item.discount);
       if (itemType === 'PART') {
+        const cost = itemPartUnitCost(item, item.product) * item.quantity;
+        partsCost += cost;
         partsRevenue += revenue;
-        partsProfit += calcItemPlannedProfit(item, item.product);
+        partsProfit += revenue - cost;
         partsProfitActual += calcItemActualProfit(item, item.product);
       } else if (itemType === 'SCANNER') {
         scannerRevenue += revenue;
         scannerProfit += calcItemProfit(item, item.product);
       } else if (itemType === 'THIRD_PARTY') {
+        const cost =
+          item.unitCost != null ? Number(item.unitCost) * item.quantity : revenue;
+        outsourcedCost += cost;
         outsourcedRevenue += revenue;
-        outsourcedProfit += calcItemProfit(item, item.product);
+        outsourcedProfit += revenue - cost;
       } else {
         servicesRevenue += revenue;
         servicesProfit += calcItemProfit(item, item.product);
@@ -1239,6 +1306,11 @@ export class ReportsService {
       servicesRevenue: roundMoney(servicesRevenue),
       scannerRevenue: roundMoney(scannerRevenue),
       outsourcedRevenue: roundMoney(outsourcedRevenue),
+      orderGross: roundMoney(orderGross),
+      orderRevenue: roundMoney(orderGross - lineDiscounts),
+      lineDiscounts: roundMoney(lineDiscounts),
+      partsCost: roundMoney(partsCost),
+      outsourcedCost: roundMoney(outsourcedCost),
     };
   }
 
@@ -1338,7 +1410,8 @@ export class ReportsService {
     return {
       periodo_inicio: report.period.from,
       periodo_fim: report.period.to,
-      faturamento: report.financial.revenue,
+      faturamento: report.financial.orderGross ?? report.financial.revenue,
+      recebimentos: report.financial.revenue,
       despesas: report.financial.expense,
       resultado: report.financial.result,
       lucro_pecas: report.financial.partsProfit,
@@ -1348,6 +1421,10 @@ export class ReportsService {
       lucro_bruto: report.financial.grossProfit,
       despesas_pagas: report.financial.expenses,
       lucro_total: report.financial.totalProfit,
+      lucro_caixa: report.financial.cashProfit,
+      taxas: report.financial.cardFees,
+      custo_pecas: report.financial.partsCost,
+      custo_terceirizado: report.financial.outsourcedCost,
       descontos: report.financial.discountsGiven,
       ticket_medio: report.operations.averageTicket,
       os_entregues: report.operations.deliveredCount,

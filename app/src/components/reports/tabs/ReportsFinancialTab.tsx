@@ -29,9 +29,13 @@ export default function ReportsFinancialTab({
         <ReportProfitMetricGrid
           items={[
             {
-              label: "Faturamento",
-              value: formatMoney(report.financial.revenue),
+              label: "Faturamento bruto",
+              value: formatMoney(report.financial.orderGross ?? report.financial.revenue),
               tone: "success",
+            },
+            {
+              label: "Recebimentos líquidos",
+              value: formatMoney(report.financial.revenue),
             },
             {
               label: "Lucro pecas",
@@ -54,20 +58,6 @@ export default function ReportsFinancialTab({
               value: formatMoney(grossProfit),
             },
             {
-              label: "Lucro bruto real",
-              value: formatMoney(report.financial.grossProfitActual ?? grossProfit),
-            },
-            {
-              label: "Diferenca custo",
-              value: formatMoney(report.financial.costVariance ?? 0),
-              tone:
-                (report.financial.costVariance ?? 0) < 0
-                  ? "danger"
-                  : (report.financial.costVariance ?? 0) > 0
-                    ? "success"
-                    : undefined,
-            },
-            {
               label: "Despesas pagas",
               value: formatNegativeMoney(expenses),
               tone: "expense",
@@ -76,6 +66,14 @@ export default function ReportsFinancialTab({
               label: "Lucro total",
               value: formatMoney(report.financial.totalProfit),
               tone: report.financial.totalProfit >= 0 ? "success" : "danger",
+            },
+            {
+              label: "Saldo C/C",
+              value: formatMoney(report.financial.cashProfit ?? report.financial.result ?? 0),
+              tone:
+                (report.financial.cashProfit ?? report.financial.result ?? 0) >= 0
+                  ? "success"
+                  : "danger",
             },
           ]}
         />
@@ -105,13 +103,14 @@ export default function ReportsFinancialTab({
           ].filter((r) => r.value > 0)}
         />
         <div className="mt-3 space-y-1 text-[12px] text-[#64748B] text-center">
-          <p>Lucro bruto previsto: <span className="font-semibold text-[#1E293B]">{formatMoney(grossProfit)}</span></p>
-          <p>Lucro bruto real: <span className="font-semibold text-[#1E293B]">{formatMoney(report.financial.grossProfitActual ?? grossProfit)}</span></p>
-          <p>Diferenca por custo: <span className="font-semibold text-[#64748B]">{formatMoney(report.financial.costVariance ?? 0)}</span></p>
-          <p>Despesas operacionais: <span className="font-semibold text-[#DC2626]">{formatNegativeMoney(report.financial.operationalExpenses ?? expenses)}</span></p>
-          <p>Lucro operacional: <span className="font-semibold text-[#1E293B]">{formatMoney(report.financial.operationalProfit ?? 0)}</span></p>
+          <p>Faturamento bruto: <span className="font-semibold text-[#1E293B]">{formatMoney(report.financial.orderGross ?? report.financial.revenue)}</span></p>
+          <p>Recebimentos líquidos: <span className="font-semibold text-[#1E293B]">{formatMoney(report.financial.revenue)}</span></p>
+          <p>Despesas pagas: <span className="font-semibold text-[#DC2626]">{formatNegativeMoney(expenses)}</span></p>
           <p className="text-[14px] font-bold text-[#16A34A] pt-1">
-            Lucro total (caixa): {formatMoney(report.financial.totalProfit)}
+            Lucro total: {formatMoney(report.financial.totalProfit)}
+          </p>
+          <p className="text-[13px] font-semibold text-[#0E7490]">
+            Saldo C/C: {formatMoney(report.financial.cashProfit ?? report.financial.result ?? 0)}
           </p>
         </div>
       </ReportSection>

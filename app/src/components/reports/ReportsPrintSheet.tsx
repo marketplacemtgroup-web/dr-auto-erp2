@@ -31,9 +31,10 @@ export default function ReportsPrintSheet({ report }: Props) {
       <h2 className="text-[15px] font-semibold mb-2">Financeiro</h2>
       <table className="w-full mb-6">
         <tbody>
-          <Row label="Faturamento (pagamentos)" value={formatMoney(f.revenue)} />
+          <Row label="Faturamento bruto" value={formatMoney(f.orderGross ?? f.revenue)} />
+          <Row label="Recebimentos líquidos" value={formatMoney(f.revenue)} />
           <Row label="Despesas pagas" value={formatNegativeMoney(f.expenses ?? f.expense)} />
-          <Row label="Resultado caixa" value={formatMoney(f.result)} />
+          <Row label="Saldo C/C" value={formatMoney(f.cashProfit ?? f.result)} />
           <Row label="Lucro pecas" value={formatMoney(f.partsProfit)} />
           <Row label="Lucro servicos" value={formatMoney(f.servicesProfit)} />
           <Row label="Lucro scanner" value={formatMoney(f.scannerProfit ?? 0)} />

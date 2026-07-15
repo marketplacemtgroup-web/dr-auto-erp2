@@ -5,17 +5,34 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ServiceOrderStatus, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListQueryInput, paginatedResponse, parseListQuery } from '../common/pagination';
 import { notDeleted } from '../common/soft-delete';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
+import { TransferVehicleDto } from './dto/transfer-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 
 const finishedStatuses: ServiceOrderStatus[] = ['FINISHED', 'DELIVERED'];
 
+/** OS abertas: RECEIVED…AWAITING_PAYMENT (sem FINISHED/DELIVERED/CANCELLED). */
+const OPEN_ORDER_STATUSES: ServiceOrderStatus[] = [
+  'RECEIVED',
+  'DIAGNOSIS',
+  'AWAITING_QUOTE',
+  'AWAITING_APPROVAL',
+  'APPROVED',
+  'IN_PROGRESS',
+  'AWAITING_PART',
+  'AWAITING_PAYMENT',
+];
+
 @Injectable()
 export class VehiclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(organizationId: string, dto: CreateVehicleDto) {
     const plate = dto.plate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -165,7 +182,18 @@ export class VehiclesService {
   }
 
   async update(organizationId: string, id: string, dto: UpdateVehicleDto) {
-    await this.findOne(organizationId, id);
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      select: { id: true, customerId: true },
+    });
+    if (!vehicle) throw new NotFoundException('Veículo não encontrado');
+
+    if (dto.customerId !== undefined && dto.customerId !== vehicle.customerId) {
+      throw new BadRequestException(
+        'Para alterar o cliente, use Transferir titularidade na ficha do veículo.',
+      );
+    }
+
     let plate: string | undefined;
     if (dto.plate) {
       plate = dto.plate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -185,7 +213,6 @@ export class VehiclesService {
         ...(dto.model !== undefined ? { model: dto.model || null } : {}),
         ...(dto.year !== undefined ? { year: dto.year ?? null } : {}),
         ...(dto.color !== undefined ? { color: dto.color || null } : {}),
-        ...(dto.customerId !== undefined ? { customerId: dto.customerId } : {}),
         ...(dto.vehicleKind !== undefined ? { vehicleKind: dto.vehicleKind } : {}),
         ...(dto.chassis !== undefined ? { chassis: dto.chassis || null } : {}),
         ...(dto.renavam !== undefined ? { renavam: dto.renavam || null } : {}),
@@ -195,6 +222,86 @@ export class VehiclesService {
       },
       include: { customer: true },
     });
+  }
+
+  async transferOwnership(
+    organizationId: string,
+    id: string,
+    dto: TransferVehicleDto,
+    userId: string,
+  ) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      include: { customer: { select: { id: true, name: true } } },
+    });
+    if (!vehicle) throw new NotFoundException('Veículo não encontrado');
+
+    if (dto.customerId === vehicle.customerId) {
+      throw new BadRequestException('O novo titular deve ser diferente do atual.');
+    }
+
+    const toCustomer = await this.prisma.customer.findFirst({
+      where: { id: dto.customerId, organizationId, ...notDeleted },
+      select: { id: true, name: true },
+    });
+    if (!toCustomer) {
+      throw new BadRequestException('Cliente não encontrado. Selecione um cliente válido.');
+    }
+
+    const openOrders = await this.prisma.serviceOrder.count({
+      where: {
+        organizationId,
+        vehicleId: id,
+        ...notDeleted,
+        status: { in: OPEN_ORDER_STATUSES },
+      },
+    });
+
+    const today = new Date();
+    const dateLabel = today.toLocaleDateString('pt-BR');
+    const reasonPart = dto.reason?.trim()
+      ? ` Motivo: ${dto.reason.trim()}.`
+      : '';
+    const noteLine =
+      `[${dateLabel}] Titularidade: ${vehicle.customer.name} → ${toCustomer.name}.${reasonPart} OS em andamento: ${openOrders}. Histórico permanece neste veículo.`;
+    const notes = vehicle.notes ? `${vehicle.notes}\n${noteLine}` : noteLine;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.vehicle.update({
+        where: { id },
+        data: {
+          customerId: toCustomer.id,
+          notes,
+        },
+        include: { customer: true },
+      });
+      await tx.portalAccessToken.deleteMany({ where: { vehicleId: id } });
+      return row;
+    });
+
+    await this.audit.log(organizationId, 'vehicle.transfer_ownership', 'vehicle', {
+      userId,
+      reason: dto.reason?.trim() || undefined,
+      metadata: {
+        vehicleId: id,
+        plate: vehicle.plate,
+        fromCustomerId: vehicle.customer.id,
+        fromCustomerName: vehicle.customer.name,
+        toCustomerId: toCustomer.id,
+        toCustomerName: toCustomer.name,
+        openOrders,
+      },
+    });
+
+    return {
+      ...updated,
+      transfer: {
+        fromCustomer: vehicle.customer,
+        toCustomer,
+        openOrders,
+        portalTokensRevoked: true,
+      },
+    };
   }
 
   async remove(organizationId: string, id: string) {

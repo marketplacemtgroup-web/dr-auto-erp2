@@ -500,10 +500,14 @@ export default function FinancialPage() {
             ...(showMoney
               ? [
                   {
-                    label: "Faturamento",
-                    value: profitLoading ? "—" : formatCurrency(profitSummary?.revenue ?? 0),
+                    label: "Faturamento bruto",
+                    value: profitLoading
+                      ? "—"
+                      : formatCurrency(
+                          profitSummary?.orderGross ?? profitSummary?.orderRevenue ?? profitSummary?.revenue ?? 0,
+                        ),
                     tone: "success" as const,
-                    hint: FINANCIAL_PERIOD_PRESETS.find((p) => p.id === profitPeriod)?.label,
+                    hint: "Preço × qtd OS fechadas",
                   },
                   {
                     label: "Despesas",
@@ -526,7 +530,7 @@ export default function FinancialPage() {
                       (profitSummary?.totalProfit ?? 0) >= 0
                         ? ("success" as const)
                         : ("danger" as const),
-                    hint: "Faturamento − despesas pagas",
+                    hint: "Bruto − custo peças − terceirizado − taxas/descontos",
                   },
                   {
                     label: "Saldo contas",
@@ -535,13 +539,15 @@ export default function FinancialPage() {
                     hint: "Caixa + bancos + carteiras",
                   },
                   {
-                    label: "Lucro operacional",
-                    value: profitLoading ? "—" : formatCurrency(profitSummary?.operationalProfit ?? 0),
+                    label: "Saldo C/C",
+                    value: profitLoading
+                      ? "—"
+                      : formatCurrency(profitSummary?.cashProfit ?? 0),
                     tone:
-                      (profitSummary?.operationalProfit ?? 0) >= 0
+                      (profitSummary?.cashProfit ?? 0) >= 0
                         ? ("success" as const)
                         : ("danger" as const),
-                    hint: "Margem OS − despesas operacionais",
+                    hint: "Faturamento líquido − despesas pagas",
                   },
                 ]
               : []),

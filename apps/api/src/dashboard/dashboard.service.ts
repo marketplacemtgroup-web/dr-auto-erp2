@@ -95,26 +95,27 @@ export class DashboardService {
     };
   }
 
-  /** Financeiro — mesma base dos Relatórios BI (pode demorar mais). */
+  /** Financeiro — profitForPeriod do mês (leve) + cache do dia/ontem. */
   async getFinancialKpis(organizationId: string) {
     const today = startOfDay(new Date());
     const todayEnd = endOfDay(today);
     const yesterday = startOfDay(new Date(today));
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayEnd = endOfDay(yesterday);
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), 1));
     const active = { organizationId, ...notDeleted };
-    const fromStr = this.toLocalIsoDate(monthStart);
-    const toStr = this.toLocalIsoDate(today);
     const paidReceivable = {
       organizationId,
       status: 'PAID' as const,
       type: 'RECEIVABLE' as const,
     };
 
-    const [report, todayCache, yesterdayCache, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
+    const [monthProfit, todayCache, yesterdayCache, paidTodayAgg, paidYesterdayAgg, deliveredOrdersMonth] =
       await Promise.all([
-        this.reportsService.dashboardFinancial(organizationId, fromStr, toStr),
+        this.reportsService.profitForPeriod(organizationId, {
+          from: monthStart,
+          to: todayEnd,
+        }),
         this.dashboardCache.getOrCompute(organizationId, today),
         this.dashboardCache.getOrCompute(organizationId, yesterday),
         this.prisma.financialEntry.aggregate({
@@ -165,6 +166,9 @@ export class DashboardService {
         ? Math.round(totalServiceMs / deliveredOrdersMonth.length / (1000 * 60))
         : 0;
 
+    const monthlyRevenue =
+      monthProfit.orderGross ?? monthProfit.orderRevenue ?? monthProfit.revenue;
+
     return {
       dailyRevenue: dailyAmount,
       dailyRevenueTrend: this.percentTrend(dailyAmount, yesterdayAmount),
@@ -172,13 +176,19 @@ export class DashboardService {
       dailyProfitTrend: this.percentTrend(dailyProfit, yesterdayProfit),
       invoicesThisMonth: deliveredOrdersMonth.length,
       averageTicket,
-      monthlyRevenue: report.financial.revenue,
+      monthlyRevenue,
       averageServiceTimeMinutes,
-      partsProfit: report.financial.partsProfit,
-      servicesProfit: report.financial.servicesProfit,
-      grossProfit: report.financial.grossProfit,
-      expenses: report.financial.expenses,
-      totalProfit: report.financial.totalProfit,
+      partsProfit: monthProfit.partsProfit,
+      servicesProfit: monthProfit.servicesProfit,
+      scannerProfit: monthProfit.scannerProfit,
+      outsourcedProfit: monthProfit.outsourcedProfit,
+      grossProfit: monthProfit.grossProfit,
+      expenses: monthProfit.expenses,
+      totalProfit: monthProfit.totalProfit,
+      cashProfit: monthProfit.cashProfit,
+      operationalProfit: monthProfit.operationalProfit,
+      orderGross: monthProfit.orderGross,
+      orderRevenue: monthProfit.orderRevenue,
     };
   }
 
@@ -287,13 +297,6 @@ export class DashboardService {
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
-  }
-
-  private toLocalIsoDate(date: Date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
   }
 
   private percentTrend(current: number, previous: number): number {

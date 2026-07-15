@@ -83,6 +83,10 @@ export interface DashboardFinancialKpis {
   grossProfit?: number;
   expenses?: number;
   totalProfit?: number;
+  cashProfit?: number;
+  operationalProfit?: number;
+  orderGross?: number;
+  orderRevenue?: number;
 }
 
 export type DashboardKpis = DashboardOperationalKpis & DashboardFinancialKpis;
@@ -428,6 +432,7 @@ export interface FinancialProfitSummary {
   grossProfitActual?: number;
   costVariance?: number;
   totalProfit: number;
+  cashProfit?: number;
   operationalProfit?: number;
   operationalExpenses?: number;
   nonOperationalExpenses?: number;
@@ -435,6 +440,13 @@ export interface FinancialProfitSummary {
   servicesRevenue: number;
   scannerRevenue?: number;
   outsourcedRevenue?: number;
+  orderGross?: number;
+  orderRevenue?: number;
+  partsCost?: number;
+  outsourcedCost?: number;
+  lineDiscounts?: number;
+  cardFees?: number;
+  discountsGiven?: number;
 }
 
 export interface FixedExpenseRow {
@@ -679,6 +691,7 @@ export interface ReportsFull {
     grossProfitActual?: number;
     costVariance?: number;
     totalProfit: number;
+    cashProfit?: number;
     operationalProfit?: number;
     operationalExpenses?: number;
     nonOperationalExpenses?: number;
@@ -686,6 +699,12 @@ export interface ReportsFull {
     servicesRevenue: number;
     scannerRevenue?: number;
     outsourcedRevenue?: number;
+    orderGross?: number;
+    orderRevenue?: number;
+    partsCost?: number;
+    outsourcedCost?: number;
+    lineDiscounts?: number;
+    cardFees?: number;
     discountsGiven: number;
     openReceivables: { count: number; amount: number };
     openPayables: { count: number; amount: number };
@@ -1484,6 +1503,22 @@ export const api = {
     }>,
   ) =>
     request<VehicleRow>(`/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(data) }, token),
+
+  transferVehicle: (
+    token: string,
+    id: string,
+    data: { customerId: string; reason?: string },
+  ) =>
+    request<
+      VehicleRow & {
+        transfer: {
+          fromCustomer: { id: string; name: string };
+          toCustomer: { id: string; name: string };
+          openOrders: number;
+          portalTokensRevoked: boolean;
+        };
+      }
+    >(`/vehicles/${id}/transfer`, { method: "POST", body: JSON.stringify(data) }, token),
 
   deleteVehicle: (token: string, id: string) =>
     request<{ ok: boolean }>(`/vehicles/${id}`, { method: "DELETE" }, token),

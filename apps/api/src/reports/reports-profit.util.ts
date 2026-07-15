@@ -45,8 +45,12 @@ export function calcItemPlannedProfit(item: ItemLike, product?: ProductCostLike)
   if (item.itemType === 'PART') {
     return revenue - itemPartUnitCost(item, product) * item.quantity;
   }
-  if (item.itemType === 'THIRD_PARTY' && item.unitCost != null) {
-    return revenue - Number(item.unitCost) * item.quantity;
+  if (item.itemType === 'THIRD_PARTY') {
+    // Sem unitCost: passa a receita como custo (margem zero no terceirizado).
+    if (item.unitCost != null) {
+      return revenue - Number(item.unitCost) * item.quantity;
+    }
+    return 0;
   }
   return revenue;
 }
@@ -59,6 +63,7 @@ export function calcItemActualProfit(item: ItemLike, product?: ProductCostLike) 
   if (item.itemType === 'THIRD_PARTY') {
     const cost = item.actualUnitCost ?? item.unitCost;
     if (cost != null) return revenue - Number(cost) * item.quantity;
+    return 0;
   }
   return revenue;
 }

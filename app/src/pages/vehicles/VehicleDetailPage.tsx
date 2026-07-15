@@ -4,8 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Printer, Upload } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge";
 import KpiStrip from "../../components/modules/KpiStrip";
-import FormDrawer, { FormField, inputClass } from "../../components/modules/FormDrawer";
-import { api } from "../../lib/api";
+import FormDrawer, { FormField, inputClass, selectClass } from "../../components/modules/FormDrawer";
+import { api, getErrorMessage, LIST_PAGE_SIZE } from "../../lib/api";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { osStatusLabel, osStatusToVariant, quoteStatusLabel } from "../../lib/service-order-status";
 import { routes } from "../../lib/routes";
@@ -30,6 +30,11 @@ export default function VehicleDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [transferCustomerId, setTransferCustomerId] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+  const [transferError, setTransferError] = useState<string | null>(null);
   const [form, setForm] = useState({
     chassis: "",
     renavam: "",
@@ -42,6 +47,15 @@ export default function VehicleDetailPage() {
     ["vehicle", id ?? ""],
     (t) => api.vehicle(t, id!),
     !!id,
+  );
+
+  const { data: customersRes } = useApiQuery(
+    ["customers-picker-transfer", customerSearch],
+    (t) => api.customers(t, customerSearch || undefined, 1, LIST_PAGE_SIZE),
+    transferOpen,
+  );
+  const transferCustomers = (customersRes?.data ?? []).filter(
+    (c) => c.id !== v?.customer.id,
   );
 
   const saveMeta = useMutation({
@@ -57,6 +71,25 @@ export default function VehicleDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
       setEditOpen(false);
     },
+  });
+
+  const transferOwnership = useMutation({
+    mutationFn: () =>
+      api.transferVehicle(token!, id!, {
+        customerId: transferCustomerId,
+        reason: transferReason.trim() || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
+      setTransferOpen(false);
+      setTransferCustomerId("");
+      setTransferReason("");
+      setCustomerSearch("");
+      setTransferError(null);
+    },
+    onError: (err) => setTransferError(getErrorMessage(err)),
   });
 
   async function handleDeleteAttachment(attachmentId: string) {
@@ -123,22 +156,37 @@ export default function VehicleDetailPage() {
             Cliente: {v.customer.name}
           </Link>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setForm({
-              chassis: v.chassis ?? "",
-              renavam: v.renavam ?? "",
-              fuelType: v.fuelType ?? "",
-              currentKm: v.currentKm ? String(v.currentKm) : "",
-              notes: v.notes ?? "",
-            });
-            setEditOpen(true);
-          }}
-          className="h-9 px-4 rounded-lg border border-[#E2E8F0] text-sm text-[#64748B] hover:bg-[#F8FAFC]"
-        >
-          Editar dados técnicos
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setTransferCustomerId("");
+              setTransferReason("");
+              setCustomerSearch("");
+              setTransferError(null);
+              setTransferOpen(true);
+            }}
+            className="h-9 px-4 rounded-lg border border-[#E2E8F0] text-sm text-[#0E7490] hover:bg-[#F0FDFA]"
+          >
+            Transferir titularidade
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setForm({
+                chassis: v.chassis ?? "",
+                renavam: v.renavam ?? "",
+                fuelType: v.fuelType ?? "",
+                currentKm: v.currentKm ? String(v.currentKm) : "",
+                notes: v.notes ?? "",
+              });
+              setEditOpen(true);
+            }}
+            className="h-9 px-4 rounded-lg border border-[#E2E8F0] text-sm text-[#64748B] hover:bg-[#F8FAFC]"
+          >
+            Editar dados técnicos
+          </button>
+        </div>
       </div>
 
       <KpiStrip
@@ -363,6 +411,70 @@ export default function VehicleDetailPage() {
             className={`${inputClass} min-h-[72px] py-2`}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+        </FormField>
+      </FormDrawer>
+
+      <FormDrawer
+        open={transferOpen}
+        title="Transferir titularidade"
+        subtitle={`Placa ${v.plate} · titular atual: ${v.customer.name}`}
+        error={transferError}
+        onClose={() => setTransferOpen(false)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!transferCustomerId) {
+            setTransferError("Selecione o novo cliente.");
+            return;
+          }
+          const msg =
+            `Transferir a titularidade de ${v.customer.name} para o novo cliente?\n\n` +
+            `O histórico de OS permanece neste veículo (placa).\n` +
+            `O acesso do portal do titular antigo será invalidado.` +
+            (v.kpis.openOrders > 0
+              ? `\n\nAtenção: há ${v.kpis.openOrders} OS em andamento.`
+              : "");
+          if (!confirm(msg)) return;
+          setTransferError(null);
+          transferOwnership.mutate();
+        }}
+        loading={transferOwnership.isPending}
+        submitLabel="Confirmar transferência"
+      >
+        {v.kpis.openOrders > 0 ? (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+            Há {v.kpis.openOrders} OS em andamento neste veículo. Elas continuam
+            vinculadas à placa e passarão a aparecer sob o novo titular.
+          </p>
+        ) : null}
+        <FormField label="Novo cliente *">
+          <input
+            className={inputClass}
+            value={customerSearch}
+            onChange={(e) => setCustomerSearch(e.target.value)}
+            placeholder="Buscar cliente por nome..."
+          />
+          <select
+            className={`${selectClass} mt-2`}
+            value={transferCustomerId}
+            onChange={(e) => setTransferCustomerId(e.target.value)}
+            required
+          >
+            <option value="">Selecione...</option>
+            {transferCustomers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Motivo (opcional)">
+          <textarea
+            className={`${inputClass} min-h-[72px] py-2`}
+            value={transferReason}
+            onChange={(e) => setTransferReason(e.target.value)}
+            maxLength={500}
+            placeholder="Ex.: venda do veículo, erro de cadastro..."
           />
         </FormField>
       </FormDrawer>

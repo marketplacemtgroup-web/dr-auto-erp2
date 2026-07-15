@@ -23,16 +23,15 @@ interface SecondaryKPIsProps {
 }
 
 export default function SecondaryKPIs({ kpis, isLoading }: SecondaryKPIsProps) {
-  const totalProfit =
-    kpis?.totalProfit ??
-    (kpis?.partsProfit ?? 0) + (kpis?.servicesProfit ?? 0) - (kpis?.expenses ?? 0);
+  const totalProfit = kpis?.totalProfit ?? 0;
+  const faturamentoBruto = kpis?.orderGross ?? kpis?.monthlyRevenue ?? 0;
 
   const items = [
     { label: "Lucro Geral (Mes)", value: isLoading ? "—" : formatMoney(totalProfit), icon: TrendingUp, iconBg: "#FEE2E2", iconColor: "#EF4444", to: routes.relatorios },
     { label: "Despesas (Mes)", value: isLoading ? "—" : formatNegativeMoney(kpis?.expenses ?? 0), icon: DollarSign, iconBg: "#FEE2E2", iconColor: "#DC2626", to: routes.financeiro },
     { label: "Lucro Pecas (Mes)", value: isLoading ? "—" : formatMoney(kpis?.partsProfit ?? 0), icon: Package, iconBg: "#FFEDD5", iconColor: "#F97316", to: routes.estoque },
     { label: "Lucro Servicos (Mes)", value: isLoading ? "—" : formatMoney(kpis?.servicesProfit ?? 0), icon: Wrench, iconBg: "#DBEAFE", iconColor: "#3B82F6", to: routes.servicos },
-    { label: "Faturamento (Mes)", value: isLoading ? "—" : formatMoney(kpis?.monthlyRevenue ?? 0), icon: DollarSign, iconBg: "#D1FAE5", iconColor: "#10B981", to: routes.relatorios },
+    { label: "Faturamento Bruto (Mes)", value: isLoading ? "—" : formatMoney(faturamentoBruto), icon: DollarSign, iconBg: "#D1FAE5", iconColor: "#10B981", to: routes.relatorios },
     { label: "Tempo Medio de Servico", value: isLoading ? "—" : formatMinutes(kpis?.averageServiceTimeMinutes ?? 0), icon: Timer, iconBg: "#EDE9FE", iconColor: "#8B5CF6", to: routes.ordemDeServico },
   ];
   return (

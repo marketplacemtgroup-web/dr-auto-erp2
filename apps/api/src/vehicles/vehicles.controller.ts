@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
+import { TransferVehicleDto } from './dto/transfer-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -48,6 +49,21 @@ export class VehiclesController {
     @Param('id') id: string,
   ) {
     return this.vehiclesService.findOne(user.organizationId, id);
+  }
+
+  @Post(':id/transfer')
+  @RequirePermissions('vehicles.manage')
+  transfer(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Param('id') id: string,
+    @Body() dto: TransferVehicleDto,
+  ) {
+    return this.vehiclesService.transferOwnership(
+      user.organizationId,
+      id,
+      dto,
+      user.userId,
+    );
   }
 
   @Patch(':id')
