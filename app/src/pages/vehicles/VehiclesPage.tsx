@@ -80,23 +80,19 @@ export default function VehiclesPage() {
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const vehiclePayload = () => {
-    const base = {
-      plate: normalizePlate(form.plate),
-      brand: form.brand || undefined,
-      model: form.model || undefined,
-      year: parseOptionalYear(form.year),
-      color: form.color || undefined,
-      vehicleKind: form.vehicleKind,
-      chassis: form.chassis || undefined,
-      renavam: form.renavam || undefined,
-      fuelType: form.fuelType || undefined,
-      currentKm: parseOptionalKm(form.currentKm),
-      notes: form.notes || undefined,
-    };
-    if (editing) return base;
-    return { ...base, customerId: form.customerId };
-  };
+  const vehicleFields = () => ({
+    plate: normalizePlate(form.plate),
+    brand: form.brand || undefined,
+    model: form.model || undefined,
+    year: parseOptionalYear(form.year),
+    color: form.color || undefined,
+    vehicleKind: form.vehicleKind,
+    chassis: form.chassis || undefined,
+    renavam: form.renavam || undefined,
+    fuelType: form.fuelType || undefined,
+    currentKm: parseOptionalKm(form.currentKm),
+    notes: form.notes || undefined,
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -130,8 +126,11 @@ export default function VehiclesPage() {
   const save = useMutation({
     mutationFn: () =>
       editing
-        ? api.updateVehicle(token!, editing.id, vehiclePayload())
-        : api.createVehicle(token!, vehiclePayload()),
+        ? api.updateVehicle(token!, editing.id, vehicleFields())
+        : api.createVehicle(token!, {
+            customerId: form.customerId,
+            ...vehicleFields(),
+          }),
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       queryClient.invalidateQueries({ queryKey: ["customer"] });
