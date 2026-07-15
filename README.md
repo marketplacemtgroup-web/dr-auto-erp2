@@ -1,6 +1,6 @@
 # Dr. Auto - Oficinas — ERP Oficina Mecânica
 
-Monorepo com frontend Vite (design Kimi preservado), API NestJS, PostgreSQL via Docker e caminho de migração para Supabase.
+Monorepo com frontend Vite (design Kimi preservado), API NestJS, PostgreSQL via Docker e caminho de migraçãddo para Supabase.
 
 ## Pré-requisitos
 
