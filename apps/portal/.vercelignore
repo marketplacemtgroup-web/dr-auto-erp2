@@ -1,0 +1,4 @@
+# A API Nest fica em apps/api (projeto Vercel separado).
+# Esta pasta local quebra o deploy: a Vercel trata /api como serverless
+# e roda npm install pedindo @autocore/database no registry.
+api
