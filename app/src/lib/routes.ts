@@ -45,11 +45,11 @@ export const routes = {
 } as const;
 
 /** Portal público do cliente — links enviados por WhatsApp sempre apontam aqui. */
-export const PORTAL_PUBLIC_BASE_URL = "https://oficina-beto-portal.vercel.app";
+export const PORTAL_PUBLIC_BASE_URL = "https://dr-auto-erp2-portal.vercel.app";
 
 const LEGACY_PORTAL_URLS = new Set([
+  "https://oficina-beto-portal.vercel.app",
   "https://oficinadobeto-portal.vercel.app",
-  "https://dr-auto-erp2-portal.vercel.app",
   "https://wtecmotors-portal.vercel.app",
   "https://wtec-motors-portal.vercel.app",
 ]);
