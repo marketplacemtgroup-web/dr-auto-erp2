@@ -70,20 +70,24 @@ const CHECKLIST_RESULT_OPTIONS = [
 
 const CHECKLIST_TEXT_ONLY_LABELS = new Set<string>();
 
-const MAINTENANCE_INTERVAL_OPTIONS = [
+const MAINTENANCE_INTERVAL_OPTIONS: { value: string; label: string }[] = [
   { value: "none", label: "Nenhum" },
-  { value: "5000_km", label: "5.000 km" },
-  { value: "10000_km", label: "10.000 km" },
+  ...Array.from({ length: 20 }, (_, i) => {
+    const km = (i + 1) * 1000;
+    return {
+      value: `${km}_km`,
+      label: `${km.toLocaleString("pt-BR")} km`,
+    };
+  }),
   { value: "12_months", label: "12 meses" },
-] as const;
+];
 
 function encodeMaintenanceInterval(
   km: number | null | undefined,
   months: number | null | undefined,
 ): string {
   if (months === 12) return "12_months";
-  if (km === 5000) return "5000_km";
-  if (km === 10000) return "10000_km";
+  if (km != null && km > 0) return `${km}_km`;
   return "none";
 }
 
@@ -91,9 +95,9 @@ function decodeMaintenanceInterval(value: string): {
   km: number | null;
   months: number | null;
 } {
-  if (value === "5000_km") return { km: 5000, months: null };
-  if (value === "10000_km") return { km: 10000, months: null };
   if (value === "12_months") return { km: null, months: 12 };
+  const match = /^(\d+)_km$/.exec(value);
+  if (match) return { km: Number(match[1]), months: null };
   return { km: null, months: null };
 }
 
