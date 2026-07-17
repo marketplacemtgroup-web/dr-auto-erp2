@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { DEFAULT_BACKGROUND_URL } from "../../lib/branding";
+import { branding } from "../../lib/branding";
 import { useBrandingStore } from "../../stores/brandingStore";
 
 type QuoteSheetLayoutProps = {
@@ -29,7 +29,7 @@ export default function QuoteSheetLayout({
     <div className="quote-sheet min-h-screen relative">
       <div
         className="portal-bg__image absolute inset-0"
-        style={{ backgroundImage: `url("${encodeURI(DEFAULT_BACKGROUND_URL)}")` }}
+        style={{ backgroundImage: `url("${encodeURI(branding.backgroundUrl)}")` }}
         aria-hidden
       />
       <div className="portal-bg__overlay absolute inset-0" aria-hidden />

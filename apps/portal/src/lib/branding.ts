@@ -1,17 +1,18 @@
 const TAGLINE = "Portal do Cliente";
 
 export const DEFAULT_LOGO_URL = "/logo-oficinascalibur.png";
-export const DEFAULT_BACKGROUND_URL = "/oficina-scalibur.png";
+/** Fundo oficial em `public/oficina-scalibur.png` (?v= evita cache PWA da imagem antiga). */
+export const DEFAULT_BACKGROUND_URL = "/oficina-scalibur.png?v=scalibur";
 
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
 const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
 
 /** Instância dedicada — uma empresa por deploy. */
 export const branding = {
-  appName: import.meta.env.VITE_APP_NAME ?? "OFICINA DO BETO",
+  appName: import.meta.env.VITE_APP_NAME ?? "Oficina Scalibur",
   appTagline: import.meta.env.VITE_APP_TAGLINE ?? TAGLINE,
   defaultOrganizationName:
-    import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "OFICINA DO BETO",
+    import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "Oficina Scalibur",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
   /** Logo em public/logo-oficinascalibur.png */
   logoUrl: DEFAULT_LOGO_URL,
