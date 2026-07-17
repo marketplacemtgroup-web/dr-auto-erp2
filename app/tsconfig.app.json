@@ -8,7 +8,6 @@
     "types": ["vite/client", "vite-plugin-pwa/client"],
     "skipLibCheck": true,
 
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"

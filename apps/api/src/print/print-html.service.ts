@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AttachmentsService } from '../attachments/attachments.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { QuotesService } from '../quotes/quotes.service';
 import { ServiceOrdersService } from '../service-orders/service-orders.service';
@@ -18,13 +19,102 @@ import {
   wrapPrintDocument,
 } from './print-html.utils';
 
+type PrintLine = {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  itemType?: string;
+};
+
 @Injectable()
 export class PrintHtmlService {
   constructor(
     private readonly organizations: OrganizationsService,
     private readonly serviceOrders: ServiceOrdersService,
     private readonly quotes: QuotesService,
+    private readonly attachments: AttachmentsService,
   ) {}
+
+  private async resolveImageSrc(organizationId: string, attachmentId: string): Promise<string> {
+    try {
+      const { url } = await this.attachments.getSignedUrlForClient(organizationId, attachmentId);
+      if (url?.trim()) return url.trim();
+    } catch {
+      /* fallback abaixo */
+    }
+    return `/api/attachments/${attachmentId}/file`;
+  }
+
+  private partitionLines(lines: PrintLine[]) {
+    const services: PrintLine[] = [];
+    const parts: PrintLine[] = [];
+    for (const line of lines) {
+      if (line.itemType === 'PART') parts.push(line);
+      else services.push(line);
+    }
+    return { services, parts };
+  }
+
+  private renderItemsSections(lines: PrintLine[], grandTotal: number | string): string {
+    if (lines.length === 0) {
+      return `<section>
+        <p class="section-title">Serviços e Peças</p>
+        <table>
+          <tbody><tr><td colspan="4" class="muted text-center" style="padding:12px 8px;">Nenhum item lancado.</td></tr></tbody>
+        </table>
+      </section>`;
+    }
+
+    const { services, parts } = this.partitionLines(lines);
+    const renderTable = (title: string, rows: PrintLine[]) => {
+      if (rows.length === 0) return '';
+      const subtotal = rows.reduce((sum, row) => sum + row.total, 0);
+      const body = rows
+        .map(
+          (item) => `<tr>
+            <td>${escapeHtml(item.description)}</td>
+            <td class="text-center">${item.quantity}</td>
+            <td class="text-right">${formatMoney(item.unitPrice)}</td>
+            <td class="text-right total-value">${formatMoney(item.total)}</td>
+          </tr>`,
+        )
+        .join('');
+      return `<section>
+        <p class="section-title">${escapeHtml(title)}</p>
+        <table>
+          <thead>
+            <tr>
+              <th class="text-left">Descrição</th>
+              <th class="text-center" style="width:48px;">Qtd</th>
+              <th class="text-right" style="width:80px;">Unit.</th>
+              <th class="text-right" style="width:96px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" class="text-right muted">Subtotal ${escapeHtml(title.toLowerCase())}</td>
+              <td class="text-right">${formatMoney(subtotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>`;
+    };
+
+    return `${renderTable('Serviços', services)}
+      ${renderTable('Peças', parts)}
+      <section>
+        <table>
+          <tfoot>
+            <tr>
+              <td colspan="3" class="text-right">Total geral</td>
+              <td class="text-right total-value">${formatMoney(grandTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>`;
+  }
 
   async renderServiceOrder(organizationId: string, id: string): Promise<string> {
     const [org, os] = await Promise.all([
@@ -41,20 +131,13 @@ export class PrintHtmlService {
     const contactLine = [branding.phone, branding.email].filter(Boolean).join(' · ');
     const openedAt = os.enteredAt ?? os.createdAt;
 
-    const itemsRows =
-      (os.items ?? []).length === 0
-        ? `<tr><td colspan="4" class="muted text-center" style="padding:12px 8px;">Nenhum item lancado.</td></tr>`
-        : (os.items ?? [])
-            .map((item) => {
-              const total = Number(item.unitPrice) * item.quantity;
-              return `<tr>
-                <td>${escapeHtml(item.description)}</td>
-                <td class="text-center">${item.quantity}</td>
-                <td class="text-right">${formatMoney(item.unitPrice)}</td>
-                <td class="text-right total-value">${formatMoney(total)}</td>
-              </tr>`;
-            })
-            .join('');
+    const printLines: PrintLine[] = (os.items ?? []).map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      total: Number(item.unitPrice) * item.quantity,
+      itemType: item.itemType,
+    }));
 
     const images = (os.attachments ?? []).filter((a) =>
       (a.mimeType ?? '').startsWith('image/'),
@@ -67,40 +150,45 @@ export class PrintHtmlService {
     }
     const usedAttachmentIds = new Set<string>();
 
-    const checklistPhotoCards = (os.checklistItems ?? [])
-      .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .flatMap((item) => {
-        const slug = checklistCategorySlug(item.label);
-        const photo = photoByCategory.get(slug);
-        if (!photo) return [];
-        usedAttachmentIds.add(photo.id);
-        const resultLabel = checklistResultLabel(item.result);
-        const notes = item.notes?.trim();
-        return [
-          `<div class="photo-card">
+    const checklistPhotoCards = (
+      await Promise.all(
+        (os.checklistItems ?? [])
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(async (item) => {
+            const slug = checklistCategorySlug(item.label);
+            const photo = photoByCategory.get(slug);
+            if (!photo) return '';
+            usedAttachmentIds.add(photo.id);
+            const resultLabel = checklistResultLabel(item.result);
+            const notes = item.notes?.trim();
+            const src = await this.resolveImageSrc(organizationId, photo.id);
+            return `<div class="photo-card">
             <p class="photo-label">${escapeHtml(item.label)}${resultLabel ? ` — <span class="photo-result">${escapeHtml(resultLabel)}</span>` : ''}</p>
-            <img src="/api/attachments/${escapeHtml(photo.id)}/file" alt="${escapeHtml(item.label)}" />
+            <img src="${escapeHtml(src)}" alt="${escapeHtml(item.label)}" />
             ${notes ? `<p class="photo-notes">${escapeHtml(notes)}</p>` : ''}
-          </div>`,
-        ];
-      })
-      .join('');
+          </div>`;
+          }),
+      )
+    ).join('');
 
-    const mediaPhotoCards = images
-      .filter(
-        (attachment) =>
-          !attachment.category?.startsWith('checklist-') &&
-          !usedAttachmentIds.has(attachment.id),
-      )
-      .map(
-        (attachment) =>
-          `<div class="photo-card">
+    const mediaPhotoCards = (
+      await Promise.all(
+        images
+          .filter(
+            (attachment) =>
+              !attachment.category?.startsWith('checklist-') &&
+              !usedAttachmentIds.has(attachment.id),
+          )
+          .map(async (attachment) => {
+            const src = await this.resolveImageSrc(organizationId, attachment.id);
+            return `<div class="photo-card">
             <p class="photo-label">${escapeHtml(attachment.fileName)}</p>
-            <img src="/api/attachments/${escapeHtml(attachment.id)}/file" alt="${escapeHtml(attachment.fileName)}" />
-          </div>`,
+            <img src="${escapeHtml(src)}" alt="${escapeHtml(attachment.fileName)}" />
+          </div>`;
+          }),
       )
-      .join('');
+    ).join('');
 
     const photosHtml =
       checklistPhotoCards || mediaPhotoCards
@@ -169,26 +257,7 @@ export class PrintHtmlService {
           : ''
       }
 
-      <section>
-        <p class="section-title">Serviços e Peças</p>
-        <table>
-          <thead>
-            <tr>
-              <th class="text-left">Descrição</th>
-              <th class="text-center" style="width:48px;">Qtd</th>
-              <th class="text-right" style="width:80px;">Unit.</th>
-              <th class="text-right" style="width:96px;">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-          <tfoot>
-            <tr>
-              <td colspan="3" class="text-right">Total</td>
-              <td class="text-right total-value">${formatMoney(os.totalAmount)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </section>
+      ${this.renderItemsSections(printLines, Number(os.totalAmount))}
 
       ${photosHtml}
 
@@ -253,63 +322,68 @@ export class PrintHtmlService {
         ? new Date(new Date(quote.createdAt).getTime() + 15 * 86400000).toISOString().slice(0, 10)
         : null;
 
-    const freeTextEnabled = quote.freeTextEnabled && quote.freeTextContent?.trim();
-    const displayAmount = freeTextEnabled && quote.freeTextAmount != null
-      ? Number(quote.freeTextAmount)
-      : Number(quote.amount);
+    const freeTextEnabled = Boolean(quote.freeTextEnabled && quote.freeTextContent?.trim());
+    const displayAmount =
+      freeTextEnabled && quote.freeTextAmount != null
+        ? Number(quote.freeTextAmount)
+        : Number(quote.amount);
 
-    const lines =
-      freeTextEnabled
-        ? []
-        : (quote.lines ?? []).length > 0
-          ? (quote.lines ?? []).map((line) => ({
-              description: line.description,
-              quantity: line.quantity,
-              unitPrice: Number(line.unitPrice),
-              total: Number(line.unitPrice) * line.quantity - Number(line.discount ?? 0),
-            }))
-          : (os.items ?? []).map((item) => ({
-              description: item.description,
-              quantity: item.quantity,
-              unitPrice: Number(item.unitPrice),
-              total: Number(item.unitPrice) * item.quantity,
-            }));
-
-    const linesRows =
-      freeTextEnabled
-        ? `<tr>
-            <td class="whitespace-pre">${escapeHtml(quote.freeTextContent!.trim())}</td>
-            <td class="text-center">1</td>
-            <td class="text-right">${formatMoney(displayAmount)}</td>
-            <td class="text-right total-value">${formatMoney(displayAmount)}</td>
-          </tr>`
-        : lines.length === 0
-          ? `<tr><td colspan="4" class="muted text-center" style="padding:12px 8px;">Nenhum item no orçamento.</td></tr>`
-          : lines
-              .map(
-                (line) => `<tr>
-                <td>${escapeHtml(line.description)}</td>
-                <td class="text-center">${line.quantity}</td>
-                <td class="text-right">${formatMoney(line.unitPrice)}</td>
-                <td class="text-right total-value">${formatMoney(line.total)}</td>
-              </tr>`,
-              )
-              .join('');
+    const lines: PrintLine[] = freeTextEnabled
+      ? []
+      : (quote.lines ?? []).length > 0
+        ? (quote.lines ?? []).map((line) => ({
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: Number(line.unitPrice),
+            total: Number(line.unitPrice) * line.quantity - Number(line.discount ?? 0),
+            itemType: line.lineType ?? 'SERVICE',
+          }))
+        : (os.items ?? []).map((item) => ({
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice),
+            total: Number(item.unitPrice) * item.quantity,
+            itemType: item.itemType,
+          }));
 
     const photosHtml =
       images.length > 0
         ? `<section style="margin-bottom:16px;">
             <p class="section-title">Registro fotografico</p>
             <div class="photos">
-              ${images
-                .map(
-                  (a) =>
-                    `<div><img src="/api/attachments/${escapeHtml(a.id)}/file" alt="${escapeHtml(a.fileName)}" /></div>`,
+              ${(
+                await Promise.all(
+                  images.map(async (a) => {
+                    const src = await this.resolveImageSrc(organizationId, a.id);
+                    return `<div class="photo-card"><img src="${escapeHtml(src)}" alt="${escapeHtml(a.fileName)}" /></div>`;
+                  }),
                 )
-                .join('')}
+              ).join('')}
             </div>
           </section>`
         : '';
+
+    const freeTextSection = freeTextEnabled
+      ? `<section>
+          <p class="section-title">Descrição</p>
+          <table>
+            <tbody>
+              <tr>
+                <td class="whitespace-pre">${escapeHtml(quote.freeTextContent!.trim())}</td>
+                <td class="text-center">1</td>
+                <td class="text-right">${formatMoney(displayAmount)}</td>
+                <td class="text-right total-value">${formatMoney(displayAmount)}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" class="text-right">Total geral</td>
+                <td class="text-right total-value">${formatMoney(displayAmount)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </section>`
+      : this.renderItemsSections(lines, displayAmount);
 
     const body = `
       <header class="header">
@@ -370,26 +444,7 @@ export class PrintHtmlService {
           : ''
       }
 
-      <section>
-        <p class="section-title">Serviços e Peças</p>
-        <table>
-          <thead>
-            <tr>
-              <th class="text-left">Descrição</th>
-              <th class="text-center" style="width:48px;">Qtd</th>
-              <th class="text-right" style="width:80px;">Unit.</th>
-              <th class="text-right" style="width:96px;">Total</th>
-            </tr>
-          </thead>
-          <tbody>${linesRows}</tbody>
-          <tfoot>
-            <tr>
-              <td colspan="3" class="text-right">Total</td>
-              <td class="text-right total-value">${formatMoney(displayAmount)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </section>
+      ${freeTextSection}
 
       ${photosHtml}
 

@@ -397,7 +397,7 @@ export default function ServiceOrderDetailPage() {
   useEffect(() => {
     if (!os || searchParams.get("print") !== "1") return;
     const timer = window.setTimeout(() => {
-      printDocument("os");
+      void printDocument("os");
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -818,7 +818,7 @@ export default function ServiceOrderDetailPage() {
           </button>
           <button
             type="button"
-            onClick={() => printDocument("os")}
+            onClick={() => void printDocument("os")}
             className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-[#E2E8F0] text-sm text-[#64748B] hover:bg-[#F8FAFC] print:hidden"
           >
             <Printer size={16} />
@@ -1171,7 +1171,7 @@ export default function ServiceOrderDetailPage() {
               <button
                 type="button"
                 disabled={!canPrintQuote}
-                onClick={() => printDocument("quote")}
+                onClick={() => void printDocument("quote")}
                 className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-[#0F3D4C] text-white text-sm font-medium hover:bg-[#0a2d38] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Printer size={16} />

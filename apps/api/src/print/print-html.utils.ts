@@ -166,11 +166,11 @@ export const PRINT_STYLES = `
   .muted { color: #64748B; }
   .total-value { color: #0F3D4C; font-weight: 700; }
   .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-  .photo-card { break-inside: avoid; }
+  .photo-card { break-inside: avoid; page-break-inside: avoid; }
   .photo-label { font-size: 10px; font-weight: 700; color: #0F3D4C; margin: 0 0 4px; }
   .photo-result { color: #64748B; font-weight: 600; }
   .photo-notes { font-size: 10px; color: #444; margin: 4px 0 0; line-height: 1.35; white-space: pre-wrap; }
-  .photos img { width: 100%; height: 120px; object-fit: cover; border: 1px solid #E2E8F0; border-radius: 4px; }
+  .photos img { width: 100%; height: 120px; object-fit: cover; border: 1px solid #E2E8F0; border-radius: 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #E2E8F0; }
   .legal h3 { font-size: 11px; font-weight: 700; color: #111; margin: 0 0 4px; }
   .legal p, .legal li { font-size: 10px; line-height: 1.3; color: #444; text-align: justify; }

@@ -261,4 +261,22 @@
     break-inside: avoid;
     page-break-inside: avoid;
   }
+
+  .print-photos {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-photo-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-photo-img {
+    max-width: 100% !important;
+    height: 28mm !important;
+    object-fit: cover !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
