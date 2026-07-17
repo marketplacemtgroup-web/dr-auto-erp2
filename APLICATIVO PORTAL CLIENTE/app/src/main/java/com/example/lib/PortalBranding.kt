@@ -4,8 +4,8 @@ object PortalBranding {
     const val APP_NAME = "OFICINA DO BETO"
     const val APP_TAGLINE = "Portal do Cliente"
 
-    /** Logo oficial do portal (apps/portal/public/logo-oficinadobeto.png). */
-    const val LOCAL_LOGO_PATH = "/logo-oficinadobeto.png"
+    /** Logo oficial do portal (apps/portal/public/logo-oficinascalibur.png). */
+    const val LOCAL_LOGO_PATH = "/logo-oficinascalibur.png"
 
     fun defaultLogoUrl(): String = resolveMediaUrl(LOCAL_LOGO_PATH)
 

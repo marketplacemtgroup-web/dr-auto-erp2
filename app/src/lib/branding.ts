@@ -10,9 +10,9 @@ export const branding = {
   defaultOrganizationName:
     import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "OFICINA DO BETO",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
-  /** Logo em public/logo-oficinadobeto.png */
-  logoUrl: "/logo-oficinadobeto.png",
-  watermarkUrl: "/logo-oficinadobeto.png",
+  /** Logo em public/logo-oficinascalibur.png */
+  logoUrl: "/logo-oficinascalibur.png",
+  watermarkUrl: "/logo-oficinascalibur.png",
   printContact: {
     address: "",
     email: "oficinadobeto@gmail.com",

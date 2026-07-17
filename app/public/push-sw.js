@@ -8,8 +8,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/logo-oficinadobeto.png',
-      badge: '/logo-oficinadobeto.png',
+      icon: '/logo-oficinascalibur.png',
+      badge: '/logo-oficinascalibur.png',
       data: { url: data.url || '/' },
     }),
   );

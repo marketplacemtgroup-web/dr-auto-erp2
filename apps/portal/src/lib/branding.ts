@@ -1,7 +1,7 @@
 const TAGLINE = "Portal do Cliente";
 
-export const DEFAULT_LOGO_URL = "/logo-oficinadobeto.png";
-export const DEFAULT_BACKGROUND_URL = "/oficina do beto.png";
+export const DEFAULT_LOGO_URL = "/logo-oficinascalibur.png";
+export const DEFAULT_BACKGROUND_URL = "/oficina-scalibur.png";
 
 /** URLs de logo antigas — ignoradas em favor do logo do deploy. */
 const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"]);
@@ -13,9 +13,9 @@ export const branding = {
   defaultOrganizationName:
     import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "OFICINA DO BETO",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
-  /** Logo em public/logo-oficinadobeto.png */
+  /** Logo em public/logo-oficinascalibur.png */
   logoUrl: DEFAULT_LOGO_URL,
-  /** Fundo em public/oficina do beto.png */
+  /** Fundo em public/oficina-scalibur.png */
   backgroundUrl: DEFAULT_BACKGROUND_URL,
   /** Compatibilidade com referências antigas */
   legacyLogoUrl: DEFAULT_LOGO_URL,

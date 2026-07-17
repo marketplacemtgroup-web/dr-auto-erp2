@@ -43,7 +43,7 @@ export default defineConfig({
         globIgnores: ["**/manifest.webmanifest"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
-      includeAssets: ["logo-oficinadobeto.png", "favicon.png", "favicon.ico", "oficina do beto.png", "oficina-dobeto.png"],
+      includeAssets: ["logo-oficinascalibur.png", "favicon.png", "favicon.ico", "oficina-scalibur.png", "oficina scalibur.png"],
       manifest: {
         id: "/",
         name: "Minha Oficina — Portal do Cliente",
@@ -59,9 +59,9 @@ export default defineConfig({
         scope: "/",
         lang: "pt-BR",
         icons: [
-          { src: "logo-oficinadobeto.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "logo-oficinadobeto.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "logo-oficinadobeto.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "logo-oficinascalibur.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "logo-oficinascalibur.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "logo-oficinascalibur.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
     }),

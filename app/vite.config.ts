@@ -47,7 +47,7 @@ export default defineConfig({
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
-      includeAssets: ["logo-oficinadobeto.png", "favicon.png", "favicon.ico"],
+      includeAssets: ["logo-oficinascalibur.png", "favicon.ico"],
       manifest: {
         id: "/dashboard/",
         name: "OFICINA DO BETO — OFICINA MECÂNICA",
@@ -63,19 +63,19 @@ export default defineConfig({
         lang: "pt-BR",
         icons: [
           {
-            src: "logo-oficinadobeto.png",
+            src: "logo-oficinascalibur.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "logo-oficinadobeto.png",
+            src: "logo-oficinascalibur.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "logo-oficinadobeto.png",
+            src: "logo-oficinascalibur.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

@@ -16,4 +16,4 @@ VITE_BRAND_LOGO_URL=/branding/logo.png
 VITE_BRAND_BACKGROUND_URL=/branding/background.webp
 ```
 
-Os arquivos em `/logo-oficinadobeto.png` e `/moto-bmw-bg.webp` na raiz de `public/` são cópias de compatibilidade.
+Os arquivos em `/logo-oficinascalibur.png` e `/moto-bmw-bg.webp` na raiz de `public/` são cópias de compatibilidade.

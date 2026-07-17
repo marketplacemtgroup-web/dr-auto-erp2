@@ -13,19 +13,19 @@
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/logo-oficinadobeto.png",
+      "src": "/logo-oficinascalibur.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo-oficinadobeto.png",
+      "src": "/logo-oficinascalibur.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo-oficinadobeto.png",
+      "src": "/logo-oficinascalibur.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
