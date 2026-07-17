@@ -1,0 +1,11 @@
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "account_id" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "cost_center_id" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "document_type" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "document_number" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "amount_paid" DECIMAL(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "issue_date" DATE;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "attachment_url" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "reversed_at" TIMESTAMP(3);
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "reversed_by_user_id" TEXT;
+ALTER TABLE "financial_entries" ADD COLUMN IF NOT EXISTS "reversal_reason" TEXT;

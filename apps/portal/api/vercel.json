@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "installCommand": "cd ../.. && npm ci --include=dev",
+  "buildCommand": "cd ../.. && npm run build -w @autocore/database && npm run generate -w @autocore/database && node apps/api/scripts/prepare-api-vercel.mjs && npm run build -w @autocore/api",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/apps/api/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/purge-attachments",
+      "schedule": "0 3 * * *"
+    }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60,
+      "includeFiles": "dist/**,node_modules/{@prisma,.prisma,@autocore}/**"
+    },
+    "api/ping.ts": {
+      "maxDuration": 10
+    },
+    "api/env-check.ts": {
+      "maxDuration": 15,
+      "includeFiles": "node_modules/{@prisma,.prisma,@autocore}/**"
+    },
+    "api/setup-status.ts": {
+      "maxDuration": 15,
+      "includeFiles": "node_modules/{@prisma,.prisma,@autocore}/**"
+    }
+  }
+}
