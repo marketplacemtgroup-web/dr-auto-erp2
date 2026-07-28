@@ -21,7 +21,7 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "dist/**,node_modules/{@prisma,.prisma,@autocore}/**"
+      "includeFiles": "api/nest-dist/**,dist/**,node_modules/{@prisma,.prisma,@autocore}/**"
     },
     "api/ping.ts": {
       "maxDuration": 10

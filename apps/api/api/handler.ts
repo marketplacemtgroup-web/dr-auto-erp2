@@ -58,8 +58,16 @@ export default async function vercelHandler(req: VercelRequest, res: VercelRespo
 
   try {
     if (!cachedHandler) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getExpressApp } = require('../dist/bootstrap.js') as typeof import('../dist/bootstrap.js');
+      // nest-dist é copiado no postbuild; dist fica como fallback local.
+      // Strings estáticas ajudam o file tracer da Vercel + includeFiles.
+      let getExpressApp: () => Promise<(req: VercelRequest, res: VercelResponse) => void>;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        ({ getExpressApp } = require('./nest-dist/bootstrap.js'));
+      } catch {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        ({ getExpressApp } = require('../dist/bootstrap.js'));
+      }
       cachedHandler = await getExpressApp();
     }
     return cachedHandler(req, res);

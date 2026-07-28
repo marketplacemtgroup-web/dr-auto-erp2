@@ -6,7 +6,7 @@ Atualizado: 2026-07-28
 
 Liberação de edição comercial pós-aprovação **implementada**.
 
-Na OS (orçamento aprovado), a oficina pode editar nome, quantidade, preço e desconto dos itens sem precisar deletar o orçamento. A sync preserva `approved` nas linhas alteradas; totais de OS/orçamento recalculam.
+**API prod 500:** `Cannot find module '../dist/bootstrap.js'` — packaging Vercel. Fix local: `postbuild` copia `dist` → `api/nest-dist` + handler/`vercel.json` atualizados. **Precisa commit + redeploy da API.**
 
 ## Próximo
 
