@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "prebuild": "node scripts/prepare-api-vercel.mjs",
-    "build": "nest build",
+    "build": "node scripts/clean-api-dist.mjs && nest build",
     "postbuild": "node scripts/copy-nest-dist-for-vercel.mjs",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
