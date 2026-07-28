@@ -46,8 +46,8 @@ export default defineConfig({
       includeAssets: ["logo-oficinascalibur.png", "favicon.png", "favicon.ico", "oficina-scalibur.png", "oficina scalibur.png"],
       manifest: {
         id: "/",
-        name: "Minha Oficina — Portal do Cliente",
-        short_name: "Minha Oficina",
+        name: "OFICINA SCALIBUR — Portal do Cliente",
+        short_name: "OFICINA SCALIBUR",
         description: "Acompanhe seu veículo e orçamentos na oficina",
         theme_color: "#0F3D4C",
         background_color: "#F1F5F9",

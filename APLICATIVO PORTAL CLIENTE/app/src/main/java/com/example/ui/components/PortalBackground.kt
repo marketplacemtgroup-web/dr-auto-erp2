@@ -65,7 +65,7 @@ fun PortalBrandLogo(
 ) {
     Image(
         painter = painterResource(R.drawable.logo_oficina_beto),
-        contentDescription = "OFICINA DO BETO",
+        contentDescription = "OFICINA SCALIBUR",
         modifier = modifier,
         contentScale = ContentScale.Fit,
     )

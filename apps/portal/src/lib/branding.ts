@@ -9,10 +9,10 @@ const LEGACY_LOGO_URLS = new Set(["/logo-wtecmotors.png", "/branding/logo.png"])
 
 /** Instância dedicada — uma empresa por deploy. */
 export const branding = {
-  appName: import.meta.env.VITE_APP_NAME ?? "Oficina Scalibur",
+  appName: import.meta.env.VITE_APP_NAME ?? "OFICINA SCALIBUR",
   appTagline: import.meta.env.VITE_APP_TAGLINE ?? TAGLINE,
   defaultOrganizationName:
-    import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "Oficina Scalibur",
+    import.meta.env.VITE_DEFAULT_ORGANIZATION_NAME ?? "OFICINA SCALIBUR",
   singleTenant: import.meta.env.VITE_SINGLE_TENANT !== "false",
   /** Logo em public/logo-oficinascalibur.png */
   logoUrl: DEFAULT_LOGO_URL,

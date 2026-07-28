@@ -1,7 +1,7 @@
 package com.example.lib
 
 object PortalBranding {
-    const val APP_NAME = "OFICINA DO BETO"
+    const val APP_NAME = "OFICINA SCALIBUR"
     const val APP_TAGLINE = "Portal do Cliente"
 
     /** Logo oficial do portal (apps/portal/public/logo-oficinascalibur.png). */

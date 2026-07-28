@@ -1,5 +1,5 @@
 {
-  "name": "OFICINA DO BETO — App Oficina",
+  "name": "OFICINA SCALIBUR — App Oficina",
   "description": "App Android interno: dashboard, OS, checklist fotográfico e orçamento integrado à API NestJS.",
   "requestFramePermissions": ["CAMERA"],
   "majorCapabilities": []

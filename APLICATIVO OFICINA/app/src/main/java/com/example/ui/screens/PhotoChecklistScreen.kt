@@ -410,7 +410,7 @@ private fun CameraCaptureModal(
                         title = "Permissão da câmera necessária",
                         description = "Para fotografar o veículo no checklist, permita o acesso à câmera.",
                         permissionState = cameraPermission,
-                        settingsHint = "Celular → Apps → Oficina do Beto → Permissões → Câmera",
+                        settingsHint = "Celular → Apps → Oficina Scalibur → Permissões → Câmera",
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }

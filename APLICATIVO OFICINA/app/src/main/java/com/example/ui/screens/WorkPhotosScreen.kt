@@ -210,7 +210,7 @@ fun WorkPhotosScreen(
                             title = "Permissão da câmera",
                             description = "Permita o acesso à câmera para registrar fotos do serviço.",
                             permissionState = cameraPermission,
-                            settingsHint = "Apps → Oficina do Beto → Câmera",
+                            settingsHint = "Apps → Oficina Scalibur → Câmera",
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                         Spacer(modifier = Modifier.height(8.dp))

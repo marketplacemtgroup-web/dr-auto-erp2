@@ -50,8 +50,8 @@ export default defineConfig({
       includeAssets: ["logo-oficinascalibur.png", "favicon.ico"],
       manifest: {
         id: "/dashboard/",
-        name: "OFICINA DO BETO — OFICINA MECÂNICA",
-        short_name: "OFICINA DO BETO",
+        name: "OFICINA SCALIBUR — OFICINA MECÂNICA",
+        short_name: "OFICINA SCALIBUR",
         description: "Gestão da oficina em tempo real",
         theme_color: "#0F3D4C",
         background_color: "#F1F5F9",

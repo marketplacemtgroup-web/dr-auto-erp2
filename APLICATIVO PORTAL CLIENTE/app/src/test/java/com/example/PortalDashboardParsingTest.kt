@@ -18,7 +18,7 @@ class PortalDashboardParsingTest {
         val json = """
         {
           "organization": {
-            "name": "OFICINA DO BETO",
+            "name": "OFICINA SCALIBUR",
             "phone": "11999999999",
             "email": null,
             "portalWelcome": "Bem-vindo",

@@ -195,7 +195,7 @@ fun ProfileScreen(
                     BetoLogo(size = BrandLogoSize.Compact)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "OFICINA DO BETO — App v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        text = "OFICINA SCALIBUR — App v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.bodySmall.copy(color = Graphite, fontSize = 10.sp),
                         textAlign = TextAlign.Center,
                     )

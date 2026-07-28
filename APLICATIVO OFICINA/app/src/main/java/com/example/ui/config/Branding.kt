@@ -1,8 +1,8 @@
 package com.example.ui.config
 
 object Branding {
-    const val APP_NAME = "OFICINA DO BETO"
-    const val COMPANY_NAME = "OFICINA DO BETO"
+    const val APP_NAME = "OFICINA SCALIBUR"
+    const val COMPANY_NAME = "OFICINA SCALIBUR"
     const val SUBTITLE = "App Interno da Oficina"
 
     const val COLOR_PRIMARY = "#C1121F"

@@ -75,7 +75,7 @@ fun BrandHeaderLogo(
         BetoLogo(size = BrandLogoSize.Header)
         Column {
             Text(
-                text = "OFICINA DO BETO",
+                text = "OFICINA SCALIBUR",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
                     color = FrostWhite,

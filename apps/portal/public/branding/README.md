@@ -10,7 +10,7 @@ Substitua os arquivos desta pasta para personalizar o portal por cliente/projeto
 Configure também as variáveis em `.env`:
 
 ```env
-VITE_APP_NAME=Oficina Scalibur
+VITE_APP_NAME=OFICINA SCALIBUR
 VITE_APP_TAGLINE=Portal do Cliente
 VITE_BRAND_LOGO_URL=/logo-oficinascalibur.png
 VITE_BRAND_BACKGROUND_URL=/oficina-scalibur.png

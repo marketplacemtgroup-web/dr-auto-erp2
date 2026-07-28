@@ -47,7 +47,7 @@ class PortalApiConnectivityTest {
         val body = conn.inputStream.bufferedReader().readText()
         conn.disconnect()
         assertTrue(body.contains("primaryColor"))
-        assertTrue(body.contains("OFICINA DO BETO"))
+        assertTrue(body.contains("OFICINA SCALIBUR"))
     }
 
     private fun getStatus(url: String): Int {

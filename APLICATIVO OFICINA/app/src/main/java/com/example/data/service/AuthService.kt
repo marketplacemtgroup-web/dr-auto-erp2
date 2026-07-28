@@ -55,7 +55,7 @@ class AuthService {
                 "quotes.manage",
                 "inventory.manage",
             ),
-            workshop = "OFICINA DO BETO",
+            workshop = "OFICINA SCALIBUR",
         )
         SessionManager.saveSession(user, "mock-token")
         return user

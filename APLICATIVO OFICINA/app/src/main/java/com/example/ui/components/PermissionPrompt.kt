@@ -60,7 +60,7 @@ fun PermissionRequestCard(
     permissionState: PermissionState,
     modifier: Modifier = Modifier,
     icon: ImageVector = Icons.Default.PhotoCamera,
-    settingsHint: String = "No celular: Configurações → Apps → Oficina do Beto → Permissões",
+    settingsHint: String = "No celular: Configurações → Apps → Oficina Scalibur → Permissões",
 ) {
     val context = LocalContext.current
     var hasRequestedOnce by remember { mutableStateOf(false) }
