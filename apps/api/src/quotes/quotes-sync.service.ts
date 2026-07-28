@@ -108,7 +108,6 @@ export class QuotesSyncService {
         discount: Prisma.Decimal;
         sortOrder: number;
         serviceOrderItemId: string;
-        approved?: null;
       };
     }> = [];
 
@@ -127,13 +126,13 @@ export class QuotesSyncService {
 
       if (existing) {
         if (!this.lineFieldsMatch(existing, item)) {
-          modifiedPendingLines++;
+          // Preserva approved: edição administrativa não reabre a linha para o cliente.
+          if (existing.approved === null) {
+            modifiedPendingLines++;
+          }
           linesToUpdate.push({
             id: existing.id,
-            data: {
-              ...lineData,
-              ...(existing.approved !== null ? { approved: null } : {}),
-            },
+            data: lineData,
           });
         }
       } else {
@@ -354,11 +353,14 @@ export class QuotesSyncService {
       return draft.id;
     }
 
-    if (approved && SUPPLEMENT_OS_STATUSES.includes(so.status)) {
+    if (approved) {
+      // Mantém quote_lines / amount alinhados aos itens (edição admin pós-aprovação).
       await this.syncQuoteLines(approved.id, serviceOrderId, organizationId);
       const hasPending = await this.hasPendingLines(approved.id);
-      if (hasPending) {
-        await this.reopenForSupplement(organizationId, approved.id, undefined, { notify: false });
+      if (hasPending && SUPPLEMENT_OS_STATUSES.includes(so.status)) {
+        await this.reopenForSupplement(organizationId, approved.id, undefined, {
+          notify: false,
+        });
       }
       return approved.id;
     }

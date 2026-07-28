@@ -759,7 +759,8 @@ export default function ServiceOrderDetailPage() {
     supplementUnlocked ||
     !activeQuote ||
     activeQuote.status === "PENDING" ||
-    activeQuote.status === "DRAFT";
+    activeQuote.status === "DRAFT" ||
+    activeQuote.status === "APPROVED";
   const canEditQuoteItems = canManageQuote;
 
   function itemLineApproved(item: ServiceOrderItemRow, index: number) {
@@ -1336,7 +1337,7 @@ export default function ServiceOrderDetailPage() {
                   const line = getLineForItem(item, itemIndex, activeQuote);
                   const approvalStatus = line?.approved;
                   const quoteStatus = activeQuote?.status;
-                  const editable = canEditQuoteItems && !itemLineApproved(item, itemIndex);
+                  const editable = canEditQuoteItems;
                   return (
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
                     <td className="px-4 py-3">
@@ -1502,7 +1503,7 @@ export default function ServiceOrderDetailPage() {
                 const line = getLineForItem(item, index, activeQuote);
                 const approvalStatus = line?.approved;
                 const quoteStatus = activeQuote?.status;
-                const editable = canEditQuoteItems && !itemLineApproved(item, index);
+                const editable = canEditQuoteItems;
                 return (
                   <tr key={item.id} className="border-t border-[#F1F5F9]">
                     <td className="px-4 py-3">
@@ -1575,9 +1576,9 @@ export default function ServiceOrderDetailPage() {
           <div className="px-5 py-3 border-b border-[#F1F5F9]">
             <p className="text-sm font-medium text-[#1E293B]">Custos internos das peças</p>
             <p className="text-xs text-[#94A3B8] mt-1">
-              Valores comerciais aprovados permanecem bloqueados. Em peça rápida, use
-              &quot;Atualizar peça comprada&quot; para trocar marca/modelo e custo — o estoque
-              provisório acompanha.
+              Nome e valores comerciais podem ser editados na tabela acima. Aqui ajuste só o custo
+              operacional. Em peça rápida, use &quot;Atualizar peça comprada&quot; para marca/modelo
+              e custo — o estoque provisório acompanha.
             </p>
           </div>
           <div className="divide-y divide-[#F1F5F9]">

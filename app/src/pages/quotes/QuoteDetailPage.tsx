@@ -95,7 +95,10 @@ export default function QuoteDetailPage() {
     quote?.freeTextAmount,
   ]);
 
-  const canEdit = quote?.status === "PENDING" || quote?.status === "DRAFT";
+  const canEdit =
+    quote?.status === "PENDING" ||
+    quote?.status === "DRAFT" ||
+    quote?.status === "APPROVED";
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["quote", id] });
@@ -428,8 +431,8 @@ export default function QuoteDetailPage() {
 
       <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-4 py-3 mb-5 text-sm text-[#92400E]">
         O cliente aprova pelo app ou portal. Ao aprovar, o orçamento sai desta tela e a ordem de
-        serviço é liberada automaticamente. Itens já aprovados ficam travados — para custo de peça,
-        use &quot;Ajustar custo&quot;.
+        serviço é liberada automaticamente. Nome e valores dos itens podem ser editados depois da
+        aprovação na ordem de serviço.
       </div>
 
       {saveMessage && (
@@ -581,7 +584,7 @@ export default function QuoteDetailPage() {
             )}
             {items.map((item) => {
               const locked = isItemCommerciallyLocked(item);
-              const canEditRow = canEdit && !locked;
+              const canEditRow = canEdit;
               const canAdjustCost =
                 locked && (item.itemType === "PART" || item.itemType === "THIRD_PARTY");
               return (
@@ -594,7 +597,7 @@ export default function QuoteDetailPage() {
                   <p className="text-xs text-[#94A3B8] mt-0.5">
                     {item.isQuickPart ? "Peça rápida" : itemTypeLabel(item.itemType)}
                     {itemCatalogLabel(item) ? ` · ${itemCatalogLabel(item)}` : ""}
-                    {locked ? " · Aprovado (travado)" : ""}
+                    {locked ? " · Aprovado" : ""}
                   </p>
                 </td>
                 <td className="px-2 py-3 text-[#64748B]">{item.partBrand ?? "—"}</td>

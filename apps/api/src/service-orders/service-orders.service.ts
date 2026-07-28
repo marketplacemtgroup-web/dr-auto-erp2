@@ -826,8 +826,8 @@ export class ServiceOrdersService {
             expectedCommission,
           },
         });
-        await this.recalculateTotal(serviceOrderId);
         await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+        await this.recalculateTotal(serviceOrderId);
         const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
         const totalAfter = Number(refreshed.totalAmount);
         if (totalBefore !== totalAfter) {
@@ -876,8 +876,8 @@ export class ServiceOrdersService {
           internalNotes: dto.internalNotes?.trim() || null,
         },
       });
-      await this.recalculateTotal(serviceOrderId);
       await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+      await this.recalculateTotal(serviceOrderId);
       const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
       const totalAfter = Number(refreshed.totalAmount);
       if (totalBefore !== totalAfter) {
@@ -921,8 +921,8 @@ export class ServiceOrdersService {
       },
     });
 
-    await this.recalculateTotal(serviceOrderId);
     await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+    await this.recalculateTotal(serviceOrderId);
     const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
     const totalAfter = Number(refreshed.totalAmount);
     if (totalBefore !== totalAfter) {
@@ -952,60 +952,8 @@ export class ServiceOrdersService {
     });
     if (!item) throw new NotFoundException('Item não encontrado');
 
-    const commerciallyLocked = await this.isItemCommerciallyLocked(
-      organizationId,
-      item.id,
-      item.commercialLockedAt,
-    );
-    if (commerciallyLocked) {
-      const sameNum = (a: number, b: number) => Math.abs(a - b) < 0.0001;
-      const descChanging =
-        dto.description !== undefined && dto.description.trim() !== item.description;
-      const qtyChanging =
-        dto.quantity !== undefined && dto.quantity !== item.quantity;
-      const priceChanging =
-        dto.unitPrice !== undefined && !sameNum(Number(dto.unitPrice), Number(item.unitPrice));
-      const discountChanging =
-        dto.discount !== undefined &&
-        !sameNum(Number(dto.discount), Number(item.discount ?? 0));
-      const typeChanging =
-        dto.itemType !== undefined && dto.itemType !== item.itemType;
-      const outsourcedChanging =
-        dto.outsourcedServiceId !== undefined &&
-        (dto.outsourcedServiceId || null) !== (item.outsourcedServiceId || null);
-      const costChanging =
-        dto.unitCost !== undefined &&
-        (dto.unitCost == null
-          ? item.unitCost != null
-          : item.unitCost == null || !sameNum(Number(dto.unitCost), Number(item.unitCost)));
-
-      if (
-        descChanging ||
-        qtyChanging ||
-        priceChanging ||
-        discountChanging ||
-        typeChanging ||
-        outsourcedChanging
-      ) {
-        throw new BadRequestException(
-          'Item com valor aprovado pelo cliente. Use "Atualizar peça comprada" / "Ajustar custo interno" para alterar custos operacionais.',
-        );
-      }
-
-      // Custo-only em item travado: grava como custo real (não mexe no comercial).
-      if (costChanging) {
-        return this.updateInternalCost(
-          organizationId,
-          serviceOrderId,
-          itemId,
-          {
-            actualUnitCost: dto.unitCost ?? null,
-            note: 'Custo atualizado pela edição do item (comercial travado)',
-          },
-          userId,
-        );
-      }
-    }
+    // Itens aprovados permanecem editáveis (nome, valores, tipo) pela oficina.
+    // commercialLockedAt continua sendo gravado na aprovação para auditoria/histórico.
 
     const so = (await this.findOne(organizationId, serviceOrderId))!;
     const totalBefore = Number(so.totalAmount);
@@ -1205,8 +1153,8 @@ export class ServiceOrdersService {
       },
     });
 
-    await this.recalculateTotal(serviceOrderId);
     await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+    await this.recalculateTotal(serviceOrderId);
     const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
     const totalAfter = Number(refreshed.totalAmount);
     if (totalBefore !== totalAfter) {
@@ -1221,13 +1169,19 @@ export class ServiceOrdersService {
         },
       });
     }
+    const commercialTouched =
+      dto.description !== undefined ||
+      dto.quantity !== undefined ||
+      dto.unitPrice !== undefined ||
+      dto.discount !== undefined ||
+      dto.itemType !== undefined;
     const teamItemTouched =
       dto.executorId !== undefined ||
       dto.coExecutorId !== undefined ||
       dto.coExecutorSplitPct !== undefined ||
       dto.soldById !== undefined ||
       dto.appliedById !== undefined;
-    if (teamItemTouched) {
+    if (teamItemTouched || commercialTouched) {
       await this.maybeRegenerateCommissions(
         organizationId,
         serviceOrderId,
@@ -1296,8 +1250,8 @@ export class ServiceOrdersService {
     }
 
     await this.prisma.serviceOrderItem.delete({ where: { id: itemId } });
-    await this.recalculateTotal(serviceOrderId);
     await this.quotesSync.syncForServiceOrder(organizationId, serviceOrderId);
+    await this.recalculateTotal(serviceOrderId);
     const refreshed = (await this.findOne(organizationId, serviceOrderId))!;
     const totalAfter = Number(refreshed.totalAmount);
     if (totalBefore !== totalAfter) {
@@ -1451,18 +1405,6 @@ export class ServiceOrdersService {
         metadata: { serviceOrderId, quoteId },
       });
     }
-  }
-
-  private async isItemCommerciallyLocked(
-    organizationId: string,
-    itemId: string,
-    commercialLockedAt: Date | null,
-  ) {
-    if (commercialLockedAt) return true;
-    const approvedLine = await this.prisma.quoteLine.findFirst({
-      where: { organizationId, serviceOrderItemId: itemId, approved: true },
-    });
-    return approvedLine != null;
   }
 
   async updateInternalCost(
