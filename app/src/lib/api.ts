@@ -87,6 +87,32 @@ export interface DashboardFinancialKpis {
   operationalProfit?: number;
   orderGross?: number;
   orderRevenue?: number;
+  payableOpen?: number;
+  payableOverdue?: number;
+  payableOpenCount?: number;
+  payableOverdueCount?: number;
+}
+
+export interface FinancialOpenPayablePreview {
+  id: string;
+  description: string;
+  dueDate: string;
+  amount: number;
+  remaining: number;
+  status: string;
+  isOverdue: boolean;
+  supplier?: { id: string; legalName: string; tradeName: string | null } | null;
+  purchaseOrder?: { id: string; number: string } | null;
+}
+
+export interface FinancialOpenSummary {
+  receivableOpen: number;
+  payableOpen: number;
+  payableOverdue: number;
+  receivableOpenCount: number;
+  payableOpenCount: number;
+  payableOverdueCount: number;
+  payablesPreview: FinancialOpenPayablePreview[];
 }
 
 export type DashboardKpis = DashboardOperationalKpis & DashboardFinancialKpis;
@@ -2192,12 +2218,28 @@ export const api = {
   deleteSupplier: (token: string, id: string) =>
     request<SupplierDetail>(`/suppliers/${id}`, { method: "DELETE" }, token),
 
-  financialEntries: (token: string, search?: string, page?: number, limit?: number) =>
+  financialEntries: (
+    token: string,
+    search?: string,
+    page?: number,
+    limit?: number,
+    filters?: { type?: "PAYABLE" | "RECEIVABLE"; status?: string; openOnly?: boolean },
+  ) =>
     request<FinancialEntryRow[] | Paginated<FinancialEntryRow>>(
-      `/financial${buildQuery({ search, page, limit })}`,
+      `/financial${buildQuery({
+        search,
+        page,
+        limit,
+        type: filters?.type,
+        status: filters?.status,
+        openOnly: filters?.openOnly ? "1" : undefined,
+      })}`,
       { method: "GET" },
       token,
     ).then(parsePaginatedList),
+
+  financialOpenSummary: (token: string) =>
+    request<FinancialOpenSummary>("/financial/open-summary", { method: "GET" }, token),
 
   createFinancialEntry: (
     token: string,
@@ -2208,6 +2250,9 @@ export const api = {
       amount: number;
       paid?: boolean;
       paidAt?: string;
+      paymentMethod?: PaymentMethod;
+      accountId?: string;
+      registerInCash?: boolean;
     },
   ) =>
     request<FinancialEntryRow>(

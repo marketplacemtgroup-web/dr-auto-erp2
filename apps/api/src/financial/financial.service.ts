@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, Optional, forwardRef } from '@nestjs/common';
-import { PaymentMethod, Prisma, ServiceOrderStatus } from '@prisma/client';
+import { PaymentMethod, Prisma, PurchaseFinancialStatus, ServiceOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { CommissionEngineService } from '../team/commission-engine.service';
@@ -82,14 +82,24 @@ export class FinancialService {
     status?: string,
     origin?: string,
     supplierId?: string,
-    query: ListQueryInput = {},
+    query: ListQueryInput & { openOnly?: boolean } = {},
   ) {
+    await this.syncOverdueStatuses(organizationId);
+
     const { page, limit, skip } = parseListQuery(query);
+    const openStatuses = ['OPEN', 'PARTIAL', 'OVERDUE'] as const;
+    const resolvedStatus =
+      query.openOnly || status?.toLowerCase() === 'open'
+        ? { status: { in: [...openStatuses] } }
+        : status
+          ? { status: status as never }
+          : {};
+
     const where: Prisma.FinancialEntryWhereInput = {
       organizationId,
       parentEntryId: null,
       ...(type ? { type: type as never } : {}),
-      ...(status ? { status: status as never } : {}),
+      ...resolvedStatus,
       ...(origin ? { origin: origin as never } : {}),
       ...(supplierId ? { supplierId } : {}),
       ...(search
@@ -114,11 +124,9 @@ export class FinancialService {
     return paginatedResponse(rows, total, page, limit);
   }
 
-  async create(organizationId: string, dto: CreateFinancialEntryDto) {
+  async create(organizationId: string, dto: CreateFinancialEntryDto, userId?: string) {
     const amount = new Prisma.Decimal(dto.amount);
     const paid = dto.paid === true;
-    // Quando já pago, a data efetiva (paidAt) define o mês nos relatórios.
-    // Se não informada, usa a data de vencimento escolhida (permite lançar mês passado).
     const paidAt = paid ? this.resolveEntryDate(dto.paidAt ?? dto.dueDate) : null;
 
     const entry = await this.prisma.financialEntry.create({
@@ -128,10 +136,10 @@ export class FinancialService {
         type: dto.type,
         dueDate: new Date(dto.dueDate),
         amount,
-        status: paid ? 'PAID' : 'OPEN',
-        paidAt,
-        amountReceived: paid ? amount : null,
-        amountPaid: paid ? amount : new Prisma.Decimal(0),
+        status: 'OPEN',
+        paidAt: null,
+        amountReceived: null,
+        amountPaid: new Prisma.Decimal(0),
         customerId: dto.customerId ?? null,
         serviceOrderId: dto.serviceOrderId ?? null,
         quoteId: dto.quoteId ?? null,
@@ -139,7 +147,22 @@ export class FinancialService {
       },
       include: entryInclude,
     });
-    await this.invalidateDashboardCache(organizationId, paidAt ?? undefined);
+
+    if (paid) {
+      return this.markPaid(
+        organizationId,
+        entry.id,
+        {
+          accountId: dto.accountId,
+          paymentMethod: dto.paymentMethod ?? 'PIX',
+          paidAt: dto.paidAt ?? dto.dueDate,
+          registerInCash: dto.registerInCash,
+        },
+        userId,
+      );
+    }
+
+    await this.invalidateDashboardCache(organizationId);
     return entry;
   }
 
@@ -157,8 +180,35 @@ export class FinancialService {
     const nextAmount =
       dto.amount !== undefined ? new Prisma.Decimal(dto.amount) : entry.amount;
 
-    // Estado de pagamento resultante (mantém o atual se não for informado).
+    const wasSettled = entry.status === 'PAID' || entry.status === 'PARTIAL';
     const willBePaid = dto.paid !== undefined ? dto.paid : entry.status === 'PAID';
+
+    if (willBePaid && !wasSettled) {
+      const prep = await this.prisma.financialEntry.update({
+        where: { id },
+        data: {
+          ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
+          ...(dto.type !== undefined ? { type: dto.type } : {}),
+          ...(dto.dueDate !== undefined ? { dueDate: new Date(dto.dueDate) } : {}),
+          ...(dto.amount !== undefined ? { amount: nextAmount } : {}),
+          ...(dto.paymentMethod !== undefined ? { paymentMethod: dto.paymentMethod } : {}),
+          status: 'OPEN',
+          paidAt: null,
+          amountReceived: null,
+          amountPaid: new Prisma.Decimal(0),
+        },
+      });
+
+      return this.markPaid(
+        organizationId,
+        prep.id,
+        {
+          paymentMethod: dto.paymentMethod ?? prep.paymentMethod ?? 'PIX',
+          paidAt: dto.paidAt ?? dto.dueDate ?? this.toIsoDate(prep.dueDate),
+        },
+        userId,
+      );
+    }
 
     const data: Prisma.FinancialEntryUpdateInput = {
       ...(dto.description !== undefined ? { description: dto.description.trim() } : {}),
@@ -684,6 +734,14 @@ export class FinancialService {
       throw new BadRequestException('Lançamento não pode ser baixado neste status');
     }
 
+    const isInstallmentParent =
+      (entry.installmentTotal ?? 0) > 1 && (entry.installmentNumber ?? 0) === 0;
+    if (isInstallmentParent) {
+      throw new BadRequestException(
+        'Este lançamento possui parcelas. Expanda "Parcelas" e baixe cada uma individualmente.',
+      );
+    }
+
     const { netDue, alreadyPaid, remaining, discount, interest, penalty, fee } =
       this.entryRemainingAmount(entry, dto);
 
@@ -886,6 +944,14 @@ export class FinancialService {
         }
       }
 
+      if (entry.parentEntryId) {
+        await this.syncParentInstallmentStatus(tx, organizationId, entry.parentEntryId);
+      }
+
+      if (entry.purchaseOrderId && entry.type === 'PAYABLE') {
+        await this.syncPurchaseFinancialStatus(tx, organizationId, entry.purchaseOrderId);
+      }
+
       return row;
     });
 
@@ -1011,6 +1077,12 @@ export class FinancialService {
 
     if (entry.paidAt) {
       await this.invalidateDashboardCache(organizationId, entry.paidAt);
+    }
+
+    if (entry.purchaseOrderId && entry.type === 'PAYABLE') {
+      await this.prisma.$transaction(async (tx) => {
+        await this.syncPurchaseFinancialStatus(tx, organizationId, entry.purchaseOrderId!);
+      });
     }
 
     return reversed;
@@ -1226,5 +1298,185 @@ export class FinancialService {
     }
 
     return { revenue, expenses, profit, paymentMethods };
+  }
+
+  private leafEntryWhere(): Prisma.FinancialEntryWhereInput {
+    return {
+      NOT: {
+        AND: [{ installmentTotal: { gt: 1 } }, { installmentNumber: 0 }],
+      },
+    };
+  }
+
+  private entryRemainingFromRow(entry: {
+    type: string;
+    amount: Prisma.Decimal;
+    amountPaid: Prisma.Decimal;
+    discountAmount?: Prisma.Decimal | null;
+    interestAmount?: Prisma.Decimal | null;
+    penaltyAmount?: Prisma.Decimal | null;
+    feeAmount?: Prisma.Decimal | null;
+  }) {
+    const gross = Number(entry.amount);
+    const discount = Number(entry.discountAmount ?? 0);
+    const interest = Number(entry.interestAmount ?? 0);
+    const penalty = Number(entry.penaltyAmount ?? 0);
+    const fee = Number(entry.feeAmount ?? 0);
+    const netDue =
+      entry.type === 'PAYABLE'
+        ? this.roundMoney(gross - discount + interest + penalty)
+        : this.roundMoney(gross - discount - fee);
+    const alreadyPaid = this.roundMoney(Number(entry.amountPaid ?? 0));
+    return this.roundMoney(Math.max(netDue - alreadyPaid, 0));
+  }
+
+  private async syncOverdueStatuses(organizationId: string) {
+    const today = this.startOfDay(new Date());
+    await this.prisma.financialEntry.updateMany({
+      where: {
+        organizationId,
+        status: 'OPEN',
+        dueDate: { lt: today },
+      },
+      data: { status: 'OVERDUE' },
+    });
+  }
+
+  private async syncParentInstallmentStatus(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    parentId: string,
+  ) {
+    const children = await tx.financialEntry.findMany({
+      where: { organizationId, parentEntryId: parentId },
+    });
+    if (children.length === 0) return;
+
+    const allPaid = children.every((child) => child.status === 'PAID');
+    const anySettled = children.some(
+      (child) => child.status === 'PAID' || child.status === 'PARTIAL',
+    );
+
+    const paidChildren = children
+      .filter((child) => child.paidAt)
+      .sort((a, b) => b.paidAt!.getTime() - a.paidAt!.getTime());
+
+    await tx.financialEntry.update({
+      where: { id: parentId },
+      data: {
+        status: allPaid ? 'PAID' : anySettled ? 'PARTIAL' : 'OPEN',
+        paidAt: allPaid ? paidChildren[0]?.paidAt ?? new Date() : null,
+        amountPaid: new Prisma.Decimal(
+          children.reduce((sum, child) => sum + Number(child.amountPaid ?? 0), 0),
+        ),
+      },
+    });
+  }
+
+  private async syncPurchaseFinancialStatus(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    purchaseOrderId: string,
+  ) {
+    const entries = await tx.financialEntry.findMany({
+      where: {
+        organizationId,
+        purchaseOrderId,
+        type: 'PAYABLE',
+        status: { not: 'CANCELLED' },
+      },
+    });
+
+    const leaves = entries.filter(
+      (entry) =>
+        !((entry.installmentTotal ?? 0) > 1 && (entry.installmentNumber ?? 0) === 0),
+    );
+    if (leaves.length === 0) return;
+
+    const allPaid = leaves.every((entry) => entry.status === 'PAID');
+    const anySettled = leaves.some(
+      (entry) => entry.status === 'PAID' || entry.status === 'PARTIAL',
+    );
+    const anyOverdue = leaves.some((entry) => entry.status === 'OVERDUE');
+
+    let financialStatus: PurchaseFinancialStatus = 'OPEN';
+    if (allPaid) financialStatus = 'PAID';
+    else if (anySettled) financialStatus = 'PARTIALLY_PAID';
+    else if (anyOverdue) financialStatus = 'OVERDUE';
+
+    await tx.purchaseOrder.update({
+      where: { id: purchaseOrderId },
+      data: { financialStatus },
+    });
+  }
+
+  async getOpenSummary(organizationId: string) {
+    await this.syncOverdueStatuses(organizationId);
+
+    const openStatuses = ['OPEN', 'PARTIAL', 'OVERDUE'] as const;
+    const entries = await this.prisma.financialEntry.findMany({
+      where: {
+        organizationId,
+        status: { in: [...openStatuses] },
+        ...this.leafEntryWhere(),
+      },
+      include: {
+        supplier: { select: { id: true, legalName: true, tradeName: true } },
+        purchaseOrder: { select: { id: true, number: true } },
+      },
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    let receivableOpen = 0;
+    let payableOpen = 0;
+    let payableOverdue = 0;
+    let payableOverdueCount = 0;
+    let payableOpenCount = 0;
+    let receivableOpenCount = 0;
+
+    const today = this.startOfDay(new Date());
+
+    for (const entry of entries) {
+      const remaining = this.entryRemainingFromRow(entry);
+      if (remaining <= 0) continue;
+
+      if (entry.type === 'RECEIVABLE') {
+        receivableOpen += remaining;
+        receivableOpenCount += 1;
+      } else {
+        payableOpen += remaining;
+        payableOpenCount += 1;
+        if (entry.status === 'OVERDUE' || entry.dueDate < today) {
+          payableOverdue += remaining;
+          payableOverdueCount += 1;
+        }
+      }
+    }
+
+    const payablesPreview = entries
+      .filter((entry) => entry.type === 'PAYABLE')
+      .map((entry) => ({
+        id: entry.id,
+        description: entry.description,
+        dueDate: entry.dueDate.toISOString(),
+        amount: Number(entry.amount),
+        remaining: this.entryRemainingFromRow(entry),
+        status: entry.status,
+        supplier: entry.supplier,
+        purchaseOrder: entry.purchaseOrder,
+        isOverdue: entry.status === 'OVERDUE' || entry.dueDate < today,
+      }))
+      .filter((entry) => entry.remaining > 0)
+      .slice(0, 10);
+
+    return {
+      receivableOpen: this.roundMoney(receivableOpen),
+      payableOpen: this.roundMoney(payableOpen),
+      payableOverdue: this.roundMoney(payableOverdue),
+      receivableOpenCount,
+      payableOpenCount,
+      payableOverdueCount,
+      payablesPreview,
+    };
   }
 }

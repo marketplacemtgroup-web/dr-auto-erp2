@@ -30,6 +30,7 @@ export class FinancialController {
     @Query('status') status?: string,
     @Query('origin') origin?: string,
     @Query('supplierId') supplierId?: string,
+    @Query('openOnly') openOnly?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -40,8 +41,14 @@ export class FinancialController {
       status,
       origin,
       supplierId,
-      { page, limit },
+      { page, limit, openOnly: openOnly === '1' || openOnly === 'true' },
     );
+  }
+
+  @Get('open-summary')
+  @RequirePermissions('financial.manage', 'dashboard.view', 'dashboard.view_financial')
+  openSummary(@CurrentUser() user: { organizationId: string }) {
+    return this.financialService.getOpenSummary(user.organizationId);
   }
 
   @Get('summary')
@@ -114,8 +121,11 @@ export class FinancialController {
 
   @Post()
   @RequirePermissions('financial.manage')
-  create(@CurrentUser() user: { organizationId: string }, @Body() dto: CreateFinancialEntryDto) {
-    return this.financialService.create(user.organizationId, dto);
+  create(
+    @CurrentUser() user: { organizationId: string; userId: string },
+    @Body() dto: CreateFinancialEntryDto,
+  ) {
+    return this.financialService.create(user.organizationId, dto, user.userId);
   }
 
   @Post('installments')

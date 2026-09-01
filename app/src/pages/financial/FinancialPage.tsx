@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Calculator, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
 import CalculatorModal from "../../components/financial/CalculatorModal";
@@ -18,6 +18,7 @@ import {
   type CashSessionRow,
   type FinancialAccountRow,
   type FinancialEntryRow,
+  type FinancialOpenSummary,
   type FinancialProfitSummary,
   type FinancialReceiveQueue,
   type FinancialReceiveQueueOrder,
@@ -39,9 +40,45 @@ import {
   type PayEntryFormState,
 } from "../../lib/payEntry";
 import { formatDate, formatMoney, formatNegativeMoney } from "../../lib/format";
+import { PAYMENT_LABELS, PAYMENT_METHODS } from "../../lib/paymentMethods";
+import type { PaymentMethod } from "../../lib/api";
 
 function formatCurrency(value: number) {
   return formatMoney(value);
+}
+
+function isInstallmentParent(row: FinancialEntryRow) {
+  return Boolean(row.installments && row.installments.length > 0);
+}
+
+function entryStatusBadge(row: FinancialEntryRow) {
+  if (row.status === "PAID") {
+    return { label: "Pago", className: "bg-[#F0FDF4] text-[#166534] border-[#BBF7D0]" };
+  }
+  if (row.status === "PARTIAL") {
+    return { label: "Parcial", className: "bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]" };
+  }
+  if (row.status === "REVERSED") {
+    return { label: "Estornado", className: "bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]" };
+  }
+  if (row.status === "OVERDUE") {
+    return { label: "Vencido", className: "bg-[#FEF2F2] text-[#B91C1C] border-[#FECACA]" };
+  }
+  const due = row.dueDate ? new Date(row.dueDate) : null;
+  if (due) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    if (due < today) {
+      return { label: "Vencido", className: "bg-[#FEF2F2] text-[#B91C1C] border-[#FECACA]" };
+    }
+    const soon = new Date(today);
+    soon.setDate(soon.getDate() + 3);
+    if (due <= soon) {
+      return { label: "Vence em breve", className: "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]" };
+    }
+  }
+  return { label: "Em aberto", className: "bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]" };
 }
 
 function cashBalance(session: CashSessionRow) {
@@ -64,6 +101,12 @@ export default function FinancialPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const typeFilter =
+    searchParams.get("type") === "PAYABLE" || searchParams.get("type") === "RECEIVABLE"
+      ? searchParams.get("type")!
+      : "all";
+  const openOnly = searchParams.get("open") === "1";
   const { canViewMoney } = usePermissions();
   const showMoney = canViewMoney();
   const [profitPeriod, setProfitPeriod] = useState<FinancialPeriodPreset>("month");
@@ -95,6 +138,7 @@ export default function FinancialPage() {
     installments: "1",
     paid: false,
     paidAt: "",
+    paymentMethod: "PIX" as PaymentMethod,
   });
   const [cashForm, setCashForm] = useState({ openingBalance: "0", closingBalance: "", movementAmount: "", movementDesc: "" });
   const [receiveQueue, setReceiveQueue] = useState<FinancialReceiveQueue | null>(null);
@@ -107,7 +151,8 @@ export default function FinancialPage() {
   const [fixedLoading, setFixedLoading] = useState(false);
   const [fixedModalOpen, setFixedModalOpen] = useState(false);
   const [generatingFixedId, setGeneratingFixedId] = useState<string | null>(null);
-  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [openSummary, setOpenSummary] = useState<FinancialOpenSummary | null>(null);
+  const [openSummaryLoading, setOpenSummaryLoading] = useState(false);
 
   async function loadProfitSummary(period: FinancialPeriodPreset = profitPeriod) {
     if (!token || !showMoney) return;
@@ -121,11 +166,51 @@ export default function FinancialPage() {
     }
   }
 
-  async function loadEntries(nextSearch?: string, nextPage = entriesPage) {
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+
+  const listFilters = useMemo(
+    () => ({
+      type: typeFilter === "all" ? undefined : (typeFilter as "PAYABLE" | "RECEIVABLE"),
+      openOnly,
+    }),
+    [typeFilter, openOnly],
+  );
+
+  async function loadOpenSummary() {
+    if (!token) return;
+    setOpenSummaryLoading(true);
+    try {
+      setOpenSummary(await api.financialOpenSummary(token));
+    } catch {
+      setOpenSummary(null);
+    } finally {
+      setOpenSummaryLoading(false);
+    }
+  }
+
+  const refreshFinancialViews = useCallback(() => {
+    void loadOpenSummary();
+    void queryClient.invalidateQueries({ queryKey: ["financial", "open-summary"] });
+  }, [queryClient, token]);
+
+  function setListFilters(next: { type?: string; open?: boolean }) {
+    const params = new URLSearchParams(searchParams);
+    if (next.type !== undefined) {
+      if (next.type === "all") params.delete("type");
+      else params.set("type", next.type);
+    }
+    if (next.open !== undefined) {
+      if (next.open) params.set("open", "1");
+      else params.delete("open");
+    }
+    setSearchParams(params, { replace: true });
+  }
+
+  async function loadEntries(nextSearch?: string, nextPage = entriesPage, filters = listFilters) {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await api.financialEntries(token, nextSearch, nextPage, LIST_PAGE_SIZE);
+      const res = await api.financialEntries(token, nextSearch, nextPage, LIST_PAGE_SIZE, filters);
       setRows(res.data);
       setEntriesTotalPages(res.pagination.totalPages);
       setEntriesPage(res.pagination.page);
@@ -190,8 +275,9 @@ export default function FinancialPage() {
         amount: Number(item.amount),
         paid: false,
       });
-      void loadEntries(search);
+      void loadEntries(search, entriesPage, listFilters);
       void loadProfitSummary();
+      refreshFinancialViews();
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
     } finally {
       setGeneratingFixedId(null);
@@ -203,7 +289,7 @@ export default function FinancialPage() {
     setLoading(true);
     setQueueLoading(true);
     void Promise.all([
-      api.financialEntries(token, undefined, 1, LIST_PAGE_SIZE).then((res) => {
+      api.financialEntries(token, undefined, 1, LIST_PAGE_SIZE, listFilters).then((res) => {
         setRows(res.data);
         setEntriesTotalPages(res.pagination.totalPages);
         setEntriesPage(1);
@@ -212,12 +298,13 @@ export default function FinancialPage() {
       api.financialAccounts(token).then(setAccounts).catch(() => setAccounts([])),
       api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => setAccountsSummary(null)),
       api.financialReceiveQueue(token).then(setReceiveQueue),
+      api.financialOpenSummary(token).then(setOpenSummary).catch(() => setOpenSummary(null)),
     ]).finally(() => {
       setLoading(false);
       setQueueLoading(false);
     });
     void loadFixedExpenses();
-  }, [token]);
+  }, [token, listFilters.type, listFilters.openOnly]);
 
   useEffect(() => {
     void loadProfitSummary(profitPeriod);
@@ -269,17 +356,27 @@ export default function FinancialPage() {
       return api.createFinancialEntry(token!, {
         ...base,
         paid: form.paid,
-        // Data da despesa/recebimento; se vazia usa o vencimento. Define o mês nos relatórios.
         paidAt: form.paid ? form.paidAt || form.dueDate : undefined,
+        paymentMethod: form.paid ? form.paymentMethod : undefined,
+        accountId: form.paid ? primaryAccountId || undefined : undefined,
       });
     },
     onSuccess: () => {
-      void loadEntries(search);
+      void loadEntries(search, entriesPage, listFilters);
       void loadProfitSummary();
+      refreshFinancialViews();
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       setDrawerOpen(false);
       setEditingId(null);
-      setForm({ description: "", dueDate: "", amount: "", installments: "1", paid: false, paidAt: "" });
+      setForm({
+        description: "",
+        dueDate: "",
+        amount: "",
+        installments: "1",
+        paid: false,
+        paidAt: "",
+        paymentMethod: "PIX",
+      });
     },
   });
 
@@ -313,9 +410,10 @@ export default function FinancialPage() {
       });
     },
     onSuccess: () => {
-      void loadEntries(search);
+      void loadEntries(search, entriesPage, listFilters);
       void loadCash();
       void loadReceiveQueue();
+      refreshFinancialViews();
       void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       void loadProfitSummary();
@@ -330,8 +428,9 @@ export default function FinancialPage() {
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       api.reverseFinancialEntry(token!, id, reason),
     onSuccess: () => {
-      void loadEntries(search);
+      void loadEntries(search, entriesPage, listFilters);
       void loadCash();
+      refreshFinancialViews();
       void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       void loadProfitSummary();
@@ -344,17 +443,11 @@ export default function FinancialPage() {
     },
   });
 
-  const totals = useMemo(() => {
-    let openRecv = 0;
-    let openPay = 0;
-    for (const r of rows) {
-      const amount = Number(r.amount ?? 0);
-      if (r.status !== "OPEN") continue;
-      if (r.type === "RECEIVABLE") openRecv += amount;
-      else openPay += amount;
-    }
-    return { openRecv, openPay };
-  }, [rows]);
+  const openTotals = {
+    openRecv: openSummary?.receivableOpen ?? 0,
+    openPay: openSummary?.payableOpen ?? 0,
+    overduePay: openSummary?.payableOverdue ?? 0,
+  };
 
   function openNew(type: "RECEIVABLE" | "PAYABLE") {
     setEditingId(null);
@@ -367,9 +460,9 @@ export default function FinancialPage() {
       dueDate: todayIso,
       amount: "",
       installments: "1",
-      // Despesas em geral já foram pagas quando lançadas — vem marcado por padrão.
-      paid: type === "PAYABLE",
-      paidAt: todayIso,
+      paid: false,
+      paidAt: type === "PAYABLE" ? todayIso : "",
+      paymentMethod: "PIX",
     });
     setDrawerOpen(true);
   }
@@ -385,6 +478,7 @@ export default function FinancialPage() {
       installments: "1",
       paid: isPaid,
       paidAt: row.paidAt ? row.paidAt.slice(0, 10) : row.dueDate?.slice(0, 10) ?? "",
+      paymentMethod: row.paymentMethod ?? "PIX",
     });
     setDrawerOpen(true);
   }
@@ -448,9 +542,10 @@ export default function FinancialPage() {
     setDeletingId(deleteTarget.id);
     try {
       await api.deleteFinancialEntry(token, deleteTarget.id, reason);
-      void loadEntries(search);
+      void loadEntries(search, entriesPage, listFilters);
       void loadCash();
       void loadReceiveQueue();
+      refreshFinancialViews();
       void queryClient.invalidateQueries({ queryKey: ["financial", "cash-flow"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
       void loadProfitSummary();
@@ -554,8 +649,16 @@ export default function FinancialPage() {
                   },
                 ]
               : []),
-            { label: "A receber (aberto)", value: formatCurrency(totals.openRecv) },
-            { label: "A pagar (aberto)", value: formatCurrency(totals.openPay), tone: "danger" },
+            { label: "A receber (aberto)", value: openSummaryLoading ? "—" : formatCurrency(openTotals.openRecv) },
+            {
+              label: "A pagar (aberto)",
+              value: openSummaryLoading ? "—" : formatCurrency(openTotals.openPay),
+              tone: "danger",
+              hint:
+                openTotals.overduePay > 0
+                  ? `${formatCurrency(openTotals.overduePay)} vencido`
+                  : undefined,
+            },
             {
               label: "Caixa",
               value: cashSession ? formatCurrency(cashBalance(cashSession)) : "Fechado",
@@ -590,6 +693,48 @@ export default function FinancialPage() {
 
         {tab === "entries" ? (
           <>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                { id: "all", label: "Todos" },
+                { id: "PAYABLE", label: "A pagar" },
+                { id: "RECEIVABLE", label: "A receber" },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setListFilters({ type: item.id })}
+                  className={`h-9 px-3 rounded-lg text-[12px] font-medium border transition-colors ${
+                    typeFilter === item.id
+                      ? "border-[#0E7490] bg-[#ECFEFF] text-[#0E7490]"
+                      : "border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setListFilters({ open: !openOnly })}
+                className={`h-9 px-3 rounded-lg text-[12px] font-medium border transition-colors ${
+                  openOnly
+                    ? "border-[#DC2626] bg-[#FEF2F2] text-[#DC2626]"
+                    : "border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]"
+                }`}
+              >
+                Somente em aberto
+              </button>
+              {(typeFilter !== "all" || openOnly) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchParams({}, { replace: true });
+                  }}
+                  className="h-9 px-3 rounded-lg text-[12px] font-medium text-[#94A3B8] hover:text-[#64748B]"
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2 mb-4">
               <button type="button" onClick={() => openNew("RECEIVABLE")} className="h-10 px-4 rounded-lg bg-[#16A34A] text-white text-sm font-medium">
                 + Novo recebimento
@@ -611,6 +756,7 @@ export default function FinancialPage() {
                 <thead className="bg-[#F8FAFC]">
                   <tr>
                     <th className="text-left px-4 py-2">Descricao</th>
+                    <th className="text-left px-4 py-2">Status</th>
                     <th className="text-left px-4 py-2">Vinculo</th>
                     <th className="text-left px-4 py-2">Venc.</th>
                     <th className="text-right px-4 py-2">Valor</th>
@@ -620,11 +766,14 @@ export default function FinancialPage() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={6} className="px-4 py-6 text-[#64748B]">Carregando...</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-6 text-[#64748B]">Carregando...</td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-6 text-[#64748B]">Nenhum lancamento.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-6 text-[#64748B]">Nenhum lancamento.</td></tr>
                   ) : (
-                    rows.map((r) => (
+                    rows.map((r) => {
+                      const statusBadge = entryStatusBadge(r);
+                      const parentWithInstallments = isInstallmentParent(r);
+                      return (
                       <Fragment key={r.id}>
                         <tr className="border-t border-[#E2E8F0]">
                           <td className="px-4 py-3">
@@ -640,6 +789,13 @@ export default function FinancialPage() {
                                 {formatPaymentSplitsLabel(r.paymentSplits, r.paymentMethod)}
                               </div>
                             ) : null}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border ${statusBadge.className}`}
+                            >
+                              {statusBadge.label}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-[12px] text-[#64748B]">
                             {r.customer?.name && <div>{r.customer.name}</div>}
@@ -674,12 +830,18 @@ export default function FinancialPage() {
                                 {r.status === "REVERSED" ? "Estornado" : "Pago"}
                               </span>
                             ) : (
-                              <FinancialPayButton
-                                type={r.type}
-                                disabled={!token}
-                                label={r.status === "PARTIAL" ? "Completar" : undefined}
-                                onClick={() => openPay(r)}
-                              />
+                              parentWithInstallments ? (
+                                <span className="inline-flex items-center h-8 px-3 text-[11px] font-medium text-[#94A3B8]">
+                                  Ver parcelas
+                                </span>
+                              ) : (
+                                <FinancialPayButton
+                                  type={r.type}
+                                  disabled={!token}
+                                  label={r.status === "PARTIAL" ? "Completar" : undefined}
+                                  onClick={() => openPay(r)}
+                                />
+                              )
                             )}
                             {(r.status === "PAID" || r.status === "PARTIAL") && (
                               <button
@@ -752,7 +914,8 @@ export default function FinancialPage() {
                           </tr>
                         ))}
                       </Fragment>
-                    ))
+                    );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1033,6 +1196,7 @@ export default function FinancialPage() {
         </label>
 
         {form.paid ? (
+          <>
           <FormField
             label={
               drawerType === "PAYABLE"
@@ -1051,6 +1215,22 @@ export default function FinancialPage() {
               Define o mês em que entra nos relatórios — pode ser de um mês anterior.
             </p>
           </FormField>
+          <FormField label="Forma de pagamento *">
+            <select
+              className={inputClass}
+              value={form.paymentMethod}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, paymentMethod: e.target.value as PaymentMethod }))
+              }
+            >
+              {PAYMENT_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {PAYMENT_LABELS[method]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          </>
         ) : editingId ? null : (
           <FormField label="Parcelas">
             <input type="number" min={1} max={24} className={inputClass} value={form.installments} onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))} />

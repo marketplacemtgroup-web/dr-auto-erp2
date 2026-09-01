@@ -56,6 +56,15 @@ export class CreateFinancialEntryDto {
   @IsOptional()
   @IsDateString()
   paidAt?: string;
+
+  /** Conta financeira usada na baixa imediata (quando paid=true). */
+  @IsOptional()
+  @IsString()
+  accountId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  registerInCash?: boolean;
 }
 
 export class CreateInstallmentsDto extends CreateFinancialEntryDto {

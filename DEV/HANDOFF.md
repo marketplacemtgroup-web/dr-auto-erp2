@@ -1,21 +1,31 @@
 # Handoff
 
-Atualizado: 2026-07-28
+Atualizado: 2026-09-01
 
 ## Estado
 
-Liberação de edição comercial pós-aprovação **implementada**.
+**Financeiro — melhorias em lançamentos / a pagar (implementado):**
+- Despesa nova nasce **em aberto** por padrão (não mais "já paga")
+- "Já paga" na criação/edição passa pelo **razão** (`markPaid`)
+- `GET /financial/open-summary` — totais reais + preview de despesas
+- KPIs corrigidos (saldo restante, não só página atual)
+- Parcelas: pai fecha ao quitar filhas; baixa bloqueada no pai
+- Compra sincroniza `financialStatus` ao pagar/estornar
+- Status `OVERDUE` automático por vencimento
+- Filtros na tela: tipo, somente em aberto, badges de status
+- Dashboard: card **A Pagar (Aberto)** + painel **Contas a pagar** no topo
 
-**API prod 500:** `Cannot find module '../dist/bootstrap.js'` — packaging Vercel. Fix local: `postbuild` copia `dist` → `api/nest-dist` + handler/`vercel.json` atualizados. **Precisa commit + redeploy da API.**
+**API prod 500:** fix local pronto — precisa commit + redeploy.
 
 ## Próximo
 
-- Smoke manual: OS com orçamento APPROVED → Editar peça (nome + valor) → salvar → conferir totais e badge aprovado.
-- Itens **novos** após aprovação ainda passam por sync com `approved: null` e podem reabrir o orçamento para PENDING (fluxo de suplemento).
+- Smoke: criar despesa em aberto → baixar → conferir saldo e dashboard
+- Smoke: compra parcelada → pagar parcelas → status da compra
+- Commit + redeploy API se ainda pendente
 
 ## Arquivos-chave
 
-- `apps/api/src/service-orders/service-orders.service.ts` — `updateItem` sem lock comercial
-- `apps/api/src/quotes/quotes-sync.service.ts` — preserva `approved` em update
-- `app/src/pages/service-orders/ServiceOrderDetailPage.tsx` — `canManageQuote` inclui APPROVED; botão Editar sempre
-- `app/src/pages/quotes/QuoteDetailPage.tsx` — textos/gates alinhados (APPROVED ainda redireciona para OS)
+- `apps/api/src/financial/financial.service.ts` — open-summary, overdue, parcelas, compras
+- `app/src/pages/financial/FinancialPage.tsx` — filtros e UX
+- `app/src/components/OpenPayablesPanel.tsx` — painel no dashboard
+- `app/src/pages/DashboardPage.tsx` — KPI e painel despesas

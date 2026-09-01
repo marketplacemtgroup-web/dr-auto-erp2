@@ -8,8 +8,11 @@ import {
   Clock,
   Users,
   TrendingUp,
+  Receipt,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import KPICard from "../components/KPICard";
+import { timeGreeting } from "../lib/timeGreeting";
 import SecondaryKPIs from "../components/SecondaryKPIs";
 import ServiceOrdersTable from "../components/ServiceOrdersTable";
 import PendingQuotes from "../components/PendingQuotes";
@@ -24,11 +27,12 @@ import { DashboardBundleProvider } from "../contexts/DashboardBundleContext";
 import { useDashboardBundle } from "../hooks/useDashboardBundle";
 import { usePermissions } from "../hooks/usePermissions";
 import NavButton from "../components/NavButton";
+import OpenPayablesPanel from "../components/OpenPayablesPanel";
+import { getErrorMessage, api } from "../lib/api";
 import { formatMoney } from "../lib/format";
-import { timeGreeting } from "../lib/timeGreeting";
 import { branding } from "../lib/branding";
 import { routes } from "../lib/routes";
-import { getErrorMessage } from "../lib/api";
+import { QUERY_STALE_TIME_MS } from "../lib/query-cache";
 import { useAuthStore, useAuthUser } from "../stores/authStore";
 
 function sparkline(value: number) {
@@ -57,6 +61,14 @@ function DashboardPageContent() {
     summary,
   } = useDashboardBundle();
 
+  const token = useAuthStore((s) => s.session?.accessToken);
+  const openSummary = useQuery({
+    queryKey: ["financial", "open-summary", token],
+    queryFn: () => api.financialOpenSummary(token!),
+    enabled: showFinancial && !!token,
+    staleTime: QUERY_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
+  });
   const opLoading = summary.isPending && !op;
   const finLoading = showFinancial && summary.isPending && !fin;
 
@@ -138,13 +150,24 @@ function DashboardPageContent() {
     },
   ];
 
+  const payablesKpi = {
+    label: "A Pagar (Aberto)",
+    value: openSummary.isLoading ? "—" : formatMoney(openSummary.data?.payableOpen ?? 0),
+    trend: 0,
+    icon: <Receipt size={20} strokeWidth={1.5} className="text-[#DC2626]" />,
+    iconBg: "#FEF2F2",
+    sparklineColor: "#DC2626",
+    sparklineData: sparkline(Math.round(openSummary.data?.payableOpen ?? 0)),
+    to: `${routes.financeiroLancamentos}?type=PAYABLE&open=1`,
+  };
+
   const kpiData = showFinancial
     ? [
         operationalKpis[0],
         operationalKpis[1],
         operationalKpis[2],
         ...financialKpis,
-        operationalKpis[3],
+        payablesKpi,
       ]
     : operationalKpis;
 
@@ -236,14 +259,35 @@ function DashboardPageContent() {
           showFinancial ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-3 xl:grid-cols-6"
         }`}
       >
-        {kpiData.map((kpi) => (
-          <KPICard key={kpi.label} {...kpi} />
-        ))}
+        {kpiData.map((kpi) => {
+          const link = "to" in kpi ? (kpi as { to?: string }).to : undefined;
+          const cardProps = { ...kpi } as Omit<typeof kpi, "to">;
+          if ("to" in cardProps) delete (cardProps as { to?: string }).to;
+          const card = <KPICard key={kpi.label} {...cardProps} />;
+          return link ? (
+            <NavButton
+              key={kpi.label}
+              to={link}
+              className="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E7490]"
+            >
+              {card}
+            </NavButton>
+          ) : (
+            card
+          );
+        })}
       </div>
+
+      {showFinancial ? <OpenPayablesPanel /> : null}
 
       {showFinancial && (
         <div className="mb-5">
-          <SecondaryKPIs kpis={kpis} isLoading={finLoading} />
+          <SecondaryKPIs
+            kpis={kpis}
+            isLoading={finLoading}
+            openSummary={openSummary.data}
+            openSummaryLoading={openSummary.isLoading}
+          />
         </div>
       )}
 
