@@ -36,7 +36,8 @@ export default function DeleteEntryModal({ entry, loading, onClose, onConfirm }:
   if (!entry) return null;
 
   const hasInstallments = (entry.installments?.length ?? 0) > 0;
-  const paidWarning = entry.status === "PAID";
+  const paidWarning = entry.status === "PAID" || entry.status === "PARTIAL";
+  const canDelete = !paidWarning;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -65,7 +66,10 @@ export default function DeleteEntryModal({ entry, loading, onClose, onConfirm }:
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
             <div className="space-y-1">
               {paidWarning ? (
-                <p>Este lancamento ja foi pago. O valor sera removido dos relatorios e do caixa.</p>
+                <p>
+                  Lancamentos pagos ou parciais nao podem ser excluidos. Use o botao de estorno
+                  (icone de voltar) na lista.
+                </p>
               ) : null}
               {hasInstallments ? <p>Todas as parcelas deste lancamento tambem serao excluidas.</p> : null}
             </div>
@@ -76,11 +80,14 @@ export default function DeleteEntryModal({ entry, loading, onClose, onConfirm }:
           className="mt-4"
           onSubmit={(e) => {
             e.preventDefault();
+            if (!canDelete) return;
             const trimmed = reason.trim();
             if (trimmed.length < 3) return;
             onConfirm(trimmed);
           }}
         >
+          {canDelete ? (
+            <>
           <FormField label="Motivo da exclusao *">
             <textarea
               className={inputClass}
@@ -114,6 +121,18 @@ export default function DeleteEntryModal({ entry, loading, onClose, onConfirm }:
               {loading ? "Excluindo..." : "Excluir lancamento"}
             </button>
           </div>
+            </>
+          ) : (
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-10 px-4 rounded-lg border border-[#E2E8F0] text-sm text-[#1E293B] hover:bg-[#F8FAFC]"
+              >
+                Fechar
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>,

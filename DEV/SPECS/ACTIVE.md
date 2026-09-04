@@ -1,27 +1,28 @@
-# Spec ativa — Editar itens após aprovação do orçamento
+# Spec ativa — Correção AR/AP + vencimento automático
 
-Status: **done** (implementado; smoke manual pendente)
+Status: **implemented** (smoke manual pendente; redeploy API necessário para cron)
 
 ## Objetivo
 
-Permitir editar nome e valores de peças/serviços do orçamento mesmo depois de aprovado e convertido em OS, sem obrigar deletar e recriar o orçamento.
+Corrigir inconsistências de contas a pagar/receber e garantir que status vire `OVERDUE` sozinho quando a data chega.
 
-## Escopo
+## Feito
 
-- Liberar `updateItem` na API (sem bloqueio por `commercialLockedAt` / linha aprovada)
-- UI da OS: editar itens com quote `APPROVED`
-- Sync: ao alterar campos de linha já aprovada, **preservar** `approved`
-- Manter painel de custo interno / “Atualizar peça comprada” como fluxo operacional opcional
+1. Parcelas/lançamentos `OVERDUE` mostram botão de baixar (não mais "Pago")
+2. Fila a receber inclui `OPEN`/`PARTIAL`/`OVERDUE` e sincroniza vencidos
+3. OS já faturada (qualquer status ativo) não volta para "pronto para cobrar"
+4. `createFromServiceOrder` reusa recebível `OPEN|PARTIAL|OVERDUE`
+5. Contas bancárias fora do menu (confirmado pelo Maestro)
+6. Cron diário `GET /cron/sync-overdue-financial` + sync em list/open-summary/receive-queue
+7. Pai de parcela fica `OVERDUE` quando filhas vencem
+
+## Aceite (smoke)
+
+1. Parcela vencida → badge Vencido + botão Pagar/Receber
+2. KPI "A receber" bate com fila (inclui vencidos)
+3. OS com recebível vencido não aparece em "Cobrar"
+4. Após meia-noite (ou abrir financeiro), OPEN com dueDate passado → OVERDUE
 
 ## Fora de escopo
 
-- Exigir reaprovação do cliente ao editar valores
-- Mudança de RLS (não há RLS ativo nesse fluxo)
-
-## Aceite
-
-1. Em OS com orçamento aprovado, botão **Editar** aparece em todos os itens
-2. Alterar descrição e `unitPrice` salva com sucesso
-3. Totais da OS e do orçamento atualizam
-4. Linha permanece aprovada (sem forçar PENDING só por editar)
-5. Build API ok
+- CRUD de contas bancárias (descontinuado no produto)

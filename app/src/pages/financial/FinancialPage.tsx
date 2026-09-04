@@ -51,6 +51,22 @@ function isInstallmentParent(row: FinancialEntryRow) {
   return Boolean(row.installments && row.installments.length > 0);
 }
 
+/** Statuses that still accept payment/receipt. */
+function canSettleEntry(status: FinancialEntryRow["status"]) {
+  return status === "OPEN" || status === "PARTIAL" || status === "OVERDUE";
+}
+
+/** Statuses that allow hard delete (paid/partial must reverse first). */
+function canDeleteEntry(status: FinancialEntryRow["status"]) {
+  return status === "OPEN" || status === "OVERDUE" || status === "CANCELLED" || status === "REVERSED";
+}
+
+function settledLabel(status: FinancialEntryRow["status"]) {
+  if (status === "REVERSED") return "Estornado";
+  if (status === "CANCELLED") return "Cancelado";
+  return "Pago";
+}
+
 function entryStatusBadge(row: FinancialEntryRow) {
   if (row.status === "PAID") {
     return { label: "Pago", className: "bg-[#F0FDF4] text-[#166534] border-[#BBF7D0]" };
@@ -526,6 +542,7 @@ export default function FinancialPage() {
       await api.deleteServiceOrder(token, order.serviceOrderId);
       void loadReceiveQueue();
       void queryClient.invalidateQueries({ queryKey: ["service-orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard", "kpis"] });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Nao foi possivel excluir a OS");
     } finally {
@@ -825,7 +842,7 @@ export default function FinancialPage() {
                                 Parcelas
                               </button>
                             ) : null}
-                            {r.status === "PAID" || r.status === "REVERSED" ? (
+                            {(r.status === "PAID" || r.status === "REVERSED") ? (
                               <span className="inline-flex items-center h-8 px-3 text-[11px] font-medium text-[#94A3B8]">
                                 {r.status === "REVERSED" ? "Estornado" : "Pago"}
                               </span>
@@ -834,13 +851,17 @@ export default function FinancialPage() {
                                 <span className="inline-flex items-center h-8 px-3 text-[11px] font-medium text-[#94A3B8]">
                                   Ver parcelas
                                 </span>
-                              ) : (
+                              ) : canSettleEntry(r.status) ? (
                                 <FinancialPayButton
                                   type={r.type}
                                   disabled={!token}
                                   label={r.status === "PARTIAL" ? "Completar" : undefined}
                                   onClick={() => openPay(r)}
                                 />
+                              ) : (
+                                <span className="inline-flex items-center h-8 px-3 text-[11px] font-medium text-[#94A3B8]">
+                                  {settledLabel(r.status)}
+                                </span>
                               )
                             )}
                             {(r.status === "PAID" || r.status === "PARTIAL") && (
@@ -863,6 +884,7 @@ export default function FinancialPage() {
                             >
                               <Pencil size={16} />
                             </button>
+                            {(canDeleteEntry(r.status)) && (
                             <button
                               type="button"
                               title="Excluir lancamento"
@@ -872,6 +894,7 @@ export default function FinancialPage() {
                             >
                               <Trash2 size={16} />
                             </button>
+                            )}
                           </td>
                         </tr>
                         {expandedId === r.id && r.installments?.map((p) => (
@@ -890,7 +913,7 @@ export default function FinancialPage() {
                               )}
                             </td>
                             <td className="px-4 py-2 text-right space-x-1">
-                              {p.status === "OPEN" || p.status === "PARTIAL" ? (
+                              {canSettleEntry(p.status) ? (
                                 <FinancialPayButton
                                   type={p.type}
                                   label={p.status === "PARTIAL" ? "Completar" : undefined}
@@ -898,9 +921,10 @@ export default function FinancialPage() {
                                 />
                               ) : (
                                 <span className="text-[11px] text-[#94A3B8]">
-                                  {p.status === "REVERSED" ? "Estornado" : "Pago"}
+                                  {settledLabel(p.status)}
                                 </span>
                               )}
+                              {(canDeleteEntry(p.status)) && (
                               <button
                                 type="button"
                                 title="Excluir parcela"
@@ -910,6 +934,7 @@ export default function FinancialPage() {
                               >
                                 <Trash2 size={14} />
                               </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -966,6 +991,7 @@ export default function FinancialPage() {
                                   type="RECEIVABLE"
                                   onClick={() => openPay(r)}
                                 />
+                                {(canDeleteEntry(r.status)) && (
                                 <button
                                   type="button"
                                   title="Excluir recebivel"
@@ -975,6 +1001,7 @@ export default function FinancialPage() {
                                 >
                                   <Trash2 size={16} />
                                 </button>
+                                )}
                               </div>
                             </li>
                           ))}

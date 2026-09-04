@@ -378,7 +378,10 @@ export class FinancialService {
   }
 
   async receiveQueue(organizationId: string) {
+    await this.syncOverdueStatuses(organizationId);
+
     const billableStatuses = ['DELIVERED', 'AWAITING_PAYMENT'] as const;
+    const openStatuses = ['OPEN', 'PARTIAL', 'OVERDUE'] as const;
 
     const orders = await this.prisma.serviceOrder.findMany({
       where: {
@@ -392,9 +395,8 @@ export class FinancialService {
         financialEntries: {
           where: {
             type: 'RECEIVABLE',
-            // Considera recebíveis em aberto E já pagos: se a OS já foi
-            // faturada (mesmo que quitada), não deve voltar para a fila.
-            status: { in: ['OPEN', 'PAID'] },
+            // Qualquer fatura ativa (aberta, parcial, vencida ou paga) tira a OS da fila.
+            status: { notIn: ['CANCELLED', 'REVERSED'] },
             parentEntryId: null,
           },
           take: 1,
@@ -419,7 +421,7 @@ export class FinancialService {
       where: {
         organizationId,
         type: 'RECEIVABLE',
-        status: 'OPEN',
+        status: { in: [...openStatuses] },
         parentEntryId: null,
         serviceOrderId: { not: null },
       },
@@ -474,7 +476,12 @@ export class FinancialService {
     }
 
     const existing = await this.prisma.financialEntry.findFirst({
-      where: { organizationId, serviceOrderId, type: 'RECEIVABLE', status: 'OPEN' },
+      where: {
+        organizationId,
+        serviceOrderId,
+        type: 'RECEIVABLE',
+        status: { in: ['OPEN', 'PARTIAL', 'OVERDUE'] },
+      },
       include: entryInclude,
     });
 
@@ -1185,6 +1192,8 @@ export class FinancialService {
     });
 
     await this.invalidateDashboardCache(organizationId, entry.paidAt ?? undefined);
+    await this.invalidateDashboardCache(organizationId, entry.dueDate);
+    await this.invalidateDashboardCache(organizationId, new Date());
 
     return { ok: true };
   }
@@ -1330,16 +1339,39 @@ export class FinancialService {
     return this.roundMoney(Math.max(netDue - alreadyPaid, 0));
   }
 
-  private async syncOverdueStatuses(organizationId: string) {
+  /**
+   * Marca lançamentos OPEN com vencimento passado como OVERDUE.
+   * Sem organizationId: aplica em todas as orgs (cron diário).
+   */
+  async syncOverdueStatuses(organizationId?: string) {
     const today = this.startOfDay(new Date());
-    await this.prisma.financialEntry.updateMany({
+    const orgFilter = organizationId ? { organizationId } : {};
+
+    const leaves = await this.prisma.financialEntry.updateMany({
       where: {
-        organizationId,
+        ...orgFilter,
         status: 'OPEN',
         dueDate: { lt: today },
       },
       data: { status: 'OVERDUE' },
     });
+
+    // Pais de parcela: se ainda OPEN e (venceu ou tem filha vencida) → OVERDUE
+    const parents = await this.prisma.financialEntry.updateMany({
+      where: {
+        ...orgFilter,
+        status: 'OPEN',
+        installmentNumber: 0,
+        installmentTotal: { gt: 1 },
+        OR: [
+          { dueDate: { lt: today } },
+          { installments: { some: { status: 'OVERDUE' } } },
+        ],
+      },
+      data: { status: 'OVERDUE' },
+    });
+
+    return { updated: leaves.count + parents.count, leaves: leaves.count, parents: parents.count };
   }
 
   private async syncParentInstallmentStatus(
@@ -1356,15 +1388,24 @@ export class FinancialService {
     const anySettled = children.some(
       (child) => child.status === 'PAID' || child.status === 'PARTIAL',
     );
+    const anyOverdue = children.some((child) => child.status === 'OVERDUE');
 
     const paidChildren = children
       .filter((child) => child.paidAt)
       .sort((a, b) => b.paidAt!.getTime() - a.paidAt!.getTime());
 
+    const nextStatus = allPaid
+      ? 'PAID'
+      : anySettled
+        ? 'PARTIAL'
+        : anyOverdue
+          ? 'OVERDUE'
+          : 'OPEN';
+
     await tx.financialEntry.update({
       where: { id: parentId },
       data: {
-        status: allPaid ? 'PAID' : anySettled ? 'PARTIAL' : 'OPEN',
+        status: nextStatus,
         paidAt: allPaid ? paidChildren[0]?.paidAt ?? new Date() : null,
         amountPaid: new Prisma.Decimal(
           children.reduce((sum, child) => sum + Number(child.amountPaid ?? 0), 0),

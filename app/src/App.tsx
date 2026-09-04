@@ -32,7 +32,6 @@ const SuppliersPage = lazyWithRetry(() => import("./pages/suppliers/SuppliersPag
 const SupplierDetailPage = lazyWithRetry(() => import("./pages/suppliers/SupplierDetailPage"));
 const FinancialPage = lazyWithRetry(() => import("./pages/financial/FinancialPage"));
 const FinancialLayout = lazyWithRetry(() => import("./layouts/FinancialLayout"));
-const FinancialAccountsPage = lazyWithRetry(() => import("./pages/financial/FinancialAccountsPage"));
 const FinancialCashFlowPage = lazyWithRetry(() => import("./pages/financial/FinancialCashFlowPage"));
 const FinancialEquityPage = lazyWithRetry(() => import("./pages/financial/FinancialEquityPage"));
 const FinancialLoansPage = lazyWithRetry(() => import("./pages/financial/FinancialLoansPage"));
@@ -226,14 +225,7 @@ export default function App() {
                 </Lazy>
               }
             />
-            <Route
-              path="contas"
-              element={
-                <Lazy>
-                  <FinancialAccountsPage />
-                </Lazy>
-              }
-            />
+            <Route path="contas" element={<Navigate to="lancamentos" replace />} />
             <Route
               path="fluxo-caixa"
               element={

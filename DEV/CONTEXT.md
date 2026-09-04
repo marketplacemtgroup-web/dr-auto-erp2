@@ -13,3 +13,7 @@ Monorepo AutoCore ERP (API Nest + dashboard `app` + portal). Orçamento (`Quote`
 ## Decisão recente
 
 Edição administrativa pós-aprovação **sem** reaprovação do cliente: mudar nome/valores em item já aprovado não zera `approved` e não reabre o quote para PENDING. Incluir item **novo** na OS aprovada ainda cria linha pendente e pode reabrir suplemento.
+
+## Risco ativo (financeiro)
+
+Correção AR/AP aplicada localmente. Cron de vencimento sobe só após redeploy da API. Smoke UI ainda pendente.

@@ -1,6 +1,7 @@
 import { Controller, Get, Headers, UnauthorizedException } from '@nestjs/common';
 import { AttachmentsPurgeService } from '../attachments/attachments-purge.service';
 import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
+import { FinancialService } from '../financial/financial.service';
 import { MaintenanceRemindersService } from '../maintenance-reminders/maintenance-reminders.service';
 
 @Controller('cron')
@@ -9,6 +10,7 @@ export class CronController {
     private readonly attachmentsPurge: AttachmentsPurgeService,
     private readonly maintenanceReminders: MaintenanceRemindersService,
     private readonly dashboardCache: DashboardCacheService,
+    private readonly financial: FinancialService,
   ) {}
 
   private assertCronAuth(authorization?: string) {
@@ -38,5 +40,12 @@ export class CronController {
   refreshDashboardCache(@Headers('authorization') authorization?: string) {
     this.assertCronAuth(authorization);
     return this.dashboardCache.refreshStaleBatch();
+  }
+
+  /** Marca lançamentos com vencimento passado como OVERDUE (todas as orgs). */
+  @Get('sync-overdue-financial')
+  syncOverdueFinancial(@Headers('authorization') authorization?: string) {
+    this.assertCronAuth(authorization);
+    return this.financial.syncOverdueStatuses();
   }
 }

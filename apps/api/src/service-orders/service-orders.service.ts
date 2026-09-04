@@ -1,4 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+  forwardRef,
+} from '@nestjs/common';
 import {
   Prisma,
   ServiceOrderItemCostField,
@@ -27,6 +34,7 @@ import { FinancialService } from '../financial/financial.service';
 import { CommissionEngineService } from '../team/commission-engine.service';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { MaintenanceRemindersService } from '../maintenance-reminders/maintenance-reminders.service';
+import { DashboardCacheService } from '../dashboard/dashboard-cache.service';
 
 /** Fase de orçamento/análise — peças não baixam estoque físico. */
 const QUOTE_PHASE_STATUSES: ServiceOrderStatus[] = [
@@ -125,7 +133,13 @@ export class ServiceOrdersService {
     private readonly commissionEngine: CommissionEngineService,
     private readonly appointments: AppointmentsService,
     private readonly maintenanceReminders: MaintenanceRemindersService,
+    @Optional() private readonly dashboardCache?: DashboardCacheService,
   ) {}
+
+  private async invalidateDashboardCache(organizationId: string, date?: Date) {
+    if (!this.dashboardCache) return;
+    await this.dashboardCache.invalidate(organizationId, date);
+  }
 
   private async maybeRegenerateCommissions(
     organizationId: string,
@@ -496,6 +510,11 @@ export class ServiceOrdersService {
       );
     }
 
+    const newlyClosed =
+      dto.status !== undefined &&
+      CLOSED_OS_STATUSES.includes(dto.status as ServiceOrderStatus) &&
+      !current.closedAt;
+
     const updated = await this.prisma.serviceOrder.update({
       where: { id },
       data: {
@@ -586,6 +605,10 @@ export class ServiceOrdersService {
       );
     }
 
+    if (newlyClosed) {
+      await this.invalidateDashboardCache(organizationId, new Date());
+    }
+
     if (
       (dto.status === 'FINISHED' || dto.status === 'DELIVERED') &&
       dto.status !== current.status
@@ -674,6 +697,10 @@ export class ServiceOrdersService {
       userId,
       metadata: { serviceOrderId: id, number },
     });
+    if (row.closedAt) {
+      await this.invalidateDashboardCache(organizationId, row.closedAt);
+    }
+    await this.invalidateDashboardCache(organizationId, new Date());
     return { ok: true };
   }
 

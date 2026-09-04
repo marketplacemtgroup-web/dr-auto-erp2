@@ -3,7 +3,6 @@ import { routes } from "../lib/routes";
 
 const subNav = [
   { label: "Lançamentos", path: routes.financeiroLancamentos },
-  { label: "Contas", path: routes.financeiroContas },
   { label: "Fluxo de Caixa", path: routes.financeiroFluxo },
   { label: "Transferências", path: routes.financeiroTransferencias },
   { label: "Empréstimos", path: routes.financeiroEmprestimos },
@@ -16,7 +15,7 @@ export default function FinancialLayout() {
       <div className="px-6 pt-6 pb-2">
         <h1 className="text-xl font-bold text-[#1E293B]">Financeiro</h1>
         <p className="text-[13px] text-[#64748B] mt-0.5">
-          Contas, lançamentos, fluxo de caixa e movimentações patrimoniais
+          Contas a pagar e receber, fluxo de caixa e movimentações patrimoniais
         </p>
       </div>
 

@@ -1,5 +1,13 @@
 # Worklog
 
+## 2026-09-04 - Fix AR/AP + vencimento automático
+
+- Spec: `DEV/SPECS/ACTIVE.md`
+- Changed: `financial.service.ts`, `FinancialPage.tsx`, `cron/*`, `vercel.json`, `DEV/*` (+ diff Contas removidas)
+- Why: OVERDUE quebrava UI/fila; Maestro pediu status automático no vencimento; contas bancárias descontinuadas
+- Verify: `npm run build -w @autocore/api` OK; smoke UI pendente
+- Next: smoke + commit/redeploy
+
 ## 2026-07-28 - Liberar edição pós-aprovação
 
 - Spec: `DEV/SPECS/ACTIVE.md`
