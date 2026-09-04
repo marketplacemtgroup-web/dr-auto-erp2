@@ -123,8 +123,7 @@ export default function FinancialPage() {
     searchParams.get("type") === "PAYABLE" || searchParams.get("type") === "RECEIVABLE"
       ? searchParams.get("type")!
       : "all";
-  // Default: fila em aberto. Só mistura pagos se open=0 explicitamente.
-  const openOnly = searchParams.get("open") !== "0";
+  // Fila principal = só em aberto. Pagos/recebidos ficam no Histórico.
   const [historyOpen, setHistoryOpen] = useState(false);
   const { canViewMoney } = usePermissions();
   const showMoney = canViewMoney();
@@ -191,9 +190,9 @@ export default function FinancialPage() {
   const listFilters = useMemo(
     () => ({
       type: typeFilter === "all" ? undefined : (typeFilter as "PAYABLE" | "RECEIVABLE"),
-      openOnly,
+      openOnly: true as const,
     }),
-    [typeFilter, openOnly],
+    [typeFilter],
   );
 
   async function loadOpenSummary() {
@@ -213,25 +212,16 @@ export default function FinancialPage() {
     void queryClient.invalidateQueries({ queryKey: ["financial", "open-summary"] });
   }, [queryClient, token]);
 
-  function setListFilters(next: { type?: string; open?: boolean }) {
+  function setListFilters(next: { type?: string }) {
     const params = new URLSearchParams(searchParams);
     if (next.type !== undefined) {
       if (next.type === "all") params.delete("type");
       else params.set("type", next.type);
     }
-    if (next.open !== undefined) {
-      if (next.open) params.set("open", "1");
-      else params.set("open", "0");
-    }
-    setSearchParams(params, { replace: true });
-  }
-
-  useEffect(() => {
-    if (searchParams.has("open")) return;
-    const params = new URLSearchParams(searchParams);
+    // Mantém open=1 na URL só por compat com links antigos do dashboard.
     params.set("open", "1");
     setSearchParams(params, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }
 
   async function loadEntries(nextSearch?: string, nextPage = entriesPage, filters = listFilters) {
     if (!token) return;
@@ -369,7 +359,7 @@ export default function FinancialPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, listFilters.type, listFilters.openOnly]);
+  }, [token, listFilters.type]);
 
   useEffect(() => {
     void loadProfitSummary(profitPeriod);
@@ -790,29 +780,16 @@ export default function FinancialPage() {
               ))}
               <button
                 type="button"
-                onClick={() => setListFilters({ open: !openOnly })}
-                className={`h-9 px-3 rounded-lg text-[12px] font-medium border transition-colors ${
-                  openOnly
-                    ? "border-[#DC2626] bg-[#FEF2F2] text-[#DC2626]"
-                    : "border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]"
-                }`}
-              >
-                Somente em aberto
-              </button>
-              <button
-                type="button"
                 onClick={() => setHistoryOpen(true)}
                 className="h-9 px-3 rounded-lg text-[12px] font-semibold border border-[#334155] bg-[#1E293B] text-white hover:bg-[#0F172A] inline-flex items-center gap-1.5"
               >
                 <History size={14} />
                 Histórico
               </button>
-              {(typeFilter !== "all" || !openOnly) && (
+              {typeFilter !== "all" && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchParams({ open: "1" }, { replace: true });
-                  }}
+                  onClick={() => setListFilters({ type: "all" })}
                   className="h-9 px-3 rounded-lg text-[12px] font-medium text-[#94A3B8] hover:text-[#64748B]"
                 >
                   Limpar filtros
