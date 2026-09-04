@@ -1,5 +1,13 @@
 # Worklog
 
+## 2026-09-04 - Hotfix P2024 pool + race filtros financeiro
+
+- Spec: estabilizar 500s pós-deploy UX AR/AP
+- Changed: `api/db-env.ts`, `roles-bootstrap.service.ts`, `FinancialPage.tsx`, `DEV/*`
+- Why: logs Vercel → P2024 connection pool; UI misturava listas por race no Promise.all
+- Verify: API build OK; smoke pós-deploy pendente
+- Next: push + smoke cold start
+
 ## 2026-09-04 - UX AR/AP: vencimento + histórico + popup dashboard
 
 - Spec: `DEV/SPECS/ACTIVE.md`

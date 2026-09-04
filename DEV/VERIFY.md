@@ -1,24 +1,18 @@
 # VERIFY
 
-Atualizado: 2026-09-04 (UX AR/AP)
+Atualizado: 2026-09-04 (hotfix P2024 pool + race filtros)
 
-## UX contas a pagar/receber
+## Hotfix pool / financeiro UI
 
-- [x] API `list` orderBy condicional + `dueFrom` (código)
-- [x] Dashboard CTA → popup (código)
-- [x] Financeiro default aberto + Histórico modal (código)
-- [ ] Smoke: preview dashboard por vencimento
-- [ ] Smoke: popup “Ver todas” sem mudar rota; janela hoje−3
-- [ ] Smoke: Financeiro aberto ordenado por vencimento
-- [ ] Smoke: após baixa some da fila e aparece no Histórico
-- [ ] Smoke: Histórico paidAt DESC
+- [x] Causa: P2024 `connection_limit=1` + RolesBootstrap + GETs paralelos
+- [x] `pool_timeout=30` + bootstrap roles atrasado 8s
+- [x] FinancialPage: load sequencial entradas + cancel race; Histórico destacado
+- [x] `npm run build -w @autocore/api` OK
+- [ ] Smoke pós-deploy: `/api/auth/me` e financeiro sem 500 no cold start
+- [ ] Smoke: filtros Todos os tipos / A pagar / A receber sem misturar
+- [ ] Smoke: botão Histórico abre popup
 
-## Deploy anterior `4530abb`
+## UX AR/AP anterior
 
-- [x] Push `main` → GitHub / produção Ready
-- [ ] Smoke UI IndexedDB 2ª visita (ainda pendente)
-
-## Notas
-
-- `npm run build -w @autocore/api` OK
-- Deploy desta UX ainda não feito
+- [x] Código + push `7e0f448`
+- [ ] Smoke aceite UX (após estabilizar 500)

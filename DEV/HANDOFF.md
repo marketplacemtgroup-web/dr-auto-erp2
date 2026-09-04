@@ -1,27 +1,24 @@
 # Handoff
 
-Atualizado: 2026-09-04 (UX AR/AP vencimento + histórico + popup dashboard)
+Atualizado: 2026-09-04 (hotfix P2024 + race filtros financeiro)
 
 ## Estado
 
-**Local (não commitado ainda):**
+**Hotfix local (a commit/push):**
 
-- API: `list()` ordena por vencimento (aberto) / `paidAt` (pago); filtro `dueFrom`
-- App: popup despesas no dashboard; Financeiro default aberto; modal Histórico
+- Causa dos 500: Prisma `P2024` — pool `connection_limit=1` timeout 10s no cold start (RolesBootstrap + rajada de GETs)
+- Fix API: `pool_timeout=30` em `db-env.ts`; RolesBootstrap atrasa 8s
+- Fix App: FinancialPage carrega entradas primeiro com cancelamento de race; catches em todas as calls; Histórico mais visível
 
-**Em produção (push anterior `4530abb`):** cold start + IndexedDB + baixa financeira
+**Em produção:** `7e0f448` (UX AR/AP) — 500 intermitentes até este hotfix subir
 
 ## Próximo
 
-- Smoke UI dos 5 critérios em `DEV/SPECS/ACTIVE.md`
-- Commit + deploy API + app quando Maestro pedir
-- CLI `vercel --prod` local ainda falha `spawn npm ENOENT` — preferir push GitHub
+- Push hotfix → esperar Ready API+app
+- Smoke: cold open financeiro, alternar A pagar / A receber / Todos os tipos, Histórico
 
 ## Arquivos-chave
 
-- `apps/api/src/financial/financial.service.ts` + `financial.controller.ts`
-- `app/src/lib/api.ts` (`dueFrom` / `status` em `financialEntries`)
-- `app/src/components/OpenPayablesPanel.tsx`
-- `app/src/components/financial/OpenPayablesModal.tsx`
-- `app/src/components/financial/FinancialHistoryModal.tsx`
+- `apps/api/api/db-env.ts`
+- `apps/api/src/roles/roles-bootstrap.service.ts`
 - `app/src/pages/financial/FinancialPage.tsx`

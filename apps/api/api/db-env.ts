@@ -9,11 +9,33 @@ export function stripEnvQuotes(value: string): string {
   return v;
 }
 
-/** Prisma em serverless: 1 conexão por isolate evita esgotar o pool no cold start. */
-function withServerlessConnectionLimit(url: string): string {
+/**
+ * Prisma em serverless: 1 conexão por isolate evita estourar o pooler Supabase
+ * com N lambdas. Com limit=1, requests concorrentes precisam esperar — por isso
+ * pool_timeout generoso (sem isso → P2024 em 10s no cold start).
+ */
+function withServerlessPoolParams(url: string): string {
   if (!/^postgres(ql)?:\/\//i.test(url)) return url;
-  if (/[?&]connection_limit=/i.test(url)) return url;
-  return url.includes('?') ? `${url}&connection_limit=1` : `${url}?connection_limit=1`;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has('connection_limit')) {
+      parsed.searchParams.set('connection_limit', '1');
+    }
+    // Sempre reforça timeout: cold start + bootstrap + GETs concorrentes.
+    parsed.searchParams.set('pool_timeout', '30');
+    return parsed.toString();
+  } catch {
+    let next = url;
+    if (!/[?&]connection_limit=/i.test(next)) {
+      next = next.includes('?') ? `${next}&connection_limit=1` : `${next}?connection_limit=1`;
+    }
+    if (/[?&]pool_timeout=/i.test(next)) {
+      next = next.replace(/([?&]pool_timeout=)[^&]*/i, '$130');
+    } else {
+      next = `${next}&pool_timeout=30`;
+    }
+    return next;
+  }
 }
 
 export function normalizeDatabaseEnv(): void {
@@ -23,7 +45,7 @@ export function normalizeDatabaseEnv(): void {
     let value = stripEnvQuotes(raw);
     // Pooler (DATABASE_URL) é o caminho quente de todos os GETs — limitar por isolate.
     if (name === 'DATABASE_URL') {
-      value = withServerlessConnectionLimit(value);
+      value = withServerlessPoolParams(value);
     }
     process.env[name] = value;
   }

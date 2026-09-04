@@ -9,7 +9,9 @@ export class RolesBootstrapService implements OnModuleInit {
   constructor(private readonly roles: RolesService) {}
 
   onModuleInit() {
-    void this.syncInBackground();
+    // Atrasa o sync para não competir com a 1ª onda de GETs no cold start
+    // (connection_limit=1 → RolesBootstrap + financeiro em paralelo = P2024).
+    setTimeout(() => void this.syncInBackground(), 8_000);
   }
 
   private async syncInBackground() {

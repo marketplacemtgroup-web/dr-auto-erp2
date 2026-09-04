@@ -241,6 +241,9 @@ export default function FinancialPage() {
       setRows(res.data);
       setEntriesTotalPages(res.pagination.totalPages);
       setEntriesPage(res.pagination.page);
+    } catch {
+      setRows([]);
+      setEntriesTotalPages(0);
     } finally {
       setLoading(false);
     }
@@ -260,6 +263,8 @@ export default function FinancialPage() {
     setQueueLoading(true);
     try {
       setReceiveQueue(await api.financialReceiveQueue(token));
+    } catch {
+      setReceiveQueue(null);
     } finally {
       setQueueLoading(false);
     }
@@ -313,24 +318,57 @@ export default function FinancialPage() {
 
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
     setLoading(true);
     setQueueLoading(true);
-    void Promise.all([
-      api.financialEntries(token, undefined, 1, LIST_PAGE_SIZE, listFilters).then((res) => {
+
+    const filters = listFilters;
+
+    void (async () => {
+      // Entradas primeiro (filtro ativo). Evita race: resposta antiga de "A pagar"
+      // sobrescrevendo "A receber" / "Todos".
+      try {
+        const res = await api.financialEntries(token, undefined, 1, LIST_PAGE_SIZE, filters);
+        if (cancelled) return;
         setRows(res.data);
         setEntriesTotalPages(res.pagination.totalPages);
         setEntriesPage(1);
-      }),
-      api.cashCurrent(token).then(setCashSession).catch(() => setCashSession(null)),
-      api.financialAccounts(token).then(setAccounts).catch(() => setAccounts([])),
-      api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => setAccountsSummary(null)),
-      api.financialReceiveQueue(token).then(setReceiveQueue),
-      api.financialOpenSummary(token).then(setOpenSummary).catch(() => setOpenSummary(null)),
-    ]).finally(() => {
-      setLoading(false);
-      setQueueLoading(false);
-    });
+      } catch {
+        if (!cancelled) {
+          setRows([]);
+          setEntriesTotalPages(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+
+      if (cancelled) return;
+
+      await Promise.all([
+        api.cashCurrent(token).then((v) => { if (!cancelled) setCashSession(v); }).catch(() => {
+          if (!cancelled) setCashSession(null);
+        }),
+        api.financialAccounts(token).then((v) => { if (!cancelled) setAccounts(v); }).catch(() => {
+          if (!cancelled) setAccounts([]);
+        }),
+        api.financialAccountsSummary(token).then((v) => { if (!cancelled) setAccountsSummary(v); }).catch(() => {
+          if (!cancelled) setAccountsSummary(null);
+        }),
+        api.financialReceiveQueue(token).then((v) => { if (!cancelled) setReceiveQueue(v); }).catch(() => {
+          if (!cancelled) setReceiveQueue(null);
+        }),
+        api.financialOpenSummary(token).then((v) => { if (!cancelled) setOpenSummary(v); }).catch(() => {
+          if (!cancelled) setOpenSummary(null);
+        }),
+      ]);
+      if (!cancelled) setQueueLoading(false);
+    })();
+
     void loadFixedExpenses();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token, listFilters.type, listFilters.openOnly]);
 
   useEffect(() => {
@@ -733,7 +771,7 @@ export default function FinancialPage() {
           <>
             <div className="flex flex-wrap gap-2 mb-3">
               {[
-                { id: "all", label: "Todos" },
+                { id: "all", label: "Todos os tipos" },
                 { id: "PAYABLE", label: "A pagar" },
                 { id: "RECEIVABLE", label: "A receber" },
               ].map((item) => (
@@ -764,7 +802,7 @@ export default function FinancialPage() {
               <button
                 type="button"
                 onClick={() => setHistoryOpen(true)}
-                className="h-9 px-3 rounded-lg text-[12px] font-medium border border-[#E2E8F0] text-[#475569] hover:border-[#CBD5E1] inline-flex items-center gap-1.5"
+                className="h-9 px-3 rounded-lg text-[12px] font-semibold border border-[#334155] bg-[#1E293B] text-white hover:bg-[#0F172A] inline-flex items-center gap-1.5"
               >
                 <History size={14} />
                 Histórico
