@@ -139,6 +139,7 @@ export default function FinancialPage() {
   const [drawerType, setDrawerType] = useState<"RECEIVABLE" | "PAYABLE">("RECEIVABLE");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [payTarget, setPayTarget] = useState<FinancialEntryRow | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
   const [payForm, setPayForm] = useState<PayEntryFormState>(() => createDefaultPayForm(0));
   const [accounts, setAccounts] = useState<FinancialAccountRow[]>([]);
   const [accountsSummary, setAccountsSummary] = useState<{ totalBalance: number } | null>(null);
@@ -426,6 +427,7 @@ export default function FinancialPage() {
       });
     },
     onSuccess: () => {
+      setPayError(null);
       void loadEntries(search, entriesPage, listFilters);
       void loadCash();
       void loadReceiveQueue();
@@ -437,6 +439,12 @@ export default function FinancialPage() {
         void api.financialAccountsSummary(token).then(setAccountsSummary).catch(() => null);
       }
       setPayTarget(null);
+    },
+    onError: (err) => {
+      const message =
+        err instanceof Error ? err.message : "Não foi possível confirmar a baixa";
+      setPayError(message);
+      alert(message);
     },
   });
 
@@ -500,6 +508,7 @@ export default function FinancialPage() {
   }
 
   function openPay(row: FinancialEntryRow, preferCash = tab === "cash") {
+    setPayError(null);
     setPayTarget(row);
     setPayForm(
       createDefaultPayForm(
@@ -527,6 +536,8 @@ export default function FinancialPage() {
       void queryClient.invalidateQueries({ queryKey: ["appointments"] });
       void queryClient.invalidateQueries({ queryKey: ["service-orders"] });
       void loadEntries(search);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Não foi possível gerar o recebível da OS");
     } finally {
       setChargingOrderId(null);
     }
@@ -1272,9 +1283,16 @@ export default function FinancialPage() {
         accounts={accounts}
         cashOpen={!!cashSession}
         loading={pay.isPending}
-        onFormChange={setPayForm}
+        error={payError}
+        onFormChange={(next) => {
+          setPayError(null);
+          setPayForm(next);
+        }}
         onConfirm={() => pay.mutate()}
-        onClose={() => setPayTarget(null)}
+        onClose={() => {
+          setPayError(null);
+          setPayTarget(null);
+        }}
       />
 
       <DeleteEntryModal

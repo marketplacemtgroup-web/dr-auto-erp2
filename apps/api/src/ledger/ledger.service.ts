@@ -63,7 +63,15 @@ export class LedgerService {
     const current = this.roundMoney(Number(account.currentBalance));
     const delta = input.direction === 'CREDIT' ? amount : -amount;
     const balanceAfter = this.roundMoney(current + delta);
-    if (balanceAfter < -0.001) {
+    // Bloqueia só saídas de patrimônio (saque/transferência). Contas a pagar
+    // precisam baixar mesmo com saldo zerado — o caixa físico é controlado
+    // à parte pelo registro de caixa (gaveta).
+    const hardBalanceKinds: LedgerMovementKind[] = [
+      'WITHDRAWAL',
+      'TRANSFER',
+      'ADJUSTMENT',
+    ];
+    if (balanceAfter < -0.001 && hardBalanceKinds.includes(input.movementKind)) {
       throw new BadRequestException(
         `Saldo insuficiente na conta "${account.name}" (saldo: R$ ${current.toFixed(2)})`,
       );

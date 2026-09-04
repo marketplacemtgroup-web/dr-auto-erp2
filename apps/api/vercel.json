@@ -25,18 +25,7 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "api/nest-dist/**,dist/**,node_modules/{@prisma,.prisma,@autocore}/**"
-    },
-    "api/ping.ts": {
-      "maxDuration": 10
-    },
-    "api/env-check.ts": {
-      "maxDuration": 15,
-      "includeFiles": "node_modules/{@prisma,.prisma,@autocore}/**"
-    },
-    "api/setup-status.ts": {
-      "maxDuration": 15,
-      "includeFiles": "node_modules/{@prisma,.prisma,@autocore}/**"
+      "includeFiles": "nest-runtime/**,dist/**,node_modules/{@prisma,.prisma,@autocore}/**"
     }
   }
 }

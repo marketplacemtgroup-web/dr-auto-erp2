@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
-import { applyEdgeCors } from './cors';
 import { normalizeDatabaseEnv, stripEnvQuotes } from './db-env';
 
 const REQUIRED_BUCKETS = ['os-media', 'vehicle-photos', 'documents'] as const;
@@ -96,10 +95,35 @@ async function checkStorageBuckets(): Promise<string[]> {
   );
 }
 
-/** Diagnóstico de env — não carrega Prisma/Nest. */
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (applyEdgeCors(req, res)) return;
+function isFirebaseConfigured(): boolean {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
+  if (raw) {
+    try {
+      JSON.parse(raw.replace(/^"+|"+$/g, ''));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim();
+  if (!b64) return false;
+  try {
+    JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
+function checkPushEnv(): string[] {
+  if (isFirebaseConfigured()) return [];
+  return [
+    'FIREBASE_SERVICE_ACCOUNT não configurado — push Android (FCM) desativado. Rode: node scripts/setup-firebase-fcm.mjs',
+  ];
+}
+
+/** Diagnóstico de env — não carrega Nest. */
+export async function handleEnvCheck(_req: VercelRequest, res: VercelResponse): Promise<void> {
   const dbIssues = [
     ...checkDatabaseUrl('DATABASE_URL'),
     ...checkDatabaseUrl('DIRECT_URL'),
@@ -130,31 +154,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       webPush: !!(process.env.VAPID_PUBLIC_KEY?.trim() && process.env.VAPID_PRIVATE_KEY?.trim()),
     },
   });
-}
-
-function isFirebaseConfigured(): boolean {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
-  if (raw) {
-    try {
-      JSON.parse(raw.replace(/^"+|"+$/g, ''));
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim();
-  if (!b64) return false;
-  try {
-    JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function checkPushEnv(): string[] {
-  if (isFirebaseConfigured()) return [];
-  return [
-    'FIREBASE_SERVICE_ACCOUNT não configurado — push Android (FCM) desativado. Rode: node scripts/setup-firebase-fcm.mjs',
-  ];
 }

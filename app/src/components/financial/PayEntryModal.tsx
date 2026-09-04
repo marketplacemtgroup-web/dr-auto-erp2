@@ -19,6 +19,7 @@ type Props = {
   accounts: FinancialAccountRow[];
   cashOpen: boolean;
   loading?: boolean;
+  error?: string | null;
   onFormChange: (form: PayEntryFormState) => void;
   onConfirm: () => void;
   onClose: () => void;
@@ -35,6 +36,7 @@ export default function PayEntryModal({
   accounts,
   cashOpen,
   loading,
+  error,
   onFormChange,
   onConfirm,
   onClose,
@@ -413,6 +415,12 @@ export default function PayEntryModal({
               ))}
             </div>
           </div>
+
+          {error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800">
+              {error}
+            </div>
+          ) : null}
 
           <div
             className={`rounded-lg px-3 py-2.5 text-[13px] border ${

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { applyEdgeCors } from './cors';
 import { normalizeDatabaseEnv, stripEnvQuotes } from './db-env';
+import { handleEnvCheck } from './env-check-handler';
 import { handleSetupStatus } from './setup-status-handler';
 
 function validateDbEnv(): string[] {
@@ -30,7 +31,8 @@ function normalizeApiRequestUrl(req: VercelRequest): void {
   }
 }
 
-export default async function vercelHandler(req: VercelRequest, res: VercelResponse) {
+/** Handler único — export nomeado (sem default) para não virar function extra na Vercel. */
+export async function handleVercelRequest(req: VercelRequest, res: VercelResponse) {
   normalizeDatabaseEnv();
   normalizeApiRequestUrl(req);
   if (applyEdgeCors(req, res)) return;
@@ -46,6 +48,11 @@ export default async function vercelHandler(req: VercelRequest, res: VercelRespo
     return;
   }
 
+  if (path === '/api/env-check') {
+    await handleEnvCheck(req, res);
+    return;
+  }
+
   const dbIssues = validateDbEnv();
   if (dbIssues.length) {
     res.status(503).json({
@@ -58,12 +65,11 @@ export default async function vercelHandler(req: VercelRequest, res: VercelRespo
 
   try {
     if (!cachedHandler) {
-      // nest-dist é copiado no postbuild; dist fica como fallback local.
-      // Strings estáticas ajudam o file tracer da Vercel + includeFiles.
+      // nest-runtime é copiado no postbuild (fora de api/ para não virar N functions).
       let getExpressApp: () => Promise<(req: VercelRequest, res: VercelResponse) => void>;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        ({ getExpressApp } = require('./nest-dist/bootstrap.js'));
+        ({ getExpressApp } = require('../nest-runtime/bootstrap.js'));
       } catch {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         ({ getExpressApp } = require('../dist/bootstrap.js'));

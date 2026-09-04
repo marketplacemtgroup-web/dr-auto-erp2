@@ -1,6 +1,6 @@
 /**
- * Copia o build Nest (dist/) para api/nest-dist/ para o bundle serverless
- * da Vercel incluir o bootstrap via require local (NFT + includeFiles).
+ * Copia o build Nest (dist/) para nest-runtime/ (fora de api/) para o bundle
+ * serverless incluir o bootstrap sem a Vercel tratar cada .js como function.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const apiRoot = join(scriptDir, '..');
 const distDir = join(apiRoot, 'dist');
-const nestDistDir = join(apiRoot, 'api', 'nest-dist');
+const nestRuntimeDir = join(apiRoot, 'nest-runtime');
+const legacyNestDist = join(apiRoot, 'api', 'nest-dist');
 const bootstrapJs = join(distDir, 'bootstrap.js');
 
 if (!existsSync(bootstrapJs)) {
@@ -21,12 +22,13 @@ if (!existsSync(bootstrapJs)) {
   process.exit(1);
 }
 
-rmSync(nestDistDir, { recursive: true, force: true });
-mkdirSync(dirname(nestDistDir), { recursive: true });
-cpSync(distDir, nestDistDir, { recursive: true });
+rmSync(nestRuntimeDir, { recursive: true, force: true });
+rmSync(legacyNestDist, { recursive: true, force: true });
+mkdirSync(nestRuntimeDir, { recursive: true });
+cpSync(distDir, nestRuntimeDir, { recursive: true });
 writeFileSync(
-  join(nestDistDir, '.vercel-include'),
+  join(nestRuntimeDir, '.vercel-include'),
   `copied from dist at ${new Date().toISOString()}\n`,
   'utf8',
 );
-console.log(`[copy-nest-dist] ${distDir} -> ${nestDistDir}`);
+console.log(`[copy-nest-dist] ${distDir} -> ${nestRuntimeDir}`);

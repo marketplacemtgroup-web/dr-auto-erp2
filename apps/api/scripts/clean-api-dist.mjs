@@ -11,6 +11,7 @@ const apiRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const targets = [
   join(apiRoot, 'dist'),
   join(apiRoot, 'tsconfig.tsbuildinfo'),
+  join(apiRoot, 'nest-runtime'),
   join(apiRoot, 'api', 'nest-dist'),
 ];
 

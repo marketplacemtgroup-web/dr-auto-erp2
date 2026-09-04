@@ -109,6 +109,7 @@ export class PayFinancialSplitDto {
   @IsEnum(PaymentMethod)
   paymentMethod!: PaymentMethod;
 
+  @Type(() => Number)
   @IsNumber()
   @Min(0.01)
   amount!: number;
@@ -129,6 +130,7 @@ export class PayFinancialEntryDto {
 
   /** Valor a baixar nesta operação (baixa parcial). Se omitido, quita o saldo restante. */
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0.01)
   amountToPay?: number;
@@ -150,11 +152,13 @@ export class PayFinancialEntryDto {
   registerInCash?: boolean;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   discountAmount?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(100)
@@ -168,16 +172,19 @@ export class PayFinancialEntryDto {
   splits?: PayFinancialSplitDto[];
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   interestAmount?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   penaltyAmount?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   feeAmount?: number;
