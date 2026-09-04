@@ -9,3 +9,6 @@ dist/
 .DS_Store
 apps/api/api/nest-dist/
 apps/api/nest-runtime/
+.vercel
+.env.local
+.env*.local
