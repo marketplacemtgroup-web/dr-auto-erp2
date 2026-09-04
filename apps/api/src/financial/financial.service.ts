@@ -800,12 +800,26 @@ export class FinancialService {
       ? await this.resolveAccountId(organizationId, dto.accountId)
       : entry.accountId ?? (await this.resolveAccountId(organizationId, null));
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      for (const split of splits) {
-        const accountId = await this.resolveAccountId(
-          organizationId,
-          split.accountId ?? dto.accountId,
-        );
+    // Resolve contas antes da TX (evita prisma "solto" dentro da interativa).
+    const resolvedSplits: Array<{
+      paymentMethod: PaymentMethod;
+      amount: number;
+      accountId: string;
+      registerInCash: boolean;
+    }> = [];
+    for (const split of splits) {
+      const accountId = await this.resolveAccountId(
+        organizationId,
+        split.accountId ?? dto.accountId ?? resolvedAccountId,
+      );
+      resolvedSplits.push({ ...split, accountId });
+    }
+
+    let updated;
+    try {
+      updated = await this.prisma.$transactionSafe(async (tx) => {
+      for (const split of resolvedSplits) {
+        const accountId = split.accountId;
         await tx.financialPaymentSplit.create({
           data: {
             organizationId,
@@ -961,6 +975,15 @@ export class FinancialService {
 
       return row;
     });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        `Não foi possível concluir a baixa: ${detail.slice(0, 280)}`,
+      );
+    }
 
     await this.audit.log(organizationId, 'financial.pay', 'financial_entry', {
       userId,
@@ -970,7 +993,7 @@ export class FinancialService {
         payAmount,
         newAmountPaid,
         status: newStatus,
-        splits,
+        splits: resolvedSplits,
       },
     });
 
@@ -1031,7 +1054,7 @@ export class FinancialService {
       throw new BadRequestException('Nenhum valor pago para estornar');
     }
 
-    const reversed = await this.prisma.$transaction(async (tx) => {
+    const reversed = await this.prisma.$transactionSafe(async (tx) => {
       const movements = await tx.financialAccountMovement.findMany({
         where: { financialEntryId: id, organizationId },
         orderBy: { createdAt: 'desc' },
