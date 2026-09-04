@@ -119,11 +119,9 @@ export default function FinancialPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const typeFilter =
-    searchParams.get("type") === "PAYABLE" || searchParams.get("type") === "RECEIVABLE"
-      ? searchParams.get("type")!
-      : "all";
-  // Fila principal = só em aberto. Pagos/recebidos ficam no Histórico.
+  const typeFilter: "PAYABLE" | "RECEIVABLE" =
+    searchParams.get("type") === "RECEIVABLE" ? "RECEIVABLE" : "PAYABLE";
+  const openOnly = searchParams.get("open") !== "0";
   const [historyOpen, setHistoryOpen] = useState(false);
   const { canViewMoney } = usePermissions();
   const showMoney = canViewMoney();
@@ -189,10 +187,10 @@ export default function FinancialPage() {
 
   const listFilters = useMemo(
     () => ({
-      type: typeFilter === "all" ? undefined : (typeFilter as "PAYABLE" | "RECEIVABLE"),
-      openOnly: true as const,
+      type: typeFilter,
+      openOnly,
     }),
-    [typeFilter],
+    [typeFilter, openOnly],
   );
 
   async function loadOpenSummary() {
@@ -212,16 +210,24 @@ export default function FinancialPage() {
     void queryClient.invalidateQueries({ queryKey: ["financial", "open-summary"] });
   }, [queryClient, token]);
 
-  function setListFilters(next: { type?: string }) {
+  function setListFilters(next: { type?: "PAYABLE" | "RECEIVABLE"; open?: boolean }) {
     const params = new URLSearchParams(searchParams);
-    if (next.type !== undefined) {
-      if (next.type === "all") params.delete("type");
-      else params.set("type", next.type);
-    }
-    // Mantém open=1 na URL só por compat com links antigos do dashboard.
-    params.set("open", "1");
+    if (next.type !== undefined) params.set("type", next.type);
+    if (next.open !== undefined) params.set("open", next.open ? "1" : "0");
+    if (!params.has("type")) params.set("type", typeFilter);
+    if (!params.has("open")) params.set("open", openOnly ? "1" : "0");
     setSearchParams(params, { replace: true });
   }
+
+  useEffect(() => {
+    const needsType = searchParams.get("type") !== "PAYABLE" && searchParams.get("type") !== "RECEIVABLE";
+    const needsOpen = !searchParams.has("open");
+    if (!needsType && !needsOpen) return;
+    const params = new URLSearchParams(searchParams);
+    if (needsType) params.set("type", "PAYABLE");
+    if (needsOpen) params.set("open", "1");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function loadEntries(nextSearch?: string, nextPage = entriesPage, filters = listFilters) {
     if (!token) return;
@@ -359,7 +365,7 @@ export default function FinancialPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, listFilters.type]);
+  }, [token, listFilters.type, listFilters.openOnly]);
 
   useEffect(() => {
     void loadProfitSummary(profitPeriod);
@@ -760,24 +766,39 @@ export default function FinancialPage() {
         {tab === "entries" ? (
           <>
             <div className="flex flex-wrap gap-2 mb-3">
-              {[
-                { id: "all", label: "Todos os tipos" },
-                { id: "PAYABLE", label: "A pagar" },
-                { id: "RECEIVABLE", label: "A receber" },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setListFilters({ type: item.id })}
-                  className={`h-9 px-3 rounded-lg text-[12px] font-medium border transition-colors ${
-                    typeFilter === item.id
-                      ? "border-[#0E7490] bg-[#ECFEFF] text-[#0E7490]"
-                      : "border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => setListFilters({ type: "PAYABLE" })}
+                className={`h-9 px-3 rounded-lg text-[12px] font-semibold border transition-colors ${
+                  typeFilter === "PAYABLE"
+                    ? "border-[#DC2626] bg-[#DC2626] text-white"
+                    : "border-[#FECACA] bg-[#FEF2F2] text-[#DC2626] hover:border-[#DC2626]"
+                }`}
+              >
+                A pagar
+              </button>
+              <button
+                type="button"
+                onClick={() => setListFilters({ type: "RECEIVABLE" })}
+                className={`h-9 px-3 rounded-lg text-[12px] font-semibold border transition-colors ${
+                  typeFilter === "RECEIVABLE"
+                    ? "border-[#16A34A] bg-[#16A34A] text-white"
+                    : "border-[#BBF7D0] bg-[#F0FDF4] text-[#16A34A] hover:border-[#16A34A]"
+                }`}
+              >
+                A receber
+              </button>
+              <button
+                type="button"
+                onClick={() => setListFilters({ open: !openOnly })}
+                className={`h-9 px-3 rounded-lg text-[12px] font-semibold border transition-colors ${
+                  openOnly
+                    ? "border-[#2563EB] bg-[#2563EB] text-white"
+                    : "border-[#BFDBFE] bg-[#EFF6FF] text-[#2563EB] hover:border-[#2563EB]"
+                }`}
+              >
+                Somente em aberto
+              </button>
               <button
                 type="button"
                 onClick={() => setHistoryOpen(true)}
@@ -786,15 +807,6 @@ export default function FinancialPage() {
                 <History size={14} />
                 Histórico
               </button>
-              {typeFilter !== "all" && (
-                <button
-                  type="button"
-                  onClick={() => setListFilters({ type: "all" })}
-                  className="h-9 px-3 rounded-lg text-[12px] font-medium text-[#94A3B8] hover:text-[#64748B]"
-                >
-                  Limpar filtros
-                </button>
-              )}
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
               <button type="button" onClick={() => openNew("RECEIVABLE")} className="h-10 px-4 rounded-lg bg-[#16A34A] text-white text-sm font-medium">
