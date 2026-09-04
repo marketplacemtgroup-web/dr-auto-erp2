@@ -68,7 +68,8 @@ export class LedgerService {
     // à parte pelo registro de caixa (gaveta).
     const hardBalanceKinds: LedgerMovementKind[] = [
       'WITHDRAWAL',
-      'TRANSFER',
+      'WITHDRAWAL_CASH',
+      'TRANSFER_OUT',
       'ADJUSTMENT',
     ];
     if (balanceAfter < -0.001 && hardBalanceKinds.includes(input.movementKind)) {
