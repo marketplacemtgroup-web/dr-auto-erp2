@@ -31,6 +31,7 @@ export class FinancialController {
     @Query('origin') origin?: string,
     @Query('supplierId') supplierId?: string,
     @Query('openOnly') openOnly?: string,
+    @Query('dueFrom') dueFrom?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -41,7 +42,12 @@ export class FinancialController {
       status,
       origin,
       supplierId,
-      { page, limit, openOnly: openOnly === '1' || openOnly === 'true' },
+      {
+        page,
+        limit,
+        openOnly: openOnly === '1' || openOnly === 'true',
+        dueFrom,
+      },
     );
   }
 

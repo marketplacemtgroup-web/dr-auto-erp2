@@ -1,28 +1,26 @@
-# Spec ativa — Correção AR/AP + vencimento automático
+# Spec ativa — UX contas a pagar/receber + histórico
 
-Status: **implemented** (smoke manual pendente; redeploy API necessário para cron)
+Status: **implemented** (smoke UI pendente)
 
 ## Objetivo
 
-Corrigir inconsistências de contas a pagar/receber e garantir que status vire `OVERDUE` sozinho quando a data chega.
+Ordenar filas abertas por vencimento, tirar pagos da lista principal para Histórico em popup, e fazer o CTA do dashboard abrir modal (não navegar ao Financeiro).
 
 ## Feito
 
-1. Parcelas/lançamentos `OVERDUE` mostram botão de baixar (não mais "Pago")
-2. Fila a receber inclui `OPEN`/`PARTIAL`/`OVERDUE` e sincroniza vencidos
-3. OS já faturada (qualquer status ativo) não volta para "pronto para cobrar"
-4. `createFromServiceOrder` reusa recebível `OPEN|PARTIAL|OVERDUE`
-5. Contas bancárias fora do menu (confirmado pelo Maestro)
-6. Cron diário `GET /cron/sync-overdue-financial` + sync em list/open-summary/receive-queue
-7. Pai de parcela fica `OVERDUE` quando filhas vencem
+1. API `GET /financial`: `orderBy` por `dueDate ASC` (aberto/misto) ou `paidAt DESC` (status=PAID); query `dueFrom`
+2. Dashboard **Ver todas as despesas** → popup com PAYABLE em aberto, `dueDate >= hoje−3`, ordenado por vencimento
+3. Financeiro default `open=1` (somente em aberto); botão **Histórico** com abas Já pago / Já recebido
+4. Pagos não misturam na fila aberta; histórico read-only
 
 ## Aceite (smoke)
 
-1. Parcela vencida → badge Vencido + botão Pagar/Receber
-2. KPI "A receber" bate com fila (inclui vencidos)
-3. OS com recebível vencido não aparece em "Cobrar"
-4. Após meia-noite (ou abrir financeiro), OPEN com dueDate passado → OVERDUE
+1. Dashboard → Contas a pagar → preview por vencimento
+2. **Ver todas as despesas** abre popup (rota não muda); só ≥ hoje−3; dueDate ASC
+3. Financeiro abre em aberto, ordenado por vencimento
+4. Após pagar/receber, some da fila e aparece no Histórico
+5. Histórico: mais recente (paidAt) no topo
 
 ## Fora de escopo
 
-- CRUD de contas bancárias (descontinuado no produto)
+- Regras de baixa/pagamento, cron OVERDUE, CRUD contas bancárias

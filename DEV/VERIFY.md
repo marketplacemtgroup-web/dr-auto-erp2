@@ -1,19 +1,24 @@
-# Verify
+# VERIFY
 
-## 2026-09-04 — Fix AR/AP + OVERDUE
+Atualizado: 2026-09-04 (UX AR/AP)
 
-| Check | Resultado |
-|-------|-----------|
-| `npm run build -w @autocore/api` | OK |
-| Parcela OVERDUE → botão baixar | Código corrigido; smoke UI pendente |
-| receiveQueue inclui OVERDUE/PARTIAL | Código corrigido |
-| Anti-duplicata OS faturada | Código corrigido |
-| Cron `sync-overdue-financial` | Registrado em `vercel.json` (15 3 * * *); ativo após redeploy |
-| Contas bancárias fora do menu | Mantido (decisão Maestro) |
+## UX contas a pagar/receber
 
-## 2026-07-28
+- [x] API `list` orderBy condicional + `dueFrom` (código)
+- [x] Dashboard CTA → popup (código)
+- [x] Financeiro default aberto + Histórico modal (código)
+- [ ] Smoke: preview dashboard por vencimento
+- [ ] Smoke: popup “Ver todas” sem mudar rota; janela hoje−3
+- [ ] Smoke: Financeiro aberto ordenado por vencimento
+- [ ] Smoke: após baixa some da fila e aparece no Histórico
+- [ ] Smoke: Histórico paidAt DESC
 
-| Check | Resultado |
-|-------|-----------|
-| `npm run build -w @autocore/api` | OK (nest build) — revalidado após fix sync→total |
-| Smoke UI: editar item aprovado na OS | Pendente (manual) |
+## Deploy anterior `4530abb`
+
+- [x] Push `main` → GitHub / produção Ready
+- [ ] Smoke UI IndexedDB 2ª visita (ainda pendente)
+
+## Notas
+
+- `npm run build -w @autocore/api` OK
+- Deploy desta UX ainda não feito

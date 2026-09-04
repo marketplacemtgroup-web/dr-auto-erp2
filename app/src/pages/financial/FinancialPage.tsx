@@ -1,10 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { Calculator, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
+import { Calculator, History, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import FinancialPayButton from "../../components/financial/FinancialPayButton";
 import CalculatorModal from "../../components/financial/CalculatorModal";
 import DeleteEntryModal from "../../components/financial/DeleteEntryModal";
+import FinancialHistoryModal from "../../components/financial/FinancialHistoryModal";
 import PayEntryModal from "../../components/financial/PayEntryModal";
 import FixedExpensesModal from "../../components/financial/FixedExpensesModal";
 import ModulePageShell from "../../components/modules/ModulePageShell";
@@ -122,7 +123,9 @@ export default function FinancialPage() {
     searchParams.get("type") === "PAYABLE" || searchParams.get("type") === "RECEIVABLE"
       ? searchParams.get("type")!
       : "all";
-  const openOnly = searchParams.get("open") === "1";
+  // Default: fila em aberto. Só mistura pagos se open=0 explicitamente.
+  const openOnly = searchParams.get("open") !== "0";
+  const [historyOpen, setHistoryOpen] = useState(false);
   const { canViewMoney } = usePermissions();
   const showMoney = canViewMoney();
   const [profitPeriod, setProfitPeriod] = useState<FinancialPeriodPreset>("month");
@@ -218,10 +221,17 @@ export default function FinancialPage() {
     }
     if (next.open !== undefined) {
       if (next.open) params.set("open", "1");
-      else params.delete("open");
+      else params.set("open", "0");
     }
     setSearchParams(params, { replace: true });
   }
+
+  useEffect(() => {
+    if (searchParams.has("open")) return;
+    const params = new URLSearchParams(searchParams);
+    params.set("open", "1");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function loadEntries(nextSearch?: string, nextPage = entriesPage, filters = listFilters) {
     if (!token) return;
@@ -751,11 +761,19 @@ export default function FinancialPage() {
               >
                 Somente em aberto
               </button>
-              {(typeFilter !== "all" || openOnly) && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                className="h-9 px-3 rounded-lg text-[12px] font-medium border border-[#E2E8F0] text-[#475569] hover:border-[#CBD5E1] inline-flex items-center gap-1.5"
+              >
+                <History size={14} />
+                Histórico
+              </button>
+              {(typeFilter !== "all" || !openOnly) && (
                 <button
                   type="button"
                   onClick={() => {
-                    setSearchParams({}, { replace: true });
+                    setSearchParams({ open: "1" }, { replace: true });
                   }}
                   className="h-9 px-3 rounded-lg text-[12px] font-medium text-[#94A3B8] hover:text-[#64748B]"
                 >
@@ -1303,6 +1321,8 @@ export default function FinancialPage() {
       />
 
       <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
+
+      <FinancialHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
 
       <FixedExpensesModal
         open={fixedModalOpen}

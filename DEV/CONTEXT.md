@@ -16,4 +16,4 @@ Edição administrativa pós-aprovação **sem** reaprovação do cliente: mudar
 
 ## Risco ativo (financeiro)
 
-Correção AR/AP aplicada localmente. Cron de vencimento sobe só após redeploy da API. Smoke UI ainda pendente.
+UX de fila/histórico/popup dashboard implementada localmente. Smoke UI e deploy ainda pendentes. Cron OVERDUE depende de API em produção.

@@ -86,18 +86,25 @@ export class FinancialService {
     status?: string,
     origin?: string,
     supplierId?: string,
-    query: ListQueryInput & { openOnly?: boolean } = {},
+    query: ListQueryInput & { openOnly?: boolean; dueFrom?: string } = {},
   ) {
     await this.syncOverdueStatuses(organizationId);
 
     const { page, limit, skip } = parseListQuery(query);
     const openStatuses = ['OPEN', 'PARTIAL', 'OVERDUE'] as const;
+    const statusLower = status?.toLowerCase();
+    const isPaidFilter = statusLower === 'paid';
     const resolvedStatus =
-      query.openOnly || status?.toLowerCase() === 'open'
+      query.openOnly || statusLower === 'open'
         ? { status: { in: [...openStatuses] } }
         : status
           ? { status: status as never }
           : {};
+
+    const dueFromDate =
+      query.dueFrom && /^\d{4}-\d{2}-\d{2}$/.test(query.dueFrom)
+        ? new Date(`${query.dueFrom}T00:00:00.000Z`)
+        : null;
 
     const where: Prisma.FinancialEntryWhereInput = {
       organizationId,
@@ -106,10 +113,17 @@ export class FinancialService {
       ...resolvedStatus,
       ...(origin ? { origin: origin as never } : {}),
       ...(supplierId ? { supplierId } : {}),
+      ...(dueFromDate ? { dueDate: { gte: dueFromDate } } : {}),
       ...(search
         ? { description: { contains: search, mode: 'insensitive' } }
         : {}),
     };
+
+    // Fila aberta / mista: vencimento crescente. Histórico pago: data de baixa.
+    const orderBy = isPaidFilter
+      ? ([{ paidAt: 'desc' as const }, { createdAt: 'desc' as const }] as const)
+      : ([{ dueDate: 'asc' as const }, { createdAt: 'desc' as const }] as const);
+
     const [total, rows] = await Promise.all([
       this.prisma.financialEntry.count({ where }),
       this.prisma.financialEntry.findMany({
@@ -118,9 +132,7 @@ export class FinancialService {
           ...entryInclude,
           installments: { orderBy: { installmentNumber: 'asc' } },
         },
-        // Mais recentes primeiro: o que foi lançado/finalizado hoje abre na
-        // primeira página; os lançamentos antigos ficam nas últimas.
-        orderBy: [{ createdAt: 'desc' }, { dueDate: 'desc' }],
+        orderBy: [...orderBy],
         skip,
         take: limit,
       }),

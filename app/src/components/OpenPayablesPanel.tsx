@@ -1,14 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { AlertTriangle, ArrowRight, Receipt } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { formatDate, formatMoney } from "../lib/format";
 import { QUERY_STALE_TIME_MS } from "../lib/query-cache";
 import { routes } from "../lib/routes";
 import { useAuthStore } from "../stores/authStore";
 import NavButton from "./NavButton";
+import OpenPayablesModal from "./financial/OpenPayablesModal";
 
 export default function OpenPayablesPanel() {
   const token = useAuthStore((s) => s.session?.accessToken);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["financial", "open-summary", token],
@@ -102,16 +105,20 @@ export default function OpenPayablesPanel() {
 
       <div className="px-5 py-3 border-t border-[#F1F5F9] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-2">
         <span className="text-[12px] text-[#64748B]">
-          {data?.payableOpenCount ?? 0} despesa{(data?.payableOpenCount ?? 0) === 1 ? "" : "s"} pendente{(data?.payableOpenCount ?? 0) === 1 ? "" : "s"}
+          {data?.payableOpenCount ?? 0} despesa{(data?.payableOpenCount ?? 0) === 1 ? "" : "s"}{" "}
+          pendente{(data?.payableOpenCount ?? 0) === 1 ? "" : "s"}
         </span>
-        <NavButton
-          to={`${routes.financeiroLancamentos}?type=PAYABLE&open=1`}
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
           className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[12px] font-semibold transition-colors"
         >
           Ver todas as despesas
           <ArrowRight size={14} />
-        </NavButton>
+        </button>
       </div>
+
+      <OpenPayablesModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </section>
   );
 }

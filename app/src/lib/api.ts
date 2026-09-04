@@ -2223,7 +2223,12 @@ export const api = {
     search?: string,
     page?: number,
     limit?: number,
-    filters?: { type?: "PAYABLE" | "RECEIVABLE"; status?: string; openOnly?: boolean },
+    filters?: {
+      type?: "PAYABLE" | "RECEIVABLE";
+      status?: string;
+      openOnly?: boolean;
+      dueFrom?: string;
+    },
   ) =>
     request<FinancialEntryRow[] | Paginated<FinancialEntryRow>>(
       `/financial${buildQuery({
@@ -2233,6 +2238,7 @@ export const api = {
         type: filters?.type,
         status: filters?.status,
         openOnly: filters?.openOnly ? "1" : undefined,
+        dueFrom: filters?.dueFrom,
       })}`,
       { method: "GET" },
       token,

@@ -1,27 +1,27 @@
 # Handoff
 
-Atualizado: 2026-09-04
+Atualizado: 2026-09-04 (UX AR/AP vencimento + histórico + popup dashboard)
 
 ## Estado
 
-**Financeiro AR/AP corrigido (local, aguarda commit + redeploy API).**
+**Local (não commitado ainda):**
 
-- UI: `OVERDUE` pode baixar; parcelas não mostram "Pago" indevido
-- `receiveQueue` + `createFromServiceOrder` anti-duplicata
-- `syncOverdueStatuses` público: lista, open-summary, receive-queue + cron diário
-- Contas bancárias: menu removido / redirect para lançamentos (decisão do Maestro)
-- Delete pago/parcial bloqueado na UI (alinha API)
+- API: `list()` ordena por vencimento (aberto) / `paidAt` (pago); filtro `dueFrom`
+- App: popup despesas no dashboard; Financeiro default aberto; modal Histórico
+
+**Em produção (push anterior `4530abb`):** cold start + IndexedDB + baixa financeira
 
 ## Próximo
 
-- Smoke manual dos 4 aceites em `DEV/SPECS/ACTIVE.md`
-- Commit + redeploy API (cron `sync-overdue-financial` só sobe com deploy)
-- Confirmar `CRON_SECRET` no Vercel da API
+- Smoke UI dos 5 critérios em `DEV/SPECS/ACTIVE.md`
+- Commit + deploy API + app quando Maestro pedir
+- CLI `vercel --prod` local ainda falha `spawn npm ENOENT` — preferir push GitHub
 
 ## Arquivos-chave
 
-- `apps/api/src/financial/financial.service.ts`
-- `apps/api/src/cron/cron.controller.ts` + `cron.module.ts`
-- `apps/api/vercel.json` — cron `15 3 * * *`
+- `apps/api/src/financial/financial.service.ts` + `financial.controller.ts`
+- `app/src/lib/api.ts` (`dueFrom` / `status` em `financialEntries`)
+- `app/src/components/OpenPayablesPanel.tsx`
+- `app/src/components/financial/OpenPayablesModal.tsx`
+- `app/src/components/financial/FinancialHistoryModal.tsx`
 - `app/src/pages/financial/FinancialPage.tsx`
-- `app/src/App.tsx` + `FinancialLayout.tsx` (Contas fora)

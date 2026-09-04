@@ -1,5 +1,13 @@
 # Worklog
 
+## 2026-09-04 - UX AR/AP: vencimento + histórico + popup dashboard
+
+- Spec: `DEV/SPECS/ACTIVE.md`
+- Changed: `financial.service.ts`, `financial.controller.ts`, `api.ts`, `OpenPayablesPanel.tsx`, `OpenPayablesModal.tsx`, `FinancialHistoryModal.tsx`, `FinancialPage.tsx`, `DEV/*`
+- Why: cliente reclamou ordem aleatória (createdAt), CTA dashboard indo ao Financeiro, pagos misturados na fila
+- Verify: lints OK; smoke UI pendente
+- Next: smoke + commit/deploy
+
 ## 2026-09-04 - Fix AR/AP + vencimento automático
 
 - Spec: `DEV/SPECS/ACTIVE.md`
