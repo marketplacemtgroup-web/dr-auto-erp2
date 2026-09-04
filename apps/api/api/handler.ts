@@ -21,6 +21,8 @@ function validateDbEnv(): string[] {
 }
 
 let cachedHandler: ((req: VercelRequest, res: VercelResponse) => void) | null = null;
+/** Mutex: várias lambdas concorrentes no cold start não devem bootar Nest N vezes. */
+let handlerBoot: Promise<(req: VercelRequest, res: VercelResponse) => void> | null = null;
 
 function normalizeApiRequestUrl(req: VercelRequest): void {
   const raw = req.url ?? '';
@@ -65,18 +67,28 @@ export async function handleVercelRequest(req: VercelRequest, res: VercelRespons
 
   try {
     if (!cachedHandler) {
-      // nest-runtime é copiado no postbuild (fora de api/ para não virar N functions).
-      let getExpressApp: () => Promise<(req: VercelRequest, res: VercelResponse) => void>;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        ({ getExpressApp } = require('../nest-runtime/bootstrap.js'));
-      } catch {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        ({ getExpressApp } = require('../dist/bootstrap.js'));
+      if (!handlerBoot) {
+        handlerBoot = (async () => {
+          // nest-runtime é copiado no postbuild (fora de api/ para não virar N functions).
+          let getExpressApp: () => Promise<(req: VercelRequest, res: VercelResponse) => void>;
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            ({ getExpressApp } = require('../nest-runtime/bootstrap.js'));
+          } catch {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            ({ getExpressApp } = require('../dist/bootstrap.js'));
+          }
+          const app = await getExpressApp();
+          cachedHandler = app;
+          return app;
+        })().catch((err) => {
+          handlerBoot = null;
+          throw err;
+        });
       }
-      cachedHandler = await getExpressApp();
+      cachedHandler = await handlerBoot;
     }
-    return cachedHandler(req, res);
+    return cachedHandler!(req, res);
   } catch (err) {
     console.error('[api] handler error:', err);
     if (!res.headersSent) {

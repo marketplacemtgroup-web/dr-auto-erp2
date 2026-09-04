@@ -37,6 +37,10 @@ const entryInclude = {
   paymentSplits: { orderBy: { createdAt: 'asc' as const } },
 };
 
+/** Evita UPDATE em massa a cada GET de lista/resumo (cron diário já cobre). */
+const OVERDUE_SYNC_TTL_MS = 5 * 60_000;
+const overdueSyncAt = new Map<string, number>();
+
 @Injectable()
 export class FinancialService {
   constructor(
@@ -1365,8 +1369,19 @@ export class FinancialService {
   /**
    * Marca lançamentos OPEN com vencimento passado como OVERDUE.
    * Sem organizationId: aplica em todas as orgs (cron diário).
+   * Com org: throttled — list/summary não devem bater UPDATE a cada request.
    */
-  async syncOverdueStatuses(organizationId?: string) {
+  async syncOverdueStatuses(organizationId?: string, opts?: { force?: boolean }) {
+    const cacheKey = organizationId ?? '__all__';
+    const now = Date.now();
+    if (!opts?.force) {
+      const last = overdueSyncAt.get(cacheKey) ?? 0;
+      if (now - last < OVERDUE_SYNC_TTL_MS) {
+        return { updated: 0, leaves: 0, parents: 0, skipped: true as const };
+      }
+    }
+    overdueSyncAt.set(cacheKey, now);
+
     const today = this.startOfDay(new Date());
     const orgFilter = organizationId ? { organizationId } : {};
 

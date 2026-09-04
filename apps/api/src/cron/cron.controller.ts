@@ -46,6 +46,6 @@ export class CronController {
   @Get('sync-overdue-financial')
   syncOverdueFinancial(@Headers('authorization') authorization?: string) {
     this.assertCronAuth(authorization);
-    return this.financial.syncOverdueStatuses();
+    return this.financial.syncOverdueStatuses(undefined, { force: true });
   }
 }

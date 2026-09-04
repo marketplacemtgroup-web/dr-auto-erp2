@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { api, ApiError, type AuthSession } from "../lib/api";
+import { clearPersistedQueryCache } from "../lib/query-cache";
 
 interface AuthState {
   session: AuthSession | null;
@@ -29,14 +30,19 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       setSession: (session) => set({ session }),
       login: async (email, password) => {
+        await clearPersistedQueryCache();
         const session = await api.login(email, password);
         set({ session });
       },
       registerOrganization: async (data, logo) => {
+        await clearPersistedQueryCache();
         const session = await api.registerOrganization(data, logo);
         set({ session });
       },
-      logout: () => set({ session: null }),
+      logout: () => {
+        set({ session: null });
+        void clearPersistedQueryCache();
+      },
       refreshMe: async () => {
         const token = get().session?.accessToken;
         if (!token) return;
@@ -46,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
             set({ session: null });
+            void clearPersistedQueryCache();
           }
         }
       },

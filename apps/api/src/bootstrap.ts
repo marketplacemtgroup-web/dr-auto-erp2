@@ -17,10 +17,21 @@ export async function createExpressApp(): Promise<express.Application> {
 }
 
 let cachedApp: express.Application | null = null;
+/** Evita boot Nest paralelo no mesmo isolate (cold start + rajada de requests). */
+let bootPromise: Promise<express.Application> | null = null;
 
 export async function getExpressApp(): Promise<express.Application> {
-  if (!cachedApp) {
-    cachedApp = await createExpressApp();
+  if (cachedApp) return cachedApp;
+  if (!bootPromise) {
+    bootPromise = createExpressApp()
+      .then((app) => {
+        cachedApp = app;
+        return app;
+      })
+      .catch((err) => {
+        bootPromise = null;
+        throw err;
+      });
   }
-  return cachedApp;
+  return bootPromise;
 }
